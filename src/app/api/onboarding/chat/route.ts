@@ -236,7 +236,7 @@ export async function POST(request: Request) {
         .set({
           currentPhase: nextPhase,
           phaseIndex: phaseOrder.indexOf(nextPhase),
-          extractedData: newExtractedData,
+          extractedData: newExtractedData as Record<string, unknown>,
           conversationHistory: updatedHistory,
           completedAt: isComplete ? new Date() : null,
           updatedAt: new Date(),

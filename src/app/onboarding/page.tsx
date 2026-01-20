@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowUp,
@@ -22,6 +22,7 @@ import {
   type ExtractedProfileData,
 } from "@/components/onboarding/profile-panel";
 import { ProfileReviewModal } from "@/components/onboarding/profile-review-modal";
+import { BodyFatSelector } from "@/components/body-fat-selector";
 import { cn } from "@/lib/utils";
 
 interface Message {
@@ -72,6 +73,9 @@ export default function OnboardingPage() {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
 
+  // Body fat selector state
+  const [bodyFatValue, setBodyFatValue] = useState("");
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -105,6 +109,24 @@ export default function OnboardingPage() {
       setIsPanelCollapsed(true);
     }
   }, [isMobile]);
+
+  // Determine if we should show the body fat selector
+  // Show when in body_composition phase and AI just asked about body fat
+  const showBodyFatSelector = useMemo(() => {
+    if (currentPhase !== "body_composition") return false;
+    if (extractedData.bodyFatPercentage !== undefined) return false;
+    if (isLoading || isStreaming) return false;
+
+    // Check if the last assistant message mentions body fat
+    const lastAssistantMessage = [...messages].reverse().find(m => m.role === "assistant");
+    if (!lastAssistantMessage) return false;
+
+    const content = lastAssistantMessage.content.toLowerCase();
+    return content.includes("body fat") ||
+           content.includes("body composition") ||
+           content.includes("physique") ||
+           content.includes("body type");
+  }, [currentPhase, extractedData.bodyFatPercentage, messages, isLoading, isStreaming]);
 
   // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = useCallback(() => {
@@ -304,6 +326,17 @@ export default function OnboardingPage() {
     handleSend(option);
   };
 
+  // Handle body fat selector selection
+  const handleBodyFatSelection = useCallback((action: "select" | "skip") => {
+    if (action === "skip") {
+      handleSend("I'm not sure about my body fat percentage, let's skip this for now");
+    } else if (bodyFatValue) {
+      handleSend(`My body fat is around ${bodyFatValue}%`);
+      // Reset the value after sending
+      setBodyFatValue("");
+    }
+  }, [bodyFatValue, handleSend]);
+
   // Voice handlers
   const handleVoiceToggle = useCallback(() => {
     if (isListening) {
@@ -490,6 +523,40 @@ export default function OnboardingPage() {
                   message={streamingMessage}
                   isComplete={false}
                 />
+              )}
+
+              {/* Body Fat Selector - show when in body composition phase */}
+              {showBodyFatSelector && !isLoading && !isComplete && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.3 }}
+                  className="my-4 mx-auto max-w-md"
+                >
+                  <div className="bg-card rounded-2xl border border-border/50 p-4 shadow-lg">
+                    <BodyFatSelector
+                      value={bodyFatValue}
+                      onChange={setBodyFatValue}
+                      gender={extractedData.gender}
+                    />
+                    <div className="mt-4 flex gap-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => handleBodyFatSelection("skip")}
+                      >
+                        Skip for now
+                      </Button>
+                      <Button
+                        className="flex-1 bg-brand hover:bg-brand/90"
+                        onClick={() => handleBodyFatSelection("select")}
+                        disabled={!bodyFatValue}
+                      >
+                        Confirm {bodyFatValue ? `${bodyFatValue}%` : ""}
+                      </Button>
+                    </div>
+                  </div>
+                </motion.div>
               )}
 
               {/* Typing indicator */}
