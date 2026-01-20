@@ -5,90 +5,36 @@
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#09090b",
-  "theme_color": "#09090b",
+  "theme_color": "#7c3aed",
   "orientation": "portrait-primary",
   "scope": "/",
   "icons": [
     {
-      "src": "/icons/icon-72.png",
-      "sizes": "72x72",
-      "type": "image/png",
-      "purpose": "maskable any"
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
     },
     {
-      "src": "/icons/icon-96.png",
-      "sizes": "96x96",
-      "type": "image/png",
-      "purpose": "maskable any"
-    },
-    {
-      "src": "/icons/icon-128.png",
-      "sizes": "128x128",
-      "type": "image/png",
-      "purpose": "maskable any"
-    },
-    {
-      "src": "/icons/icon-144.png",
-      "sizes": "144x144",
-      "type": "image/png",
-      "purpose": "maskable any"
-    },
-    {
-      "src": "/icons/icon-152.png",
-      "sizes": "152x152",
-      "type": "image/png",
-      "purpose": "maskable any"
-    },
-    {
-      "src": "/icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable any"
-    },
-    {
-      "src": "/icons/icon-384.png",
-      "sizes": "384x384",
-      "type": "image/png",
-      "purpose": "maskable any"
-    },
-    {
-      "src": "/icons/icon-512.png",
+      "src": "/icons/icon.svg",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable any"
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ],
   "categories": ["health", "fitness", "lifestyle"],
-  "screenshots": [
-    {
-      "src": "/screenshots/dashboard.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Dashboard view"
-    },
-    {
-      "src": "/screenshots/mobile.png",
-      "sizes": "750x1334",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Mobile workout view"
-    }
-  ],
   "shortcuts": [
     {
       "name": "Start Workout",
       "short_name": "Workout",
       "description": "Start a new workout session",
-      "url": "/workouts/active",
-      "icons": [{ "src": "/icons/workout-shortcut.png", "sizes": "96x96" }]
+      "url": "/workouts/active"
     },
     {
       "name": "Log Progress",
       "short_name": "Log",
       "description": "Log your workout progress",
-      "url": "/workouts/log",
-      "icons": [{ "src": "/icons/log-shortcut.png", "sizes": "96x96" }]
+      "url": "/workouts/log"
     }
   ],
   "related_applications": [],

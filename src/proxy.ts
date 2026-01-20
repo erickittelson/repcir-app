@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 /**
- * Middleware for the Family Workout App
+ * Proxy for the Family Workout App (Next.js 16+)
  *
  * Handles:
  * - API caching headers
  * - Security headers
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const response = NextResponse.next();
   const { pathname } = request.nextUrl;
 
@@ -60,7 +60,7 @@ export function middleware(request: NextRequest) {
   return response;
 }
 
-// Only run middleware on API routes and specific paths
+// Only run proxy on API routes and specific paths
 export const config = {
   matcher: [
     "/api/:path*",

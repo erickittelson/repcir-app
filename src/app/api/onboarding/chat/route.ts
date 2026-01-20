@@ -95,9 +95,9 @@ const requestSchema = z.object({
   conversationHistory: z.array(z.object({
     role: z.enum(["user", "assistant"]),
     content: z.string(),
-  })),
+  })).default([]),
   currentPhase: z.string(),
-  extractedData: z.record(z.unknown()).optional(),
+  extractedData: z.any().optional(),
 });
 
 export async function POST(request: Request) {
@@ -107,7 +107,24 @@ export async function POST(request: Request) {
       return new Response("Unauthorized", { status: 401 });
     }
 
-    const body = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Ensure body is a plain object before parsing
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return new Response(JSON.stringify({ error: "Request body must be an object" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     const validation = requestSchema.safeParse(body);
 
     if (!validation.success) {

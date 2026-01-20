@@ -14,7 +14,7 @@ import { drizzle, NeonHttpDatabase } from "drizzle-orm/neon-http";
 import * as schema from "./schema";
 
 // Configure Neon for optimal performance
-neonConfig.fetchConnectionCache = true; // Enable connection caching
+// Note: fetchConnectionCache is now always true by default
 neonConfig.poolQueryViaFetch = true; // Use fetch for pooled queries (better for serverless)
 
 // =============================================================================
