@@ -32,7 +32,8 @@ interface Message {
 }
 
 // Total expected profile fields for progress calculation
-const TOTAL_PROFILE_FIELDS = 12;
+// Must match profile-panel.tsx: 16 fields + 2 special (limitations, personalRecords) = 18
+const TOTAL_PROFILE_FIELDS = 18;
 
 // Labels for extracted data display
 const DATA_LABELS: Record<string, string> = {
@@ -357,11 +358,30 @@ export default function OnboardingPage() {
     setEditValue("");
   };
 
-  // Calculate progress based on filled fields (same as side panel)
-  const filledFieldsCount = Object.keys(extractedData).filter(
-    (k) => extractedData[k as keyof ExtractedProfileData] !== undefined
+  // Calculate progress based on filled fields (must match profile-panel.tsx exactly)
+  // Profile panel tracks these specific fields across phases
+  const trackedFields: (keyof ExtractedProfileData)[] = [
+    // welcome
+    "name", "primaryMotivation",
+    // basics
+    "age", "gender", "heightFeet", "weight",
+    // fitness_background
+    "fitnessLevel", "trainingFrequency", "currentActivity",
+    // goals
+    "primaryGoal", "timeline",
+    // body_composition
+    "bodyFatPercentage", "targetWeight",
+    // preferences
+    "workoutDuration", "equipmentAccess", "workoutDays",
+  ];
+  const filledFieldsCount = trackedFields.filter(
+    (k) => extractedData[k] !== undefined
   ).length;
-  const progressPercent = Math.round((filledFieldsCount / TOTAL_PROFILE_FIELDS) * 100);
+  // Add special fields (limitations + personalRecords count as 1 each if they have items)
+  const specialFieldsCount =
+    (extractedData.limitations?.length ? 1 : 0) +
+    (extractedData.personalRecords?.length ? 1 : 0);
+  const progressPercent = Math.round(((filledFieldsCount + specialFieldsCount) / TOTAL_PROFILE_FIELDS) * 100);
 
   return (
     <div className="flex h-[100dvh] bg-background mesh-gradient">

@@ -274,37 +274,68 @@ function buildSystemPrompt(
 ): string {
   const name = extractedData.name || userName || "there";
 
+  // Determine what's still missing in the current phase
+  const phaseDataNeeds: Record<string, string[]> = {
+    welcome: ["name"],
+    motivation: ["primaryMotivation (why they want to work out)"],
+    basics: ["age", "gender", "height (feet and inches)", "weight (in lbs)"],
+    fitness_background: ["fitness level (beginner/intermediate/advanced)", "how many days per week they train", "what activities they currently do"],
+    goals: ["primary fitness goal (specific and measurable)", "timeline for achieving it"],
+    body_composition: ["body fat percentage (can skip)", "target weight (can skip)"],
+    limitations: ["any injuries or physical limitations (can skip)"],
+    personal_records: ["any known maxes or PRs (can skip)"],
+    preferences: ["preferred workout duration", "equipment available", "preferred workout days"],
+    wrap_up: [],
+  };
+
+  // Figure out what's already collected vs what's still needed
+  const collected: string[] = [];
+  const stillNeeded: string[] = [];
+
+  if (extractedData.name) collected.push("name");
+  if (extractedData.primaryMotivation) collected.push("motivation");
+  if (extractedData.age) collected.push("age");
+  if (extractedData.gender) collected.push("gender");
+  if (extractedData.heightFeet) collected.push("height");
+  if (extractedData.weight) collected.push("weight");
+  if (extractedData.fitnessLevel) collected.push("fitness level");
+  if (extractedData.trainingFrequency) collected.push("training frequency");
+  if (extractedData.primaryGoal) collected.push("primary goal");
+  if (extractedData.timeline) collected.push("timeline");
+
+  // Get what we still need for this phase
+  const phaseNeeds = phaseDataNeeds[phaseConfig.goal] || phaseConfig.data_collected;
+
   let prompt = `${personaPrompt}
 
 ## Current Onboarding Phase: ${phaseConfig.goal}
 
 You are helping a new user set up their fitness profile through natural conversation.
+You MUST ask questions in a sequential order. DO NOT skip ahead or ask about topics from later phases.
 
-### Data You're Collecting This Phase
+### Data You're Collecting This Phase (in order)
 ${phaseConfig.data_collected.map(d => `- ${d}`).join("\n")}
 
-### What You Know So Far About This User
-${Object.entries(extractedData)
-  .filter(([, v]) => v !== undefined && v !== null)
-  .map(([k, v]) => `- ${k}: ${JSON.stringify(v)}`)
-  .join("\n") || "- Nothing yet, this is a new user"}
+### What You Already Know About This User
+${collected.length > 0 ? collected.map(c => `✓ ${c}`).join("\n") : "- Nothing yet, this is a new user"}
+
+### Your Next Question Should Be About
+${phaseConfig.data_collected[0]} - Focus on collecting this data point first before moving on.
 
 ### Guidelines For This Response
-1. Acknowledge what the user said naturally
-2. If they gave useful information, confirm you got it ("Got it!" / "Nice!" / "Love that!")
-3. Ask the NEXT question in a conversational way
-4. Keep responses SHORT (2-3 sentences max)
-5. Reference their name "${name}" occasionally
-6. If they want to skip a question, say something like "No worries, we can always update that later!"
+1. Acknowledge what the user just said (briefly!)
+2. Ask about the NEXT uncollected data point for THIS phase only
+3. Keep responses SHORT (2-3 sentences max)
+4. Use their name "${name}" occasionally
+5. If they skip, say "No worries!" and move to the next data point
 
-### Feature You're Introducing This Phase
-"${phaseConfig.feature_intro}" - Mention this naturally if relevant
-
-### Important
-- Don't be repetitive with acknowledgments
-- Don't ask multiple questions at once
-- If user seems done with current topic, move to next data point
-- Be warm and encouraging, not robotic`;
+### IMPORTANT RULES
+- Ask ONE question at a time
+- Stay focused on the current phase - don't skip ahead
+- Don't ask about goals if you're still in basics phase
+- Don't ask about limitations if you're still collecting fitness background
+- Be conversational but efficient
+- ${phaseConfig.feature_intro ? `You can mention: "${phaseConfig.feature_intro}"` : ""}`;
 
   return prompt;
 }
