@@ -36,6 +36,9 @@ export {
   getCoachingModeForPrompt,
 } from "./schemas/loader";
 
+// Re-export retry utilities for AI operations
+export { withRetry, withRetryAndFallback, RetryError } from "./retry";
+
 // Get muscle recovery hours from YAML schema (with fallback for backwards compatibility)
 function getMuscleRecoveryHoursWithFallback(muscle: string): number {
   try {
@@ -428,36 +431,100 @@ function buildNotesContext(notes: typeof contextNotes.$inferSelect[]) {
   };
 }
 
+/**
+ * Build system prompt optimized for prompt caching
+ *
+ * PROMPT CACHING OPTIMIZATION (OpenAI 2026):
+ * - Static content placed FIRST (instructions, guidelines, rules)
+ * - Dynamic content placed LAST (user metrics, workout history)
+ * - Cache hits only work on exact prefix matches
+ * - This structure maximizes cache reuse across different users
+ *
+ * Structure:
+ * 1. [STATIC] Identity & Role
+ * 2. [STATIC] Guidelines & Rules
+ * 3. [STATIC] Smart Programming Rules
+ * 4. [DYNAMIC] User Profile
+ * 5. [DYNAMIC] User Metrics & History
+ */
 export function buildSystemPrompt(context: Awaited<ReturnType<typeof getMemberContext>>) {
+  // =========================================================================
+  // STATIC CONTENT (CACHEABLE) - Place at beginning for cache optimization
+  // =========================================================================
+
+  const staticInstructions = `# Identity
+
+You are an expert AI fitness coach for the Workout Circle app. You provide personalized advice on training, nutrition, and goal-setting.
+
+# Guidelines
+
+- Be encouraging but realistic about progress timelines
+- Provide specific, actionable recommendations with sets, reps, and weights when applicable
+- Consider the user's current fitness level and limitations
+- Reference their goals and help create milestones to achieve them
+- When recommending exercises, consider their recent workout history to ensure variety
+- Use progressive overload principles for strength goals
+- For skill goals (like back tuck), break down into prerequisite skills and progressions
+- Consider their current maxes (bench, squat, deadlift) when prescribing weights
+- Consider their running times when prescribing cardio workouts
+- Reference their achieved skills and help them progress to more advanced ones
+- For skills they're learning, suggest drills and progressions to help them achieve them
+
+# Smart Programming Rules
+
+- PRIORITIZE muscle groups that are fully recovered
+- AVOID overworking muscles that are still recovering unless doing active recovery
+- For progressive overload, increase weights by 2.5-5lbs or add 1-2 reps based on history
+- If a deload is recommended, reduce volume by 40-50% and intensity by 20-30%
+- Consider weekly training volume - aim for 10-20 sets per muscle group per week
+- If days since last workout > 5, consider a lighter "reactivation" session
+- Use exercise history to prescribe appropriate weights (last weight + small increment)
+- For multi-day plans, ensure adequate recovery between sessions targeting same muscle groups
+
+# User Feedback Rules
+
+- ALWAYS consider user mood and energy levels when planning workouts
+- If user reports pain, AVOID exercises that may aggravate the affected area
+- If user consistently rates workouts as "too hard", REDUCE intensity immediately
+- If user consistently rates workouts as "too easy", INCREASE challenge progressively
+- Reference specific user notes when explaining recommendations
+- Track common themes from tags and adjust accordingly
+- When stress is high, prioritize enjoyable, mood-boosting exercises over intense training`;
+
   if (!context) {
-    return `You are an AI fitness coach helping a family with their workout goals.
-You provide personalized advice on training, nutrition, and goal-setting.
-Be encouraging but realistic. Provide specific, actionable recommendations.
-When generating workout plans or milestones, be specific with sets, reps, and progressions.`;
+    return `${staticInstructions}
+
+# User Context
+
+No user profile loaded. Provide general fitness guidance.`;
   }
+
+  // =========================================================================
+  // DYNAMIC CONTENT (USER-SPECIFIC) - Place at end for cache optimization
+  // =========================================================================
 
   const { member, currentMetrics, limitations, goals, personalRecords, skills, recentWorkouts, equipment } = context;
 
-  let prompt = `You are an AI fitness coach helping ${member.name}`;
-  if (member.age) prompt += `, a ${member.age}-year-old`;
-  if (member.gender) prompt += ` ${member.gender}`;
-  prompt += ` with their fitness goals.\n\n`;
+  let dynamicContent = `\n\n# User Profile\n\n`;
+  dynamicContent += `You are helping **${member.name}**`;
+  if (member.age) dynamicContent += `, a ${member.age}-year-old`;
+  if (member.gender) dynamicContent += ` ${member.gender}`;
+  dynamicContent += ` with their fitness goals.\n`;
 
   if (currentMetrics) {
-    prompt += `Current metrics:\n`;
-    if (currentMetrics.weight) prompt += `- Weight: ${currentMetrics.weight} lbs\n`;
+    dynamicContent += `\n## Current Metrics\n`;
+    if (currentMetrics.weight) dynamicContent += `- Weight: ${currentMetrics.weight} lbs\n`;
     if (currentMetrics.height) {
       const feet = Math.floor(currentMetrics.height / 12);
       const inches = currentMetrics.height % 12;
-      prompt += `- Height: ${feet}'${inches}"\n`;
+      dynamicContent += `- Height: ${feet}'${inches}"\n`;
     }
-    if (currentMetrics.bodyFatPercentage) prompt += `- Body fat: ${currentMetrics.bodyFatPercentage}%\n`;
-    if (currentMetrics.fitnessLevel) prompt += `- Fitness level: ${currentMetrics.fitnessLevel}\n`;
-    prompt += "\n";
+    if (currentMetrics.bodyFatPercentage) dynamicContent += `- Body fat: ${currentMetrics.bodyFatPercentage}%\n`;
+    if (currentMetrics.fitnessLevel) dynamicContent += `- Fitness level: ${currentMetrics.fitnessLevel}\n`;
   }
 
   if (equipment && equipment.length > 0) {
-    prompt += `Available equipment:\n`;
+    dynamicContent += `\n## Available Equipment\n`;
     const equipmentByCategory: Record<string, string[]> = {};
     equipment.forEach((e) => {
       if (!equipmentByCategory[e.category]) {
@@ -468,35 +535,32 @@ When generating workout plans or milestones, be specific with sets, reps, and pr
       equipmentByCategory[e.category].push(qty > 1 ? `${itemDesc} x${qty}` : itemDesc);
     });
     Object.entries(equipmentByCategory).forEach(([category, items]) => {
-      prompt += `- ${category}: ${items.join(", ")}\n`;
+      dynamicContent += `- ${category}: ${items.join(", ")}\n`;
     });
-    prompt += "When recommending exercises, prioritize those that use the available equipment.\n\n";
   }
 
   if (limitations.length > 0) {
-    prompt += `IMPORTANT - Physical limitations to consider:\n`;
+    dynamicContent += `\n## Physical Limitations (IMPORTANT)\n`;
     limitations.forEach((l) => {
-      prompt += `- ${l.type}: ${l.description}`;
-      if (l.affectedAreas) prompt += ` (affects: ${(l.affectedAreas as string[]).join(", ")})`;
-      if (l.severity) prompt += ` - Severity: ${l.severity}`;
-      prompt += "\n";
+      dynamicContent += `- ${l.type}: ${l.description}`;
+      if (l.affectedAreas) dynamicContent += ` (affects: ${(l.affectedAreas as string[]).join(", ")})`;
+      if (l.severity) dynamicContent += ` - Severity: ${l.severity}`;
+      dynamicContent += "\n";
     });
-    prompt += "Always consider these limitations when recommending exercises.\n\n";
   }
 
   if (goals.length > 0) {
-    prompt += `Current goals:\n`;
+    dynamicContent += `\n## Current Goals\n`;
     goals.forEach((g) => {
-      prompt += `- ${g.title}`;
+      dynamicContent += `- ${g.title}`;
       if (g.targetValue && g.targetUnit) {
-        prompt += ` (target: ${g.targetValue} ${g.targetUnit}`;
-        if (g.currentValue) prompt += `, current: ${g.currentValue}`;
-        prompt += ")";
+        dynamicContent += ` (target: ${g.targetValue} ${g.targetUnit}`;
+        if (g.currentValue) dynamicContent += `, current: ${g.currentValue}`;
+        dynamicContent += ")";
       }
-      if (g.targetDate) prompt += ` - Due: ${new Date(g.targetDate).toLocaleDateString()}`;
-      prompt += ` [${g.status}]\n`;
+      if (g.targetDate) dynamicContent += ` - Due: ${new Date(g.targetDate).toLocaleDateString()}`;
+      dynamicContent += ` [${g.status}]\n`;
     });
-    prompt += "\n";
   }
 
   if (personalRecords.length > 0) {
@@ -577,15 +641,14 @@ When generating workout plans or milestones, be specific with sets, reps, and pr
       strengthLifts.some(lift => key.includes(lift) || lift.includes(key))
     );
     if (strengthPRs.length > 0) {
-      prompt += `Strength Maxes (use for calculating training weights):\n`;
+      dynamicContent += `\n## Strength Maxes\n`;
       strengthPRs.forEach(([exercise, prs]) => {
         const pr = prs.current || prs.allTime;
         if (pr) {
           const repMax = pr.repMax ? ` (${pr.repMax}RM)` : " (1RM)";
-          prompt += `- ${capitalize(exercise)}${repMax}:${formatPR(prs)}\n`;
+          dynamicContent += `- ${capitalize(exercise)}${repMax}:${formatPR(prs)}\n`;
         }
       });
-      prompt += "\n";
     }
 
     // Bodyweight PRs (max reps or weighted)
@@ -593,26 +656,24 @@ When generating workout plans or milestones, be specific with sets, reps, and pr
       bodyweightExercises.some(ex => key.includes(ex) || ex.includes(key))
     );
     if (bodyweightPRs.length > 0) {
-      prompt += `Bodyweight Exercise PRs:\n`;
+      dynamicContent += `\n## Bodyweight Exercise PRs\n`;
       bodyweightPRs.forEach(([exercise, prs]) => {
         const pr = prs.current || prs.allTime;
         if (pr) {
-          prompt += `- ${capitalize(exercise)}: ${pr.value} ${pr.unit}`;
-          if ("notes" in pr && pr.notes) prompt += ` (${pr.notes})`;
-          prompt += "\n";
+          dynamicContent += `- ${capitalize(exercise)}: ${pr.value} ${pr.unit}`;
+          if ("notes" in pr && pr.notes) dynamicContent += ` (${pr.notes})`;
+          dynamicContent += "\n";
         }
       });
-      prompt += "\n";
     }
 
     // Running times
     const runningPRs = Array.from(prsByExercise.entries()).filter(([key]) => key.includes("run"));
     if (runningPRs.length > 0) {
-      prompt += `Running Times:\n`;
+      dynamicContent += `\n## Running Times\n`;
       runningPRs.forEach(([exercise, prs]) => {
-        prompt += `- ${capitalize(exercise)}:${formatPR(prs, true)}\n`;
+        dynamicContent += `- ${capitalize(exercise)}:${formatPR(prs, true)}\n`;
       });
-      prompt += "\n";
     }
 
     // Other Cardio (rowing, biking, etc.)
@@ -620,16 +681,15 @@ When generating workout plans or milestones, be specific with sets, reps, and pr
       cardioExercises.some(ex => key.includes(ex) || ex.includes(key)) && !key.includes("run")
     );
     if (cardioPRs.length > 0) {
-      prompt += `Cardio PRs:\n`;
+      dynamicContent += `\n## Cardio PRs\n`;
       cardioPRs.forEach(([exercise, prs]) => {
         const pr = prs.current || prs.allTime;
         if (pr) {
           // Check if it's a time-based PR (rowing, etc.)
           const isTimeBased = pr.unit === "seconds" || pr.unit === "sec" || pr.unit === "s" || pr.unit === "time";
-          prompt += `- ${capitalize(exercise)}:${formatPR(prs, isTimeBased)}\n`;
+          dynamicContent += `- ${capitalize(exercise)}:${formatPR(prs, isTimeBased)}\n`;
         }
       });
-      prompt += "\n";
     }
 
     // Other PRs not covered above
@@ -643,14 +703,13 @@ When generating workout plans or milestones, be specific with sets, reps, and pr
       ([key]) => !coveredExercises.has(key)
     );
     if (otherPRs.length > 0) {
-      prompt += `Other Personal Records:\n`;
+      dynamicContent += `\n## Other Personal Records\n`;
       otherPRs.slice(0, 8).forEach(([exercise, prs]) => {
         const pr = prs.current || prs.allTime;
         if (pr) {
-          prompt += `- ${capitalize(exercise)}: ${pr.value} ${pr.unit}\n`;
+          dynamicContent += `- ${capitalize(exercise)}: ${pr.value} ${pr.unit}\n`;
         }
       });
-      prompt += "\n";
     }
   }
 
@@ -670,44 +729,43 @@ When generating workout plans or milestones, be specific with sets, reps, and pr
           (s.allTimeBestStatus === "achieved" && s.currentStatus === "learning"))
     );
 
-    prompt += `Skills (Current Status):\n`;
+    dynamicContent += `\n## Skills\n`;
     if (currentMastered.length > 0) {
-      prompt += `- Mastered: ${currentMastered.map((s) => s.name).join(", ")}\n`;
+      dynamicContent += `- Mastered: ${currentMastered.map((s) => s.name).join(", ")}\n`;
     }
     if (currentAchieved.length > 0) {
-      prompt += `- Achieved: ${currentAchieved.map((s) => s.name).join(", ")}\n`;
+      dynamicContent += `- Achieved: ${currentAchieved.map((s) => s.name).join(", ")}\n`;
     }
     if (currentLearning.length > 0) {
-      prompt += `- Learning: ${currentLearning.map((s) => s.name).join(", ")}\n`;
+      dynamicContent += `- Learning: ${currentLearning.map((s) => s.name).join(", ")}\n`;
     }
 
     // Note skills that were previously at a higher level
     if (regressedSkills.length > 0) {
-      prompt += `Previously achieved (needs retraining): ${regressedSkills
+      dynamicContent += `- Previously achieved (needs retraining): ${regressedSkills
         .map((s) => `${s.name} (was ${s.allTimeBestStatus})`)
         .join(", ")}\n`;
     }
-    prompt += "\n";
   }
 
   if (recentWorkouts.length > 0) {
-    prompt += `Recent workout history (last ${recentWorkouts.length} sessions):\n`;
+    dynamicContent += `\n## Recent Workout History\n`;
+    dynamicContent += `Last ${recentWorkouts.length} sessions:\n`;
     recentWorkouts.slice(0, 5).forEach((w) => {
-      prompt += `- ${w.name} (${new Date(w.date).toLocaleDateString()})`;
-      if (w.duration) prompt += ` [${w.duration}min]`;
-      if (w.rating) prompt += ` Rating: ${w.rating}/5`;
-      prompt += `:\n`;
+      dynamicContent += `\n### ${w.name} (${new Date(w.date).toLocaleDateString()})`;
+      if (w.duration) dynamicContent += ` [${w.duration}min]`;
+      if (w.rating) dynamicContent += ` Rating: ${w.rating}/5`;
+      dynamicContent += `\n`;
       w.exercises.forEach((e) => {
-        prompt += `  • ${e.name}: ${e.setsCompleted}/${e.totalSets} sets`;
-        if (e.maxWeight > 0) prompt += `, max ${e.maxWeight}lbs`;
-        if (e.avgReps > 0) prompt += `, ~${e.avgReps} reps`;
-        prompt += "\n";
+        dynamicContent += `- ${e.name}: ${e.setsCompleted}/${e.totalSets} sets`;
+        if (e.maxWeight > 0) dynamicContent += `, max ${e.maxWeight}lbs`;
+        if (e.avgReps > 0) dynamicContent += `, ~${e.avgReps} reps`;
+        dynamicContent += "\n";
       });
     });
-    prompt += "\n";
   }
 
-  // NEW: Include training analysis for smart programming
+  // Include training analysis for smart programming
   const { trainingAnalysis } = context;
   if (trainingAnalysis) {
     // Muscle recovery status
@@ -719,147 +777,100 @@ When generating workout plans or milestones, be specific with sets, reps, and pr
       .map(([muscle, status]) => `${muscle} (${status.hoursSinceWorked}h ago)`);
 
     if (recoveredMuscles.length > 0 || recoveringMuscles.length > 0) {
-      prompt += `MUSCLE RECOVERY STATUS:\n`;
+      dynamicContent += `\n## Muscle Recovery Status\n`;
       if (recoveredMuscles.length > 0) {
-        prompt += `- Ready to train: ${recoveredMuscles.join(", ")}\n`;
+        dynamicContent += `- Ready to train: ${recoveredMuscles.join(", ")}\n`;
       }
       if (recoveringMuscles.length > 0) {
-        prompt += `- Still recovering: ${recoveringMuscles.join(", ")}\n`;
+        dynamicContent += `- Still recovering: ${recoveringMuscles.join(", ")}\n`;
       }
-      prompt += "\n";
     }
 
     // Exercise history for progressive overload
     const exercisesWithHistory = Object.entries(trainingAnalysis.exerciseHistory || {});
     if (exercisesWithHistory.length > 0) {
-      prompt += `PROGRESSIVE OVERLOAD DATA (last performance):\n`;
+      dynamicContent += `\n## Progressive Overload Data\n`;
+      dynamicContent += `Last performance for each exercise:\n`;
       exercisesWithHistory.slice(0, 10).forEach(([name, data]) => {
         if (data) {
-          prompt += `- ${name}: ${data.lastWeight}lbs × ${data.lastReps} reps`;
-          if (data.trend === "increasing") prompt += " ↑ (progressing)";
-          else if (data.trend === "decreasing") prompt += " ↓ (regressing)";
-          prompt += "\n";
+          dynamicContent += `- ${name}: ${data.lastWeight}lbs × ${data.lastReps} reps`;
+          if (data.trend === "increasing") dynamicContent += " ↑ (progressing)";
+          else if (data.trend === "decreasing") dynamicContent += " ↓ (regressing)";
+          dynamicContent += "\n";
         }
       });
-      prompt += "\n";
     }
 
     // Weekly volume and deload analysis
-    prompt += `TRAINING VOLUME:\n`;
-    prompt += `- This week: ${trainingAnalysis.weeklyStats.thisWeek.workouts} workouts, ${trainingAnalysis.weeklyStats.thisWeek.totalSets} total sets\n`;
-    prompt += `- Last week: ${trainingAnalysis.weeklyStats.lastWeek.workouts} workouts, ${trainingAnalysis.weeklyStats.lastWeek.totalSets} total sets\n`;
-    prompt += `- Consecutive weeks training: ${trainingAnalysis.consecutiveWeeksTraining}\n`;
+    dynamicContent += `\n## Training Volume\n`;
+    dynamicContent += `- This week: ${trainingAnalysis.weeklyStats.thisWeek.workouts} workouts, ${trainingAnalysis.weeklyStats.thisWeek.totalSets} total sets\n`;
+    dynamicContent += `- Last week: ${trainingAnalysis.weeklyStats.lastWeek.workouts} workouts, ${trainingAnalysis.weeklyStats.lastWeek.totalSets} total sets\n`;
+    dynamicContent += `- Consecutive weeks training: ${trainingAnalysis.consecutiveWeeksTraining}\n`;
     if (trainingAnalysis.daysSinceLastWorkout !== null) {
-      prompt += `- Days since last workout: ${trainingAnalysis.daysSinceLastWorkout}\n`;
+      dynamicContent += `- Days since last workout: ${trainingAnalysis.daysSinceLastWorkout}\n`;
     }
     if (trainingAnalysis.needsDeload) {
-      prompt += `⚠️ DELOAD RECOMMENDED: ${trainingAnalysis.consecutiveWeeksTraining} weeks of consistent training. Consider a lighter week.\n`;
+      dynamicContent += `\n**⚠️ DELOAD RECOMMENDED:** ${trainingAnalysis.consecutiveWeeksTraining} weeks of consistent training. Consider a lighter week.\n`;
     }
-    prompt += "\n";
   }
 
   // Include user feedback and notes context
   const { contextNotes: notesContext } = context;
   if (notesContext && notesContext.summary) {
-    prompt += `USER FEEDBACK & MOOD CONTEXT:\n`;
-    prompt += notesContext.summary;
-    prompt += "\n";
+    dynamicContent += `\n## User Feedback & Mood\n`;
+    dynamicContent += notesContext.summary;
 
-    // Add specific recommendations based on feedback patterns
+    // Add specific alerts based on feedback patterns
+    const alerts: string[] = [];
+
     if (notesContext.avgEnergy !== null && notesContext.avgEnergy <= 2) {
-      prompt += `⚠️ LOW ENERGY PATTERN DETECTED: User consistently reports low energy. Reduce workout intensity by 20-30%, focus on recovery, and suggest sleep/nutrition improvements.\n`;
+      alerts.push(`**LOW ENERGY:** Reduce intensity by 20-30%, focus on recovery.`);
     }
     if (notesContext.avgPain !== null && notesContext.avgPain >= 5) {
-      prompt += `⚠️ SIGNIFICANT PAIN REPORTED: User is experiencing considerable pain (avg ${notesContext.avgPain.toFixed(1)}/10). Avoid exercises that may aggravate, suggest mobility/recovery work, and recommend consulting a professional if persistent.\n`;
+      alerts.push(`**SIGNIFICANT PAIN:** Avg ${notesContext.avgPain.toFixed(1)}/10. Avoid aggravating exercises, suggest mobility work.`);
     }
     if (notesContext.difficultyFeedback) {
       const { tooHard, total } = notesContext.difficultyFeedback;
       if (tooHard > total * 0.3) {
-        prompt += `⚠️ DIFFICULTY TOO HIGH: ${Math.round((tooHard / total) * 100)}% of workouts rated too hard. REDUCE weights by 10-15%, reduce sets, or extend rest periods.\n`;
+        alerts.push(`**DIFFICULTY TOO HIGH:** ${Math.round((tooHard / total) * 100)}% of workouts rated too hard. Reduce weights by 10-15%.`);
       }
     }
+
     // Check for stress/fatigue patterns
     const stressedCount = notesContext.recentMoods.filter(m => m.mood === "stressed" || m.mood === "frustrated").length;
     const tiredCount = notesContext.recentMoods.filter(m => m.mood === "tired").length;
     if (stressedCount >= 3) {
-      prompt += `⚠️ STRESS PATTERN: User frequently reports feeling stressed. Consider shorter, mood-boosting workouts with endorphin-releasing exercises.\n`;
+      alerts.push(`**STRESS PATTERN:** Consider shorter, mood-boosting workouts.`);
     }
     if (tiredCount >= 3) {
-      prompt += `⚠️ FATIGUE PATTERN: User frequently reports feeling tired. Prioritize sleep hygiene, consider lighter workouts, and check for overtraining.\n`;
+      alerts.push(`**FATIGUE PATTERN:** Prioritize sleep, consider lighter workouts.`);
     }
-    prompt += "\n";
+
+    if (alerts.length > 0) {
+      dynamicContent += `\n### Alerts\n`;
+      alerts.forEach(alert => {
+        dynamicContent += `- ${alert}\n`;
+      });
+    }
   }
 
-  prompt += `Guidelines:
-- Be encouraging but realistic about progress timelines
-- Provide specific, actionable recommendations with sets, reps, and weights when applicable
-- Consider the user's current fitness level and limitations
-- Reference their goals and help create milestones to achieve them
-- When recommending exercises, consider their recent workout history to ensure variety
-- Use progressive overload principles for strength goals
-- For skill goals (like back tuck), break down into prerequisite skills and progressions
-- Consider their current maxes (bench, squat, deadlift) when prescribing weights
-- Consider their running times when prescribing cardio workouts
-- Reference their achieved skills and help them progress to more advanced ones
-- For skills they're learning, suggest drills and progressions to help them achieve them
-
-SMART PROGRAMMING RULES:
-- PRIORITIZE muscle groups that are fully recovered (see MUSCLE RECOVERY STATUS above)
-- AVOID overworking muscles that are still recovering unless doing active recovery
-- For progressive overload, increase weights by 2.5-5lbs or add 1-2 reps based on PROGRESSIVE OVERLOAD DATA
-- If a deload is recommended, reduce volume by 40-50% and intensity by 20-30%
-- Consider weekly training volume - aim for 10-20 sets per muscle group per week
-- If days since last workout > 5, consider a lighter "reactivation" session
-- Use exercise history to prescribe appropriate weights (last weight + small increment)
-- For multi-day plans, ensure adequate recovery between sessions targeting same muscle groups
-
-USER FEEDBACK RULES:
-- ALWAYS consider user mood and energy levels when planning workouts
-- If user reports pain, AVOID exercises that may aggravate the affected area
-- If user consistently rates workouts as "too hard", REDUCE intensity immediately
-- If user consistently rates workouts as "too easy", INCREASE challenge progressively
-- Reference specific user notes when explaining recommendations (e.g., "Since you mentioned feeling tired...")
-- Track common themes from tags (e.g., "sore", "sleep deprived") and adjust accordingly
-- When stress is high, prioritize enjoyable, mood-boosting exercises over intense training`;
-
-  return prompt;
+  // Return combined static instructions + dynamic user content
+  // Static content is at the beginning for optimal prompt caching
+  return staticInstructions + dynamicContent;
 }
 
 /**
  * OpenAI GPT-5.2 Model Configuration (January 2026)
  *
- * GPT-5.2 is OpenAI's flagship model with these capabilities:
- * - 400K total context window (272K input + 128K output)
- * - State-of-the-art reasoning with xhigh effort level
- * - 50% better vision understanding (charts, screenshots, diagrams)
- * - Context compaction for long-running workflows
- * - 90% discount on cached inputs
- * - Built-in web search, file search, and MCP tools
+ * Available models:
+ * - gpt-5.2: Main general purpose model, best for complex tasks
+ * - gpt-5.2-chat-latest: Fast chat model (powers ChatGPT)
+ * - gpt-5.2-pro: Complex reasoning with more compute
+ * - gpt-5-mini: Smaller, cost-effective model
  *
- * Reasoning Effort Levels (GPT-5.2):
- * - "none": No reasoning, fastest responses, lowest latency (default)
- * - "low": Light reasoning, good for simple tasks
- * - "medium": Balanced reasoning for most use cases
- * - "high": Deep reasoning for complex multi-step problems
- * - "xhigh": Maximum reasoning (GPT-5.2 Pro only), best for highly complex tasks
+ * GPT-5.2 supports reasoning.effort: none (default), low, medium, high, xhigh
  *
- * Key Features:
- * - Responses API: 3% better performance on SWE-bench vs Chat Completions
- * - 40-80% better cache utilization with Responses API
- * - Stateful conversations with store: true
- * - Concise reasoning summaries with reasoningSummary: "auto"
- * - Service tiers: "flex" (50% cheaper) or "priority" (faster)
- *
- * Best Practices (OpenAI 2026 guidelines):
- * 1. Use Responses API for all new projects (better intelligence + caching)
- * 2. Reasoning models work better with high-level guidance vs explicit instructions
- * 3. Use "xhigh" reasoning sparingly for truly complex tasks
- * 4. Enable store: true for multi-turn conversations
- * 5. Structured outputs require all properties in 'required' array (.nullable() not .optional())
- * 6. Use serviceTier: "flex" for batch/non-urgent tasks (50% cheaper)
- *
- * @see https://platform.openai.com/docs/models/gpt-5.2
- * @see https://platform.openai.com/docs/guides/responses-vs-chat-completions
+ * @see https://platform.openai.com/docs/guides/latest-model
  */
 
 // =============================================================================
@@ -902,6 +913,9 @@ export type ServiceTier = "auto" | "flex" | "priority" | "default";
 // Type for text verbosity
 export type TextVerbosity = "low" | "medium" | "high";
 
+// Type for prompt cache retention
+export type PromptCacheRetention = "in_memory" | "24h";
+
 /**
  * Provider options interface for OpenAI Responses API
  */
@@ -913,6 +927,8 @@ interface OpenAIProviderOptions {
   store?: boolean;
   parallelToolCalls?: boolean;
   strictJsonSchema?: boolean;
+  promptCacheRetention?: "in_memory" | "24h";
+  promptCacheKey?: string;
 }
 
 /**
@@ -925,17 +941,26 @@ interface OpenAIProviderOptions {
  * - "deep": Complex multi-member workouts, detailed planning (~2min)
  * - "max": Highly complex tasks - injury prevention, training periodization (~3min)
  *
+ * Prompt Caching (OpenAI 2026):
+ * - Automatic for prompts 1024+ tokens
+ * - Extended retention (24h) available for GPT-5.2, GPT-5.1, GPT-5, GPT-4.1
+ * - Reduces latency by up to 80%, input costs by up to 90%
+ * - Use promptCacheKey for better cache hits across similar requests
+ *
  * @param level - The reasoning level to use
  * @param options - Additional configuration options
  * @returns Provider options object for AI SDK
  *
  * @example
- * // Standard workout generation
+ * // Standard workout generation with extended caching
  * const result = await generateObject({
  *   model: aiModel,
  *   schema: workoutSchema,
  *   prompt: "Generate a workout...",
- *   providerOptions: getReasoningOptions("standard"),
+ *   providerOptions: getReasoningOptions("standard", {
+ *     enableExtendedCache: true,
+ *     cacheKey: "workout-generation",
+ *   }),
  * });
  *
  * @example
@@ -946,6 +971,7 @@ interface OpenAIProviderOptions {
  *   providerOptions: getReasoningOptions("max", {
  *     showReasoning: true,
  *     verbosity: "high",
+ *     enableExtendedCache: true,
  *   }),
  * });
  */
@@ -962,18 +988,22 @@ export const getReasoningOptions = (
     storeConversation?: boolean;
     /** Enable parallel tool calls (default: true) */
     parallelTools?: boolean;
+    /** Enable extended 24h prompt caching (default: true for supported models) */
+    enableExtendedCache?: boolean;
+    /** Optional cache key to improve cache hit rates for similar requests */
+    cacheKey?: string;
   }
-): { openai: { reasoningEffort: string; reasoningSummary?: string; serviceTier?: string } } => {
+): { openai: OpenAIProviderOptions } => {
   // Map reasoning levels to GPT-5.2 reasoningEffort values
-  const effortMap: Record<ReasoningLevel, string> = {
-    none: "minimal", // GPT-5.2 doesn't support 'none', use minimal
+  const effortMap: Record<ReasoningLevel, "none" | "low" | "medium" | "high" | "xhigh"> = {
+    none: "none",
     quick: "low",
     standard: "medium",
     deep: "high",
-    max: "high", // GPT-5.2 'xhigh' is only for GPT-5.1-Codex-Max
+    max: "xhigh",
   };
 
-  const openaiOptions: { reasoningEffort: string; reasoningSummary?: string; serviceTier?: string } = {
+  const openaiOptions: OpenAIProviderOptions = {
     reasoningEffort: effortMap[level],
   };
 
@@ -985,6 +1015,23 @@ export const getReasoningOptions = (
   // Service tier for cost optimization
   if (options?.serviceTier) {
     openaiOptions.serviceTier = options.serviceTier;
+  }
+
+  // Enable extended prompt caching (24h retention) by default
+  // This reduces latency by up to 80% and input costs by up to 90%
+  if (options?.enableExtendedCache !== false) {
+    openaiOptions.promptCacheRetention = "24h";
+  }
+
+  // Optional cache key for better cache hit rates
+  // Use consistent keys for requests sharing common prefixes
+  if (options?.cacheKey) {
+    openaiOptions.promptCacheKey = options.cacheKey;
+  }
+
+  // Enable conversation storage for multi-turn by default
+  if (options?.storeConversation) {
+    openaiOptions.store = true;
   }
 
   return {
@@ -1033,7 +1080,7 @@ export const getRecommendedReasoningLevel = (
 
 /**
  * Get full provider options optimized for a specific task type
- * Combines reasoning level with appropriate verbosity and service tier
+ * Combines reasoning level with appropriate verbosity, service tier, and caching
  *
  * @param taskType - The type of AI task being performed
  * @param options - Override options
@@ -1045,6 +1092,10 @@ export const getTaskOptions = (
     showReasoning?: boolean;
     serviceTier?: ServiceTier;
     storeConversation?: boolean;
+    /** Disable extended caching if needed (default: enabled) */
+    disableExtendedCache?: boolean;
+    /** Custom cache key for this task type */
+    cacheKey?: string;
   }
 ) => {
   const level = getRecommendedReasoningLevel(taskType);
@@ -1062,11 +1113,26 @@ export const getTaskOptions = (
     mental_coaching: "high",
   };
 
+  // Default cache keys by task type for better cache hit rates
+  const defaultCacheKeys: Record<string, string> = {
+    chat: "chat-response",
+    simple_workout: "workout-simple",
+    personalized_workout: "workout-personalized",
+    multi_member_workout: "workout-multi",
+    milestone_generation: "milestone-gen",
+    complex_analysis: "analysis",
+    skill_assessment: "skill-assess",
+    injury_prevention: "injury-prevent",
+    mental_coaching: "mental-coach",
+  };
+
   return getReasoningOptions(level, {
     verbosity: verbosityMap[taskType] || "medium",
     serviceTier: options?.serviceTier,
     showReasoning: options?.showReasoning,
     storeConversation: options?.storeConversation ?? (taskType === "chat"),
+    enableExtendedCache: !options?.disableExtendedCache,
+    cacheKey: options?.cacheKey || defaultCacheKeys[taskType],
   });
 };
 

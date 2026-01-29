@@ -93,37 +93,72 @@ async function syncWorkouts() {
   console.log("Background sync: syncing workouts");
 }
 
-// Push notifications for workout reminders
+// Push notifications (messages, reminders, achievements, etc.)
 self.addEventListener("push", (event) => {
-  const data = event.data?.json() ?? {};
-  const title = data.title || "Workout Circle";
-  const options = {
-    body: data.body || "Time for your workout!",
-    icon: "/icons/icon-192.png",
-    badge: "/icons/icon-72.png",
-    tag: data.tag || "workout-reminder",
-    data: data.url || "/dashboard",
-  };
+  if (!event.data) return;
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  try {
+    const payload = event.data.json();
+    const { title, body, icon, badge, data } = payload;
+
+    const options = {
+      body: body || "",
+      icon: icon || "/icons/icon-192.png",
+      badge: badge || "/icons/icon-72.png",
+      tag: data?.notificationId || "notification",
+      data: data || {},
+      vibrate: [100, 50, 100],
+      requireInteraction: false,
+      actions: [
+        { action: "view", title: "View" },
+        { action: "dismiss", title: "Dismiss" },
+      ],
+    };
+
+    event.waitUntil(self.registration.showNotification(title, options));
+  } catch (error) {
+    console.error("Error showing notification:", error);
+  }
 });
 
 // Notification click handler
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
+  const { action } = event;
+  const { data } = event.notification;
+
+  // Handle dismiss action - just close
+  if (action === "dismiss") {
+    return;
+  }
+
+  // Open the action URL or default to dashboard
+  const urlToOpen = data?.actionUrl || "/dashboard";
+
   event.waitUntil(
-    clients.matchAll({ type: "window" }).then((clientList) => {
-      // Focus existing window if available
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      // Check if there's already an open window
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && "focus" in client) {
-          return client.focus();
+          client.focus();
+          // Navigate to the specific page if different
+          if (!client.url.includes(urlToOpen)) {
+            client.navigate(urlToOpen);
+          }
+          return;
         }
       }
-      // Open new window
+      // Open a new window if none exists
       if (clients.openWindow) {
-        return clients.openWindow(event.notification.data || "/dashboard");
+        return clients.openWindow(urlToOpen);
       }
     })
   );
+});
+
+// Notification close handler (for analytics)
+self.addEventListener("notificationclose", (event) => {
+  // Could track notification dismissal analytics here
+  console.log("Notification dismissed:", event.notification.tag);
 });

@@ -24,6 +24,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -44,7 +45,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Search,
   GripVertical,
   Plus,
   Trash2,
@@ -1308,21 +1308,18 @@ export default function WorkoutBuilderPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Intuitive Quick Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Quick search: type exercise name and press Enter to add..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-10 pr-4"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && filteredExercises.length > 0) {
-                    addExercise(filteredExercises[0]);
-                    setSearch("");
-                  }
-                }}
-              />
-            </div>
+            <SearchInput
+              placeholder="Quick search: type exercise name and press Enter to add..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pr-4"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && filteredExercises.length > 0) {
+                  addExercise(filteredExercises[0]);
+                  setSearch("");
+                }
+              }}
+            />
 
             {/* Quick Search Results - Only show when searching */}
             {search && (

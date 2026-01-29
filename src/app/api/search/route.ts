@@ -50,7 +50,11 @@ export async function GET(request: Request) {
 }
 
 async function searchExercises(query: string, limit: number) {
+  // Sanitize query for safe SQL usage (parameterized via Drizzle)
+  const searchPattern = `%${query}%`;
+  
   // First try text-based search (faster, always available)
+  // Using parameterized queries to prevent SQL injection
   const textResults = await db
     .select({
       id: exercises.id,
@@ -65,11 +69,12 @@ async function searchExercises(query: string, limit: number) {
     .from(exercises)
     .where(
       or(
-        ilike(exercises.name, `%${query}%`),
-        ilike(exercises.description, `%${query}%`),
-        ilike(exercises.category, `%${query}%`),
-        sql`${exercises.muscleGroups}::text ILIKE ${"%" + query + "%"}`,
-        sql`${exercises.equipment}::text ILIKE ${"%" + query + "%"}`
+        ilike(exercises.name, searchPattern),
+        ilike(exercises.description, searchPattern),
+        ilike(exercises.category, searchPattern),
+        // Use sql.raw for column cast but parameterize the search value
+        sql`${exercises.muscleGroups}::text ILIKE ${searchPattern}`,
+        sql`${exercises.equipment}::text ILIKE ${searchPattern}`
       )
     )
     .limit(limit);

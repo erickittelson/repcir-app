@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { DeleteConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface Skill {
   id: string;
@@ -120,6 +121,8 @@ export function MemberSkills({ memberId, compact = false }: MemberSkillsProps) {
   const [showDialog, setShowDialog] = useState(false);
   const [editingSkill, setEditingSkill] = useState<Skill | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Skill | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Form state
   const [name, setName] = useState("");
@@ -227,18 +230,22 @@ export function MemberSkills({ memberId, compact = false }: MemberSkillsProps) {
     }
   };
 
-  const handleDelete = async (skillId: string) => {
-    if (!confirm("Are you sure you want to delete this skill?")) return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
 
     try {
-      await fetch(`/api/members/${memberId}/skills?skillId=${skillId}`, {
+      await fetch(`/api/members/${memberId}/skills?skillId=${deleteTarget.id}`, {
         method: "DELETE",
       });
       toast.success("Skill deleted");
       fetchSkills();
+      setDeleteTarget(null);
     } catch (error) {
       console.error("Failed to delete skill:", error);
       toast.error("Failed to delete");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -461,7 +468,7 @@ export function MemberSkills({ memberId, compact = false }: MemberSkillsProps) {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-destructive"
-                              onClick={() => handleDelete(skill.id)}
+                              onClick={() => setDeleteTarget(skill)}
                             >
                               <Trash2 className="h-3 w-3" />
                             </Button>
@@ -490,6 +497,15 @@ export function MemberSkills({ memberId, compact = false }: MemberSkillsProps) {
           {renderForm()}
         </DialogContent>
       </Dialog>
+
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        itemName={deleteTarget?.name}
+        itemType="skill"
+        onConfirm={handleDelete}
+        loading={deleting}
+      />
     </Card>
   );
 }

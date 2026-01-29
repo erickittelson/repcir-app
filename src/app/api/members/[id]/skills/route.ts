@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { circleMembers, memberSkills } from "@/lib/db/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { evaluateAndAwardBadges } from "@/lib/badges";
 
 export async function GET(
   request: Request,
@@ -109,7 +110,25 @@ export async function POST(
       })
       .returning();
 
-    return NextResponse.json(skill);
+    // Evaluate badges if skill status is "achieved" or "mastered"
+    let badgeResults = { awarded: [] as any[], goalMatches: [] as any[] };
+    if (initialStatus === "achieved" || initialStatus === "mastered") {
+      try {
+        badgeResults = await evaluateAndAwardBadges({
+          userId: session.user.id,
+          memberId: id,
+          trigger: "skill",
+          skillName: name,
+        });
+      } catch (badgeError) {
+        console.error("Error evaluating badges:", badgeError);
+      }
+    }
+
+    return NextResponse.json({
+      ...skill,
+      badgesAwarded: badgeResults.awarded,
+    });
   } catch (error) {
     console.error("Error creating skill:", error);
     return NextResponse.json(
@@ -206,7 +225,32 @@ export async function PUT(
         )
       );
 
-    return NextResponse.json({ success: true });
+    // Evaluate badges if skill status was updated to "achieved" or "mastered"
+    let badgeResults = { awarded: [] as any[], goalMatches: [] as any[] };
+    if (newStatus === "achieved" || newStatus === "mastered") {
+      try {
+        // Get the skill name for badge evaluation
+        const updatedSkill = await db.query.memberSkills.findFirst({
+          where: eq(memberSkills.id, skillId),
+        });
+        
+        if (updatedSkill) {
+          badgeResults = await evaluateAndAwardBadges({
+            userId: session.user.id,
+            memberId: id,
+            trigger: "skill",
+            skillName: updatedSkill.name,
+          });
+        }
+      } catch (badgeError) {
+        console.error("Error evaluating badges:", badgeError);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      badgesAwarded: badgeResults.awarded,
+    });
   } catch (error) {
     console.error("Error updating skill:", error);
     return NextResponse.json(

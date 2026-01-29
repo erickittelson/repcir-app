@@ -21,7 +21,7 @@ export default function NotFound() {
             The page you are looking for does not exist or has been moved.
           </p>
           <Button asChild className="w-full">
-            <Link href="/dashboard">
+            <Link href="/">
               <Home className="mr-2 h-4 w-4" />
               Back to Dashboard
             </Link>

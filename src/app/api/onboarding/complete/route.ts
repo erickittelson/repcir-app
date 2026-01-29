@@ -23,6 +23,11 @@ import {
   goals,
   personalRecords,
   exercises,
+  userProfiles,
+  userMetrics,
+  userLocations,
+  userSports,
+  onboardingProgress,
 } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
@@ -32,29 +37,61 @@ const ACTIVE_CIRCLE_COOKIE = "active_circle";
 // Schema for the extracted onboarding data
 const onboardingDataSchema = z.object({
   name: z.string().optional(),
-  age: z.number().optional(),
+  profilePicture: z.string().optional(),
+  // Birthday (new) or age (legacy)
+  birthMonth: z.number().optional(),
+  birthYear: z.number().optional(),
+  age: z.number().optional(), // Legacy support
   gender: z.enum(["male", "female", "other"]).optional(),
   heightFeet: z.number().optional(),
   heightInches: z.number().optional(),
   weight: z.number().optional(),
+  city: z.string().optional(),
   bodyFatPercentage: z.number().optional(),
+  targetWeight: z.number().optional(),
   fitnessLevel: z.enum(["beginner", "intermediate", "advanced", "elite"]).optional(),
-  primaryMotivation: z.string().optional(),
-  primaryGoal: z.object({
-    type: z.string(),
-    description: z.string(),
-    targetValue: z.number().optional(),
-    targetUnit: z.string().optional(),
+  trainingFrequency: z.number().optional(),
+  activityLevel: z.object({
+    jobType: z.enum(["sedentary", "light", "moderate", "active", "very_active"]),
+    dailySteps: z.number().optional(),
+    description: z.string().optional(),
   }).optional(),
+  primaryMotivation: z.union([z.string(), z.array(z.string())]).optional(),
+  // Support both simple string format (new) and object format (legacy)
+  primaryGoal: z.union([
+    z.string(),
+    z.object({
+      type: z.string(),
+      description: z.string(),
+      targetValue: z.number().optional(),
+      targetUnit: z.string().optional(),
+    }),
+  ]).optional(),
   secondaryGoals: z.array(z.string()).optional(),
   timeline: z.string().optional(),
-  targetWeight: z.number().optional(),
   limitations: z.array(z.object({
     bodyPart: z.string(),
-    condition: z.string(),
+    condition: z.string().optional(),
     severity: z.enum(["mild", "moderate", "severe"]).optional(),
     avoidMovements: z.array(z.string()).optional(),
+    movementsToAvoid: z.array(z.string()).optional(),
   })).optional(),
+  // Current assessed maxes (for workout programming)
+  currentMaxes: z.array(z.object({
+    exercise: z.string(),
+    value: z.union([z.number(), z.enum(["working_on", "mastered", "consistent"])]),
+    unit: z.enum(["lbs", "reps", "seconds", "min:sec", "skill"]),
+    isCustom: z.boolean().optional(),
+  })).optional(),
+  // Specific goals (PRs, skills, targets)
+  specificGoals: z.array(z.object({
+    type: z.enum(["pr", "skill", "time", "other"]),
+    exercise: z.string().optional(),
+    targetValue: z.number().optional(),
+    targetUnit: z.string().optional(),
+    description: z.string().optional(),
+  })).optional(),
+  // Legacy personal records
   personalRecords: z.array(z.object({
     exercise: z.string(),
     value: z.number(),
@@ -64,8 +101,17 @@ const onboardingDataSchema = z.object({
   workoutDuration: z.number().optional(),
   equipmentAccess: z.array(z.string()).optional(),
   workoutDays: z.array(z.string()).optional(),
-  trainingFrequency: z.number().optional(),
   currentActivity: z.string().optional(),
+  profileVisibility: z.enum(["public", "private"]).optional(),
+  // Sports
+  sports: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    icon: z.string().optional(),
+  })).optional(),
+  sportsAcknowledged: z.boolean().optional(),
+  // Training preferences
+  trainingFrequency: z.number().optional(),
 });
 
 export async function POST(request: Request) {
@@ -88,6 +134,15 @@ export async function POST(request: Request) {
     const data = validation.data;
     const userName = data.name || session.user.name || "User";
 
+    // Convert legacy age to birthMonth/birthYear if needed
+    let birthMonth = data.birthMonth;
+    let birthYear = data.birthYear;
+    if (!birthMonth && !birthYear && data.age) {
+      // Legacy age support - estimate birth year
+      birthYear = new Date().getFullYear() - data.age;
+      birthMonth = 1; // Default to January
+    }
+
     // Check if user already has a personal circle
     const existingCircles = session.circles || [];
     let circleId: string;
@@ -99,18 +154,12 @@ export async function POST(request: Request) {
       memberId = existingCircles[0].memberId;
 
       // Update the existing member profile
+      // Note: dateOfBirth and profilePicture now stored in user_profiles instead
       await db
         .update(circleMembers)
         .set({
           name: userName,
           gender: data.gender || null,
-          dateOfBirth: data.age
-            ? new Date(
-                new Date().getFullYear() - data.age,
-                new Date().getMonth(),
-                new Date().getDate()
-              )
-            : null,
           updatedAt: new Date(),
         })
         .where(eq(circleMembers.id, memberId));
@@ -127,6 +176,7 @@ export async function POST(request: Request) {
       circleId = newCircle.id;
 
       // Create member profile
+      // Note: dateOfBirth and profilePicture now stored in user_profiles instead
       const [newMember] = await db
         .insert(circleMembers)
         .values({
@@ -134,13 +184,6 @@ export async function POST(request: Request) {
           userId: session.user.id,
           name: userName,
           gender: data.gender || null,
-          dateOfBirth: data.age
-            ? new Date(
-                new Date().getFullYear() - data.age,
-                new Date().getMonth(),
-                new Date().getDate()
-              )
-            : null,
           role: "owner",
         })
         .returning();
@@ -158,6 +201,32 @@ export async function POST(request: Request) {
       });
     }
 
+    // Create or update user_profiles with user-level data
+    // This is separate from circle_members as it's user-wide settings
+    await db
+      .insert(userProfiles)
+      .values({
+        userId: session.user.id,
+        displayName: userName,
+        profilePicture: data.profilePicture || null,
+        birthMonth: birthMonth || null,
+        birthYear: birthYear || null,
+        city: data.city || null,
+        visibility: data.profileVisibility || "private",
+      })
+      .onConflictDoUpdate({
+        target: userProfiles.userId,
+        set: {
+          displayName: userName,
+          profilePicture: data.profilePicture || null,
+          birthMonth: birthMonth || null,
+          birthYear: birthYear || null,
+          city: data.city || null,
+          visibility: data.profileVisibility || "private",
+          updatedAt: new Date(),
+        },
+      });
+
     // Create initial metrics if we have any
     if (
       data.weight ||
@@ -169,6 +238,7 @@ export async function POST(request: Request) {
         ? data.heightFeet * 12 + (data.heightInches || 0)
         : null;
 
+      // Save to member_metrics (circle-level)
       await db.insert(memberMetrics).values({
         memberId,
         weight: data.weight || null,
@@ -177,6 +247,38 @@ export async function POST(request: Request) {
         fitnessLevel: data.fitnessLevel || null,
         notes: "Initial profile from onboarding",
       });
+
+      // Save to user_metrics (user-level - displayed on profile)
+      await db.insert(userMetrics).values({
+        userId: session.user.id,
+        weight: data.weight || null,
+        height: heightInches,
+        bodyFatPercentage: data.bodyFatPercentage || null,
+        fitnessLevel: data.fitnessLevel || null,
+        notes: "Initial profile from onboarding",
+      });
+    }
+
+    // Save equipment/gym as a location
+    if (data.equipmentAccess && data.equipmentAccess.length > 0) {
+      await db.insert(userLocations).values({
+        userId: session.user.id,
+        name: "My Gym",
+        type: "home", // Default type
+        isActive: true,
+        equipment: data.equipmentAccess,
+      });
+    }
+
+    // Save sports
+    if (data.sports && data.sports.length > 0) {
+      await db.insert(userSports).values(
+        data.sports.map((sport) => ({
+          userId: session.user.id,
+          sport: sport.name,
+          currentlyActive: true,
+        }))
+      );
     }
 
     // Create limitations if any
@@ -185,7 +287,9 @@ export async function POST(request: Request) {
         data.limitations.map((l) => ({
           memberId,
           type: "injury",
-          description: `${l.bodyPart}: ${l.condition}`,
+          description: l.condition 
+            ? `${l.bodyPart}: ${l.condition}` 
+            : `${l.bodyPart} limitation`,
           affectedAreas: [l.bodyPart],
           severity: l.severity || null,
           active: true,
@@ -199,9 +303,13 @@ export async function POST(request: Request) {
       const categoryMap: Record<string, string> = {
         strength: "strength",
         weight_loss: "weight",
+        muscle_gain: "strength",
         muscle_building: "strength",
         cardio: "cardio",
+        endurance: "cardio",
         skill: "skill",
+        flexibility: "health",
+        general_fitness: "health",
         aesthetic: "weight",
         health: "health",
       };
@@ -224,20 +332,78 @@ export async function POST(request: Request) {
         }
       }
 
+      // Convert motivation to string if it's an array
+      const motivationDescription = data.primaryMotivation
+        ? Array.isArray(data.primaryMotivation)
+          ? data.primaryMotivation.join(", ")
+          : data.primaryMotivation
+        : null;
+
+      // Handle both string and object goal formats
+      const goalType = typeof data.primaryGoal === "string" 
+        ? data.primaryGoal 
+        : data.primaryGoal.type;
+      const goalTitle = typeof data.primaryGoal === "string"
+        ? data.primaryGoal.replace(/_/g, " ")
+        : data.primaryGoal.description;
+      const goalTargetValue = typeof data.primaryGoal === "object" 
+        ? data.primaryGoal.targetValue 
+        : null;
+      const goalTargetUnit = typeof data.primaryGoal === "object" 
+        ? data.primaryGoal.targetUnit 
+        : null;
+
       await db.insert(goals).values({
         memberId,
-        title: data.primaryGoal.description,
-        description: data.primaryMotivation || null,
-        category: categoryMap[data.primaryGoal.type] || "health",
-        targetValue: data.primaryGoal.targetValue || null,
-        targetUnit: data.primaryGoal.targetUnit || null,
+        title: goalTitle,
+        description: motivationDescription,
+        category: categoryMap[goalType] || "health",
+        targetValue: goalTargetValue,
+        targetUnit: goalTargetUnit,
         targetDate,
         status: "active",
         aiGenerated: true,
       });
     }
 
-    // Create personal records if any
+    // Create personal records from currentMaxes (new format)
+    if (data.currentMaxes && data.currentMaxes.length > 0) {
+      for (const max of data.currentMaxes) {
+        // Skip skills for personal records (they don't have numeric values)
+        if (max.unit === "skill") continue;
+
+        // Find or create the exercise
+        let exercise = await db.query.exercises.findFirst({
+          where: (ex, { ilike }) => ilike(ex.name, max.exercise),
+        });
+
+        if (!exercise) {
+          const [newExercise] = await db
+            .insert(exercises)
+            .values({
+              name: max.exercise,
+              category: "custom",
+              muscleGroups: [],
+              equipment: [],
+              difficulty: "intermediate",
+              isCustom: true,
+            })
+            .returning();
+          exercise = newExercise;
+        }
+
+        await db.insert(personalRecords).values({
+          memberId,
+          exerciseId: exercise.id,
+          value: typeof max.value === "number" ? max.value : 0,
+          unit: max.unit,
+          recordType: "current",
+          repMax: max.unit === "lbs" ? 1 : null,
+        });
+      }
+    }
+
+    // Create personal records from legacy format if any
     if (data.personalRecords && data.personalRecords.length > 0) {
       for (const pr of data.personalRecords) {
         // Find or create the exercise
@@ -271,6 +437,26 @@ export async function POST(request: Request) {
         });
       }
     }
+
+    // Mark onboarding as complete
+    await db
+      .insert(onboardingProgress)
+      .values({
+        userId: session.user.id,
+        currentPhase: "complete",
+        phaseIndex: 100,
+        extractedData: data as Record<string, unknown>,
+        completedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: onboardingProgress.userId,
+        set: {
+          currentPhase: "complete",
+          completedAt: new Date(),
+          extractedData: data as Record<string, unknown>,
+          updatedAt: new Date(),
+        },
+      });
 
     return NextResponse.json({
       success: true,

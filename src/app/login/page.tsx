@@ -12,7 +12,7 @@ import {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
+    <div className="min-h-screen flex items-center justify-center mesh-gradient p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
@@ -25,8 +25,10 @@ export default function LoginPage() {
             Sign in to track your workouts and achieve your goals
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <AuthView path="sign-in" />
+        <CardContent className="overflow-visible">
+          <div className="w-full [&>*]:w-full">
+            <AuthView path="sign-in" />
+          </div>
         </CardContent>
       </Card>
     </div>

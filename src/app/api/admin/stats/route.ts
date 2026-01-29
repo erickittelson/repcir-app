@@ -26,6 +26,15 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Verify admin or owner role for admin stats access
+    const userRole = session.activeCircle?.role;
+    if (userRole !== "admin" && userRole !== "owner") {
+      return NextResponse.json(
+        { error: "Forbidden: Admin access required" },
+        { status: 403 }
+      );
+    }
+
     const url = new URL(request.url);
     const detailed = url.searchParams.get("detailed") === "true";
 

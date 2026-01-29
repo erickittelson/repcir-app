@@ -26,28 +26,30 @@ export { semanticTools };
 
 /**
  * Build a system prompt enhanced with semantic context
+ *
+ * PROMPT CACHING OPTIMIZATION:
+ * - Static instructions (tool descriptions, guidelines) are placed FIRST
+ * - Dynamic content (semantic context) is placed LAST
+ * - This maximizes cache hits since the static prefix remains constant
  */
 export function buildSemanticSystemPrompt(
   basePrompt: string,
   semanticContext: SemanticContext
 ): string {
-  const formattedContext = formatSemanticContext(semanticContext);
-
-  return `${basePrompt}
-
+  // STATIC CONTENT (CACHEABLE) - Tool instructions placed first
+  const staticToolInstructions = `
 ---
-## SEMANTIC KNOWLEDGE BASE
-The following definitions and patterns are relevant to this conversation.
-Use them to understand data structures and generate accurate queries.
+## Available Tools
 
-${formattedContext}
----
+You have access to tools for intelligent data retrieval:
 
-You have access to tools for:
-1. Searching semantic definitions (search_semantic)
-2. Getting detailed entity/domain info (get_semantic)
-3. Running read-only database queries (readonly_query)
-4. Getting pre-computed member context (get_member_context)
+1. **search_semantic** - Search semantic definitions by keyword
+2. **get_semantic** - Get detailed entity/domain information
+3. **get_query_patterns** - Get SQL patterns for common queries
+4. **readonly_query** - Run read-only database queries
+5. **get_member_context** - Get pre-computed member context
+
+## Tool Usage Guidelines
 
 Use these tools when you need:
 - To understand what data is available
@@ -55,8 +57,22 @@ Use these tools when you need:
 - To run analytics or progress queries
 - To get examples of SQL patterns
 
-Always use the semantic tools before making assumptions about data structures.
-`;
+Use semantic tools before making assumptions about data structures.
+---`;
+
+  // DYNAMIC CONTENT - Base prompt and semantic context placed last
+  const formattedContext = formatSemanticContext(semanticContext);
+  const dynamicContent = `
+## SEMANTIC KNOWLEDGE BASE
+The following definitions and patterns are relevant to this conversation.
+Use them to understand data structures and generate accurate queries.
+
+${formattedContext}`;
+
+  // Static instructions first, then base prompt, then dynamic semantic context
+  return `${basePrompt}
+${staticToolInstructions}
+${dynamicContent}`;
 }
 
 /**
@@ -85,6 +101,8 @@ export function getContextForConversation(
  * - Loads relevant semantic context
  * - Provides tools for deeper exploration
  * - Manages token budgets
+ * - Enables extended prompt caching (24h) by default
+ * - Supports OpenAI Conversations API for persistent state
  */
 export async function streamWithSemanticContext(options: {
   messages: Array<{ role: "user" | "assistant" | "system"; content: string }>;
@@ -93,7 +111,15 @@ export async function streamWithSemanticContext(options: {
   enableTools?: boolean;
   maxSteps?: number;
   deepThinking?: boolean;
-  onFinish?: (params: { text: string }) => Promise<void>;
+  /** Enable extended 24h prompt caching (default: true) */
+  enableExtendedCache?: boolean;
+  /** Cache key for better cache hits across similar requests */
+  cacheKey?: string;
+  /** OpenAI Conversation ID for persistent state (no 30-day TTL) */
+  openaiConversationId?: string;
+  /** Previous response ID for chaining responses */
+  previousResponseId?: string;
+  onFinish?: (params: { text: string; response?: { id?: string } }) => Promise<void>;
 }) {
   const {
     messages,
@@ -102,6 +128,10 @@ export async function streamWithSemanticContext(options: {
     enableTools = true,
     maxSteps = 5,
     deepThinking = false,
+    enableExtendedCache = true,
+    cacheKey,
+    openaiConversationId,
+    previousResponseId,
     onFinish,
   } = options;
 
@@ -125,11 +155,28 @@ export async function streamWithSemanticContext(options: {
   // Select model based on complexity
   const model = deepThinking ? aiModel : aiModelFast;
 
-  // Get reasoning options
+  // Get reasoning options with caching configuration
   const reasoningLevel = deepThinking ? "standard" : "none";
-  const providerOptions = getReasoningOptions(
-    reasoningLevel as "none" | "quick" | "standard" | "deep" | "max"
+  const baseProviderOptions = getReasoningOptions(
+    reasoningLevel as "none" | "quick" | "standard" | "deep" | "max",
+    {
+      enableExtendedCache,
+      cacheKey: cacheKey || "semantic-stream",
+    }
   );
+
+  // Merge conversation state options
+  const providerOptions = {
+    openai: {
+      ...baseProviderOptions.openai,
+      // Always store responses for conversation features
+      store: true,
+      // Use Conversations API if available (items not subject to 30-day TTL)
+      ...(openaiConversationId && { conversation: openaiConversationId }),
+      // Fall back to previous_response_id for chaining if no conversation
+      ...(!openaiConversationId && previousResponseId && { previousResponseId }),
+    },
+  };
 
   // Stream the response with multi-step tool calling
   const result = streamText({
@@ -138,7 +185,9 @@ export async function streamWithSemanticContext(options: {
     messages,
     tools,
     stopWhen: stepCountIs(maxSteps),
-    onFinish: onFinish ? async ({ text }) => onFinish({ text }) : undefined,
+    onFinish: onFinish
+      ? async ({ text, response }) => onFinish({ text, response })
+      : undefined,
     ...providerOptions,
   });
 
@@ -152,6 +201,8 @@ export async function streamWithSemanticContext(options: {
  * - Structured data generation (workouts, milestones)
  * - Analysis tasks
  * - Any case where you need the full response before proceeding
+ *
+ * Includes extended prompt caching (24h) by default for cost optimization.
  */
 export async function generateWithSemanticContext(options: {
   messages: Array<{ role: "user" | "assistant" | "system"; content: string }>;
@@ -160,6 +211,10 @@ export async function generateWithSemanticContext(options: {
   enableTools?: boolean;
   maxSteps?: number;
   reasoningLevel?: "none" | "quick" | "standard" | "deep" | "max";
+  /** Enable extended 24h prompt caching (default: true) */
+  enableExtendedCache?: boolean;
+  /** Cache key for better cache hits across similar requests */
+  cacheKey?: string;
 }) {
   const {
     messages,
@@ -168,6 +223,8 @@ export async function generateWithSemanticContext(options: {
     enableTools = true,
     maxSteps = 5,
     reasoningLevel = "standard",
+    enableExtendedCache = true,
+    cacheKey,
   } = options;
 
   // Get semantic context
@@ -187,8 +244,11 @@ export async function generateWithSemanticContext(options: {
       }
     : undefined;
 
-  // Get reasoning options
-  const providerOptions = getReasoningOptions(reasoningLevel);
+  // Get reasoning options with caching configuration
+  const providerOptions = getReasoningOptions(reasoningLevel, {
+    enableExtendedCache,
+    cacheKey: cacheKey || "semantic-generate",
+  });
 
   // Generate the response with multi-step tool calling
   const result = await generateText({

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import {
   Dialog,
   DialogContent,
@@ -170,6 +171,8 @@ export default function InteractiveWorkoutGenerator({
   const [searchQuery, setSearchQuery] = useState("");
   const [searchSlotId, setSearchSlotId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   const selectedMembers = members.filter(m => selectedMemberIds.includes(m.id));
 
@@ -322,10 +325,28 @@ export default function InteractiveWorkoutGenerator({
     }
   }, [config, exercises, selectedMemberIds]);
 
-  // Auto-start on mount
-  useEffect(() => {
-    startGeneration();
-  }, []);
+  // Handle explicit generation start (no auto-start)
+  const handleStartGeneration = useCallback(async () => {
+    setHasStarted(true);
+    try {
+      await startGeneration();
+    } catch (err) {
+      // Error is handled in startGeneration
+      console.error("Generation failed:", err);
+    }
+  }, [startGeneration]);
+
+  // Retry generation with exponential backoff
+  const handleRetry = useCallback(async () => {
+    setRetryCount(prev => prev + 1);
+    setState(prev => ({ ...prev, phase: "idle", message: "Retrying..." }));
+    
+    // Exponential backoff: 1s, 2s, 4s
+    const delay = Math.min(1000 * Math.pow(2, retryCount), 4000);
+    await new Promise(resolve => setTimeout(resolve, delay));
+    
+    await handleStartGeneration();
+  }, [handleStartGeneration, retryCount]);
 
   // Handle exercise slot expansion
   const toggleSlotExpansion = (slotId: string) => {
@@ -592,15 +613,42 @@ export default function InteractiveWorkoutGenerator({
                 </div>
               )}
 
+              {/* Idle state - Show generate button */}
+              {state.phase === "idle" && !hasStarted && (
+                <div className="flex flex-col items-center py-12 text-center">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                    <Sparkles className="h-8 w-8 text-primary" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">Ready to Generate</h3>
+                  <p className="text-sm text-muted-foreground mb-6 max-w-sm">
+                    Our AI will analyze your members&apos; profiles, equipment, and goals to create a personalized workout plan.
+                  </p>
+                  <Button size="lg" onClick={handleStartGeneration}>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Generate Workout
+                  </Button>
+                </div>
+              )}
+
               {/* Error state */}
               {state.phase === "error" && (
                 <div className="flex flex-col items-center py-8 text-center">
                   <AlertTriangle className="h-12 w-12 text-red-500 mb-4" />
-                  <p className="text-sm text-muted-foreground mb-4">{state.message}</p>
-                  <Button onClick={startGeneration}>
-                    <RotateCcw className="h-4 w-4 mr-2" />
-                    Try Again
-                  </Button>
+                  <p className="text-sm text-muted-foreground mb-2">{state.message}</p>
+                  {retryCount < 3 && (
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Attempt {retryCount + 1} of 3
+                    </p>
+                  )}
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={onCancel}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleRetry} disabled={retryCount >= 3}>
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      {retryCount >= 3 ? "Max retries reached" : "Try Again"}
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
@@ -627,16 +675,13 @@ export default function InteractiveWorkoutGenerator({
               <DialogTitle>Search Exercises</DialogTitle>
             </DialogHeader>
             <div className="flex flex-col flex-1 min-h-0 space-y-4">
-              <div className="relative flex-shrink-0">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by name, muscle group..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                  autoFocus
-                />
-              </div>
+              <SearchInput
+                placeholder="Search by name, muscle group..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                containerClassName="flex-shrink-0"
+                autoFocus
+              />
               <div className="flex-1 min-h-0 overflow-y-auto border rounded-md">
                 <div className="space-y-1 p-1">
                   {filteredExercises.length === 0 ? (

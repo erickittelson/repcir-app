@@ -145,7 +145,7 @@ export function CircleOnboardingModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden">
         <AnimatePresence mode="wait">
           {success ? (
             <motion.div
@@ -153,7 +153,7 @@ export function CircleOnboardingModal({
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="py-8 text-center"
+              className="py-12 px-6 text-center"
             >
               <div className="flex justify-center mb-4">
                 <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center">
@@ -176,145 +176,146 @@ export function CircleOnboardingModal({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              <DialogHeader>
+              <DialogHeader className="px-6 pt-6 pb-4">
                 <DialogTitle className="text-xl">
                   {hasCircles
                     ? "Add Another Circle"
                     : `Hey ${userName}, ready to team up?`}
                 </DialogTitle>
-                <DialogDescription>
+                <DialogDescription className="pt-1">
                   {hasCircles
                     ? "Create a new circle or join an existing one."
                     : "Circles let you train with friends and family. Create your own or join someone else's!"}
                 </DialogDescription>
               </DialogHeader>
 
-              <Tabs
-                value={tab}
-                onValueChange={(v) => setTab(v as "create" | "join")}
-                className="mt-4"
-              >
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="create" className="gap-2">
-                    <Users className="w-4 h-4" />
-                    Create
-                  </TabsTrigger>
-                  <TabsTrigger value="join" className="gap-2">
-                    <UserPlus className="w-4 h-4" />
-                    Join
-                  </TabsTrigger>
-                </TabsList>
+              <div className="px-6 pb-6">
+                <Tabs
+                  value={tab}
+                  onValueChange={(v) => setTab(v as "create" | "join")}
+                >
+                  <TabsList className="grid w-full grid-cols-2 mb-4">
+                    <TabsTrigger value="create" className="gap-2">
+                      <Users className="w-4 h-4" />
+                      Create
+                    </TabsTrigger>
+                    <TabsTrigger value="join" className="gap-2">
+                      <UserPlus className="w-4 h-4" />
+                      Join
+                    </TabsTrigger>
+                  </TabsList>
 
-                <TabsContent value="create" className="space-y-4 mt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="circle-name">Circle Name</Label>
-                    <Input
-                      id="circle-name"
-                      placeholder="e.g., The Smiths, Gym Buddies"
-                      value={circleName}
-                      onChange={(e) => setCircleName(e.target.value)}
-                      disabled={isLoading}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="circle-description">
-                      Description <span className="text-muted-foreground">(optional)</span>
-                    </Label>
-                    <Textarea
-                      id="circle-description"
-                      placeholder="What's this circle about?"
-                      value={circleDescription}
-                      onChange={(e) => setCircleDescription(e.target.value)}
-                      disabled={isLoading}
-                      rows={2}
-                    />
-                  </div>
-
-                  {error && (
-                    <p className="text-sm text-destructive">{error}</p>
-                  )}
-
-                  <div className="flex gap-2 pt-2">
-                    {!hasCircles && (
-                      <Button
-                        variant="ghost"
-                        onClick={handleSkip}
+                  <TabsContent value="create" className="space-y-4 mt-0">
+                    <div className="space-y-2">
+                      <Label htmlFor="circle-name">Circle Name</Label>
+                      <Input
+                        id="circle-name"
+                        placeholder="e.g., The Smiths, Gym Buddies"
+                        value={circleName}
+                        onChange={(e) => setCircleName(e.target.value)}
                         disabled={isLoading}
-                      >
-                        Skip for now
-                      </Button>
-                    )}
-                    <Button
-                      className="flex-1"
-                      onClick={handleCreateCircle}
-                      disabled={isLoading || !circleName.trim()}
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Creating...
-                        </>
-                      ) : (
-                        <>
-                          Create Circle
-                          <ArrowRight className="ml-2 h-4 w-4" />
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="join" className="space-y-4 mt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="invite-code">Invite Code</Label>
-                    <Input
-                      id="invite-code"
-                      placeholder="Enter 6-character code"
-                      value={inviteCode}
-                      onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                      disabled={isLoading}
-                      maxLength={8}
-                      className="uppercase tracking-widest text-center font-mono text-lg"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Ask a circle member for their invite code
-                    </p>
-                  </div>
-
-                  {error && (
-                    <p className="text-sm text-destructive">{error}</p>
-                  )}
-
-                  <div className="flex gap-2 pt-2">
-                    {!hasCircles && (
-                      <Button
-                        variant="ghost"
-                        onClick={handleSkip}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="circle-description">
+                        Description <span className="text-muted-foreground">(optional)</span>
+                      </Label>
+                      <Textarea
+                        id="circle-description"
+                        placeholder="What's this circle about?"
+                        value={circleDescription}
+                        onChange={(e) => setCircleDescription(e.target.value)}
                         disabled={isLoading}
-                      >
-                        Skip for now
-                      </Button>
+                        rows={2}
+                      />
+                    </div>
+
+                    {error && (
+                      <p className="text-sm text-destructive">{error}</p>
                     )}
-                    <Button
-                      className="flex-1"
-                      onClick={handleJoinCircle}
-                      disabled={isLoading || !inviteCode.trim()}
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Joining...
-                        </>
-                      ) : (
-                        <>
-                          Join Circle
-                          <ArrowRight className="ml-2 h-4 w-4" />
-                        </>
+
+                    <div className="flex gap-3 pt-2">
+                      {!hasCircles && (
+                        <Button
+                          variant="ghost"
+                          onClick={handleSkip}
+                          disabled={isLoading}
+                        >
+                          Skip for now
+                        </Button>
                       )}
-                    </Button>
-                  </div>
-                </TabsContent>
-              </Tabs>
+                      <Button
+                        className="flex-1"
+                        onClick={handleCreateCircle}
+                        disabled={isLoading || !circleName.trim()}
+                      >
+                        {isLoading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Creating...
+                          </>
+                        ) : (
+                          <>
+                            Create Circle
+                            <ArrowRight className="ml-2 h-4 w-4" />
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="join" className="space-y-4 mt-0">
+                    <div className="space-y-2">
+                      <Label htmlFor="invite-code">Invite Code</Label>
+                      <Input
+                        id="invite-code"
+                        placeholder="Enter 6-character code"
+                        value={inviteCode}
+                        onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                        disabled={isLoading}
+                        maxLength={8}
+                        className="uppercase tracking-widest text-center font-mono text-lg h-12"
+                      />
+                      <p className="text-xs text-muted-foreground text-center">
+                        Ask a circle member for their invite code
+                      </p>
+                    </div>
+
+                    {error && (
+                      <p className="text-sm text-destructive">{error}</p>
+                    )}
+
+                    <div className="flex gap-3 pt-2">
+                      {!hasCircles && (
+                        <Button
+                          variant="ghost"
+                          onClick={handleSkip}
+                          disabled={isLoading}
+                        >
+                          Skip for now
+                        </Button>
+                      )}
+                      <Button
+                        className="flex-1"
+                        onClick={handleJoinCircle}
+                        disabled={isLoading || !inviteCode.trim()}
+                      >
+                        {isLoading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Joining...
+                          </>
+                        ) : (
+                          <>
+                            Join Circle
+                            <ArrowRight className="ml-2 h-4 w-4" />
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

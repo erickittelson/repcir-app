@@ -9,7 +9,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,237 +20,247 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus,
   Package,
   Loader2,
-  Trash2,
-  Edit,
-  ShoppingBag,
+  MapPin,
   Dumbbell,
-  Heart,
-  Wrench,
-  Bike,
+  ChevronDown,
   Check,
+  Building2,
+  Building,
+  Home,
+  GraduationCap,
+  TreePine,
+  Plane,
+  Zap,
+  Sparkles,
+  Hotel,
+  Shield,
+  Briefcase,
 } from "lucide-react";
 import { toast } from "sonner";
+import { DeleteConfirmDialog } from "@/components/ui/confirm-dialog";
+import {
+  LocationCard,
+  LocationTypeSelector,
+  type Location,
+  type LocationType,
+} from "@/components/equipment/location-card";
+import {
+  EquipmentSelector,
+  TemplateSelector,
+  type EquipmentItem,
+} from "@/components/equipment/equipment-selector";
 
-interface Equipment {
-  id: string;
-  name: string;
-  category: string;
-  description?: string;
-  quantity?: number;
-  brand?: string;
-  model?: string;
-  isFromMarketplace?: boolean;
-}
-
-interface MarketplaceItem {
-  id?: string;
-  name: string;
-  category: string;
-  description?: string;
-  commonBrands?: string[];
-}
-
-const CATEGORIES = [
-  { value: "cardio", label: "Cardio", icon: Bike },
-  { value: "strength", label: "Strength", icon: Dumbbell },
-  { value: "flexibility", label: "Flexibility", icon: Heart },
-  { value: "accessories", label: "Accessories", icon: Wrench },
-];
-
-const getCategoryIcon = (category: string) => {
-  const cat = CATEGORIES.find((c) => c.value === category);
-  return cat ? cat.icon : Package;
+const LOCATION_ICONS: Record<LocationType, React.ComponentType<{ className?: string }>> = {
+  home: Home,
+  commercial: Building2,
+  crossfit: Zap,
+  boutique: Sparkles,
+  hotel: Hotel,
+  military: Shield,
+  school: GraduationCap,
+  office: Briefcase,
+  apartment: Building,
+  outdoor: TreePine,
+  travel: Plane,
+  custom: Package,
 };
 
+interface LocationTypeDefault {
+  locationType: string;
+  equipmentIds: string[];
+  description?: string;
+  typicalEquipmentCount?: number;
+}
+
 export default function EquipmentPage() {
-  const [equipment, setEquipment] = useState<Equipment[]>([]);
-  const [marketplace, setMarketplace] = useState<MarketplaceItem[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [catalog, setCatalog] = useState<EquipmentItem[]>([]);
+  const [locationDefaults, setLocationDefaults] = useState<LocationTypeDefault[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [marketplaceDialogOpen, setMarketplaceDialogOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<Equipment | null>(null);
+  const [editingLocation, setEditingLocation] = useState<Location | null>(null);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState("my-equipment");
+  const [deleteTarget, setDeleteTarget] = useState<Location | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const [formData, setFormData] = useState({
-    name: "",
-    category: "",
-    description: "",
-    quantity: "1",
-    brand: "",
-    model: "",
-  });
+  // Form state
+  const [formName, setFormName] = useState("");
+  const [formType, setFormType] = useState<LocationType>("home");
+  const [formAddress, setFormAddress] = useState("");
+  const [formEquipment, setFormEquipment] = useState<string[]>([]);
+  const [hasAppliedTemplate, setHasAppliedTemplate] = useState(false);
 
   useEffect(() => {
-    fetchEquipment();
-    fetchMarketplace();
+    fetchData();
   }, []);
 
-  const fetchEquipment = async () => {
+  // Auto-apply equipment template when location type changes (for new locations only)
+  useEffect(() => {
+    if (!editingLocation && locationDefaults.length > 0 && !hasAppliedTemplate) {
+      applyTemplateForType(formType);
+      setHasAppliedTemplate(true);
+    }
+  }, [formType, locationDefaults, editingLocation, hasAppliedTemplate]);
+
+  const applyTemplateForType = (type: LocationType) => {
+    const defaults = locationDefaults.find((d) => d.locationType === type);
+    if (defaults) {
+      setFormEquipment(defaults.equipmentIds);
+    } else {
+      setFormEquipment([]);
+    }
+  };
+
+  // Handle location type change with template application
+  const handleTypeChange = (type: LocationType) => {
+    setFormType(type);
+    // Only auto-apply if not editing an existing location
+    if (!editingLocation) {
+      applyTemplateForType(type);
+    }
+  };
+
+  const fetchData = async () => {
     try {
-      const response = await fetch("/api/equipment");
-      if (response.ok) {
-        const data = await response.json();
-        setEquipment(data);
+      const [locationsRes, catalogRes, defaultsRes] = await Promise.all([
+        fetch("/api/locations"),
+        fetch("/api/equipment/catalog"),
+        fetch("/api/locations/defaults"),
+      ]);
+
+      if (locationsRes.ok) {
+        const locationsData = await locationsRes.json();
+        setLocations(locationsData);
+      }
+
+      if (catalogRes.ok) {
+        const catalogData = await catalogRes.json();
+        setCatalog(catalogData);
+      }
+
+      if (defaultsRes.ok) {
+        const defaultsData = await defaultsRes.json();
+        setLocationDefaults(defaultsData);
       }
     } catch (error) {
-      console.error("Failed to fetch equipment:", error);
-      toast.error("Failed to load equipment");
+      console.error("Failed to fetch data:", error);
+      toast.error("Failed to load equipment data");
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchMarketplace = async () => {
-    try {
-      const response = await fetch("/api/equipment/marketplace");
-      if (response.ok) {
-        const data = await response.json();
-        setMarketplace(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch marketplace:", error);
-    }
-  };
-
   const resetForm = () => {
-    setFormData({
-      name: "",
-      category: "",
-      description: "",
-      quantity: "1",
-      brand: "",
-      model: "",
-    });
-    setEditingItem(null);
+    setFormName("");
+    setFormType("home");
+    setFormAddress("");
+    setFormEquipment([]);
+    setEditingLocation(null);
+    setHasAppliedTemplate(false);
   };
 
-  const openEditDialog = (item: Equipment) => {
-    setEditingItem(item);
-    setFormData({
-      name: item.name,
-      category: item.category,
-      description: item.description || "",
-      quantity: String(item.quantity || 1),
-      brand: item.brand || "",
-      model: item.model || "",
-    });
+  const openEditDialog = (location: Location) => {
+    setEditingLocation(location);
+    setFormName(location.name);
+    setFormType(location.type);
+    setFormAddress(location.address || "");
+    setFormEquipment(location.equipment);
     setDialogOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formName.trim()) {
+      toast.error("Please enter a location name");
+      return;
+    }
+
     setSaving(true);
 
     try {
-      const url = editingItem
-        ? `/api/equipment/${editingItem.id}`
-        : "/api/equipment";
-      const method = editingItem ? "PUT" : "POST";
+      const url = editingLocation
+        ? `/api/locations/${editingLocation.id}`
+        : "/api/locations";
+      const method = editingLocation ? "PUT" : "POST";
 
       const response = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: formData.name,
-          category: formData.category,
-          description: formData.description || null,
-          quantity: parseInt(formData.quantity) || 1,
-          brand: formData.brand || null,
-          model: formData.model || null,
+          name: formName,
+          type: formType,
+          address: formAddress || null,
+          equipment: formEquipment,
         }),
       });
 
       if (response.ok) {
         toast.success(
-          editingItem ? "Equipment updated" : "Equipment added"
+          editingLocation ? "Location updated" : "Location added"
         );
         setDialogOpen(false);
         resetForm();
-        fetchEquipment();
+        fetchData();
       } else {
         const data = await response.json();
-        toast.error(data.error || "Failed to save equipment");
+        toast.error(data.error || "Failed to save location");
       }
     } catch (error) {
-      console.error("Failed to save equipment:", error);
-      toast.error("Failed to save equipment");
+      console.error("Failed to save location:", error);
+      toast.error("Failed to save location");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to remove this equipment?")) {
-      return;
-    }
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
 
     try {
-      const response = await fetch(`/api/equipment/${id}`, {
+      const response = await fetch(`/api/locations/${deleteTarget.id}`, {
         method: "DELETE",
       });
 
       if (response.ok) {
-        toast.success("Equipment removed");
-        fetchEquipment();
+        toast.success("Location deleted");
+        fetchData();
+        setDeleteTarget(null);
       } else {
-        toast.error("Failed to remove equipment");
+        toast.error("Failed to delete location");
       }
     } catch (error) {
-      console.error("Failed to delete equipment:", error);
-      toast.error("Failed to remove equipment");
+      console.error("Failed to delete location:", error);
+      toast.error("Failed to delete location");
+    } finally {
+      setDeleting(false);
     }
   };
 
-  const addFromMarketplace = async (item: MarketplaceItem) => {
+  const handleSetActive = async (id: string) => {
     try {
-      const response = await fetch("/api/equipment", {
+      const response = await fetch(`/api/locations/${id}/activate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: item.name,
-          category: item.category,
-          description: item.description,
-          isFromMarketplace: true,
-        }),
       });
 
       if (response.ok) {
-        toast.success(`${item.name} added to your equipment`);
-        fetchEquipment();
+        toast.success("Active location updated");
+        fetchData();
       } else {
-        toast.error("Failed to add equipment");
+        toast.error("Failed to update active location");
       }
     } catch (error) {
-      console.error("Failed to add from marketplace:", error);
-      toast.error("Failed to add equipment");
+      console.error("Failed to set active location:", error);
+      toast.error("Failed to update active location");
     }
   };
 
-  const equipmentByCategory = equipment.reduce((acc, item) => {
-    if (!acc[item.category]) {
-      acc[item.category] = [];
-    }
-    acc[item.category].push(item);
-    return acc;
-  }, {} as Record<string, Equipment[]>);
-
-  const marketplaceByCategory = marketplace.reduce((acc, item) => {
-    if (!acc[item.category]) {
-      acc[item.category] = [];
-    }
-    acc[item.category].push(item);
-    return acc;
-  }, {} as Record<string, MarketplaceItem[]>);
-
-  const isInMyEquipment = (itemName: string) =>
-    equipment.some((e) => e.name.toLowerCase() === itemName.toLowerCase());
+  const activeLocation = locations.find((l) => l.isActive);
+  const ActiveIcon = activeLocation ? LOCATION_ICONS[activeLocation.type] : MapPin;
 
   if (loading) {
     return (
@@ -264,289 +274,196 @@ export default function EquipmentPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Equipment</h1>
+          <h1 className="text-3xl font-bold">Equipment & Gyms</h1>
           <p className="text-muted-foreground">
-            Manage your circle&apos;s workout equipment
+            Manage your workout locations and equipment
           </p>
         </div>
-        <Dialog
-          open={dialogOpen}
-          onOpenChange={(open) => {
-            setDialogOpen(open);
-            if (!open) resetForm();
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Equipment
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>
-                {editingItem ? "Edit Equipment" : "Add Equipment"}
-              </DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name *</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  placeholder="e.g., Adjustable Dumbbells"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="category">Category *</Label>
-                <Select
-                  value={formData.category}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, category: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map((cat) => (
-                      <SelectItem key={cat.value} value={cat.value}>
-                        {cat.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="brand">Brand</Label>
-                  <Input
-                    id="brand"
-                    value={formData.brand}
-                    onChange={(e) =>
-                      setFormData({ ...formData, brand: e.target.value })
-                    }
-                    placeholder="e.g., Bowflex"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="quantity">Quantity</Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    min="1"
-                    value={formData.quantity}
-                    onChange={(e) =>
-                      setFormData({ ...formData, quantity: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="model">Model</Label>
-                <Input
-                  id="model"
-                  value={formData.model}
-                  onChange={(e) =>
-                    setFormData({ ...formData, model: e.target.value })
-                  }
-                  placeholder="e.g., SelectTech 552"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                  placeholder="Any notes about this equipment..."
-                />
-              </div>
-
-              <div className="flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setDialogOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={saving || !formData.name || !formData.category}>
-                  {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {editingItem ? "Save Changes" : "Add Equipment"}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={() => setDialogOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add Location
+        </Button>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="my-equipment">My Equipment ({equipment.length})</TabsTrigger>
-          <TabsTrigger value="marketplace">
-            <ShoppingBag className="mr-2 h-4 w-4" />
-            Add from Marketplace
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="my-equipment" className="mt-6">
-          {equipment.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <Package className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold">No equipment yet</h3>
-                <p className="text-muted-foreground mb-4">
-                  Add equipment to help AI create better workout plans
-                </p>
-                <div className="flex gap-2">
-                  <Button onClick={() => setDialogOpen(true)}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Custom
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setActiveTab("marketplace")}
-                  >
-                    <ShoppingBag className="mr-2 h-4 w-4" />
-                    Browse Marketplace
-                  </Button>
+      {/* Active Location Selector */}
+      {locations.length > 0 && (
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
+                  <ActiveIcon className="w-5 h-5 text-primary-foreground" />
                 </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-6">
-              {CATEGORIES.map((category) => {
-                const items = equipmentByCategory[category.value];
-                if (!items || items.length === 0) return null;
-
-                const CategoryIcon = category.icon;
-
-                return (
-                  <div key={category.value}>
-                    <div className="flex items-center gap-2 mb-3">
-                      <CategoryIcon className="h-5 w-5 text-muted-foreground" />
-                      <h2 className="text-lg font-semibold">{category.label}</h2>
-                      <Badge variant="secondary">{items.length}</Badge>
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                      {items.map((item) => (
-                        <Card key={item.id}>
-                          <CardHeader className="pb-2">
-                            <div className="flex items-start justify-between">
-                              <CardTitle className="text-base">{item.name}</CardTitle>
-                              <div className="flex gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => openEditDialog(item)}
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleDelete(item.id)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                              </div>
-                            </div>
-                            {(item.brand || item.model) && (
-                              <CardDescription>
-                                {[item.brand, item.model].filter(Boolean).join(" - ")}
-                              </CardDescription>
-                            )}
-                          </CardHeader>
-                          <CardContent>
-                            {item.description && (
-                              <p className="text-sm text-muted-foreground mb-2">
-                                {item.description}
-                              </p>
-                            )}
-                            {item.quantity && item.quantity > 1 && (
-                              <Badge variant="outline">Qty: {item.quantity}</Badge>
-                            )}
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
+                <div>
+                  <p className="text-sm text-muted-foreground">Active Location</p>
+                  <p className="font-medium">
+                    {activeLocation?.name || "No active location"}
+                  </p>
+                </div>
+              </div>
+              <Select
+                value={activeLocation?.id || ""}
+                onValueChange={(id) => handleSetActive(id)}
+              >
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Select location" />
+                </SelectTrigger>
+                <SelectContent>
+                  {locations.map((location) => {
+                    const Icon = LOCATION_ICONS[location.type];
+                    return (
+                      <SelectItem key={location.id} value={location.id}>
+                        <div className="flex items-center gap-2">
+                          <Icon className="h-4 w-4" />
+                          {location.name}
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
             </div>
-          )}
-        </TabsContent>
+          </CardContent>
+        </Card>
+      )}
 
-        <TabsContent value="marketplace" className="mt-6">
-          <div className="space-y-6">
-            {CATEGORIES.map((category) => {
-              const items = marketplaceByCategory[category.value];
-              if (!items || items.length === 0) return null;
+      {/* Locations Grid */}
+      {locations.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <MapPin className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold">No locations yet</h3>
+            <p className="text-muted-foreground mb-4 text-center max-w-sm">
+              Add your gym locations to help AI create personalized workouts based on your available equipment
+            </p>
+            <Button onClick={() => setDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Your First Location
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {locations.map((location) => (
+            <LocationCard
+              key={location.id}
+              location={location}
+              isActive={location.isActive}
+              onSetActive={() => handleSetActive(location.id)}
+              onEdit={() => openEditDialog(location)}
+              onDelete={() => setDeleteTarget(location)}
+              equipmentCount={location.equipment.length}
+            />
+          ))}
+        </div>
+      )}
 
-              const CategoryIcon = category.icon;
+      {/* Add/Edit Location Dialog */}
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) resetForm();
+        }}
+      >
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0">
+          <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-4">
+            <DialogTitle>
+              {editingLocation ? "Edit Location" : "Add Location"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingLocation 
+                ? "Update your location and equipment" 
+                : "Select a location type to start with recommended equipment, then customize as needed"}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {/* Scrollable content area */}
+          <div className="flex-1 overflow-y-auto px-6">
+            <form id="location-form" onSubmit={handleSubmit} className="space-y-6 pb-4">
+              {/* Location Type */}
+              <div className="space-y-3">
+                <Label>Location Type</Label>
+                <LocationTypeSelector value={formType} onChange={handleTypeChange} />
+                {!editingLocation && formEquipment.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Pre-populated with {formEquipment.length} typical items for this location type. Review and customize below.
+                  </p>
+                )}
+                {!editingLocation && formEquipment.length === 0 && formType === "custom" && (
+                  <p className="text-xs text-muted-foreground">
+                    Select your equipment from the list below
+                  </p>
+                )}
+              </div>
 
-              return (
-                <div key={category.value}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <CategoryIcon className="h-5 w-5 text-muted-foreground" />
-                    <h2 className="text-lg font-semibold">{category.label}</h2>
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {items.map((item, index) => {
-                      const isOwned = isInMyEquipment(item.name);
-                      return (
-                        <Card
-                          key={item.id || index}
-                          className={isOwned ? "border-primary/50 bg-primary/5" : ""}
-                        >
-                          <CardHeader className="pb-2">
-                            <div className="flex items-start justify-between">
-                              <CardTitle className="text-sm">{item.name}</CardTitle>
-                              {isOwned ? (
-                                <Badge variant="secondary" className="gap-1">
-                                  <Check className="h-3 w-3" />
-                                  Owned
-                                </Badge>
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => addFromMarketplace(item)}
-                                >
-                                  <Plus className="h-3 w-3 mr-1" />
-                                  Add
-                                </Button>
-                              )}
-                            </div>
-                          </CardHeader>
-                          <CardContent className="pt-0">
-                            {item.description && (
-                              <p className="text-xs text-muted-foreground">
-                                {item.description}
-                              </p>
-                            )}
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
-                  </div>
+              {/* Name & Address */}
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Location Name *</Label>
+                  <Input
+                    id="name"
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    placeholder="e.g., Home Gym, Planet Fitness"
+                    required
+                  />
                 </div>
-              );
-            })}
+                <div className="space-y-2">
+                  <Label htmlFor="address">Address (optional)</Label>
+                  <Input
+                    id="address"
+                    value={formAddress}
+                    onChange={(e) => setFormAddress(e.target.value)}
+                    placeholder="123 Main St..."
+                  />
+                </div>
+              </div>
+
+              {/* Equipment Selection */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Available Equipment</Label>
+                  <TemplateSelector
+                    locationType={formType}
+                    catalog={catalog}
+                    onApply={setFormEquipment}
+                  />
+                </div>
+                <EquipmentSelector
+                  catalog={catalog}
+                  selected={formEquipment}
+                  onChange={setFormEquipment}
+                />
+              </div>
+            </form>
           </div>
-        </TabsContent>
-      </Tabs>
+
+          {/* Fixed footer with actions */}
+          <div className="flex-shrink-0 flex justify-end gap-2 px-6 py-4 border-t bg-background">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button form="location-form" type="submit" disabled={saving || !formName.trim()}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {editingLocation ? "Save Changes" : "Add Location"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        itemName={deleteTarget?.name}
+        itemType="location"
+        onConfirm={handleDelete}
+        loading={deleting}
+      />
     </div>
   );
 }

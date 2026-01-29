@@ -27,7 +27,16 @@ function verifyCronSecret(request: Request): boolean {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
-  if (!cronSecret) return true; // Allow in development
+  // Require CRON_SECRET in production for security
+  if (!cronSecret) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("CRON_SECRET not configured in production");
+      return false;
+    }
+    // Allow in development for testing, but log warning
+    console.warn("CRON_SECRET not set - cron endpoint accessible without auth in dev");
+    return true;
+  }
   return authHeader === `Bearer ${cronSecret}`;
 }
 

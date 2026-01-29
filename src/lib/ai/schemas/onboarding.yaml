@@ -1,16 +1,23 @@
 # Conversational Onboarding Schema
-# Version: 1.0
-# Last Updated: 2026-01-20
+# Version: 2.0
+# Last Updated: 2026-01-21
 #
 # This schema defines the AI-powered conversational onboarding flow
 # that guides new users through profile creation in a natural, engaging way.
+#
+# v2.0 Changes:
+# - Added profile_setup phase (profile picture)
+# - Changed age to birthday (month/year)
+# - Added location phase (city, optional)
+# - Added privacy phase (public/private profile)
+# - Improved resilience with step tracking
 
-version: "1.0"
-last_updated: "2026-01-20"
+version: "2.0"
+last_updated: "2026-01-21"
 
 onboarding:
   description: "Conversational onboarding flow for new users"
-  total_phases: 9
+  total_phases: 13
 
   persona:
     name: "Coach"
@@ -40,10 +47,9 @@ onboarding:
   phases:
     welcome:
       order: 1
-      goal: "Build rapport, understand motivation"
+      goal: "Build rapport, get name"
       data_collected:
         - name_preference
-        - primary_motivation
       feature_intro: "AI coaching capabilities"
       opening_message: |
         Hey! I'm your AI coach here at Workout Circle.
@@ -59,15 +65,36 @@ onboarding:
           description: "User's preferred name/nickname"
           extraction_prompt: "Extract the name or nickname the user wants to be called"
 
-    motivation:
+    profile_setup:
       order: 2
+      goal: "Optional profile picture"
+      data_collected:
+        - profile_picture
+      feature_intro: "Personalize your profile"
+      optional: true
+      transition_message: |
+        Nice to meet you, {name}!
+
+        Would you like to add a profile picture? It helps make Workout Circle feel more personal, and if you decide to go public later, others can see who they're connecting with.
+      quick_replies:
+        - "Add a photo"
+        - "Skip for now"
+      skip_message: "No worries! You can always add one later from your profile settings."
+      extraction_hints:
+        profile_picture:
+          type: string
+          description: "URL of uploaded profile picture"
+          optional: true
+
+    motivation:
+      order: 3
       goal: "Understand why they're here"
       data_collected:
         - primary_motivation
         - specific_goals_mentioned
       feature_intro: "Goal tracking & personalized workouts"
       transition_message: |
-        Nice to meet you, {name}!
+        {profile_acknowledgment}
 
         So what brings you to Workout Circle? What's driving you to level up your fitness right now?
       quick_replies:
@@ -82,10 +109,11 @@ onboarding:
           description: "The primary reason they want to work out"
 
     basics:
-      order: 3
+      order: 4
       goal: "Collect demographic info naturally"
       data_collected:
-        - age
+        - birth_month
+        - birth_year
         - gender
         - height
         - weight
@@ -95,7 +123,7 @@ onboarding:
 
         To give you the best workout recommendations, I need to know a bit about you.
 
-        How old are you?
+        When's your birthday? Just month and year is fine - helps me tailor workouts to your experience level.
       quick_replies:
         - null
       follow_up_questions:
@@ -103,11 +131,16 @@ onboarding:
         - "What about your current weight?"
         - "One more - do you identify as male, female, or prefer another term?"
       extraction_hints:
-        age:
+        birth_month:
           type: number
-          range: [13, 100]
-          description: "User's age in years"
-          accept_phrases: ["I'm X", "X years old", just a number]
+          range: [1, 12]
+          description: "User's birth month (1-12)"
+          accept_phrases: ["January", "Feb", "March", "April", "May", "June", "July", "Aug", "September", "October", "November", "December"]
+        birth_year:
+          type: number
+          range: [1920, 2015]
+          description: "User's birth year"
+          accept_phrases: ["born in", "year"]
         gender:
           type: enum
           values: [male, female, other, prefer_not_to_say]
@@ -122,8 +155,63 @@ onboarding:
           unit: lbs
           accept_formats: ["X lbs", "X pounds", just a number]
 
+    location:
+      order: 5
+      goal: "Get optional city for finding workout partners"
+      data_collected:
+        - city
+      feature_intro: "Connect with nearby fitness enthusiasts"
+      optional: true
+      transition_template: |
+        {basics_acknowledgment}
+
+        Quick optional question - what city are you in?
+
+        This can help you find workout partners nearby and connect with people in your area. Totally fine to skip if you prefer!
+      quick_replies:
+        - "Skip this"
+      skip_message: "No problem! You can always add your location later if you want to discover nearby workout partners."
+      extraction_hints:
+        city:
+          type: string
+          description: "User's city/location"
+          optional: true
+
+    body_composition:
+      order: 6
+      goal: "Get body metrics for personalization"
+      data_collected:
+        - body_fat_estimate
+        - target_weight
+        - physique_goals
+      feature_intro: "Body composition tracking & progress photos"
+      optional: true
+      transition_template: |
+        {location_acknowledgment}
+
+        Let's talk body composition. This helps me understand where you're starting from.
+
+        Do you have a rough idea of your body fat percentage? (It's totally fine to guess or skip this!)
+      quick_replies:
+        - "Not sure"
+        - "Around 15-20%"
+        - "Around 20-25%"
+        - "Over 25%"
+      follow_up_questions:
+        - "What's your target weight, if you have one? Or are you more focused on how you look/feel?"
+      extraction_hints:
+        body_fat_estimate:
+          type: number
+          range: [3, 60]
+          optional: true
+          description: "Estimated body fat percentage"
+        target_weight:
+          type: number
+          optional: true
+          description: "Goal weight in lbs"
+
     fitness_background:
-      order: 4
+      order: 7
       goal: "Understand current fitness level"
       data_collected:
         - experience_level
@@ -159,7 +247,7 @@ onboarding:
           description: "Days per week currently training"
 
     goals:
-      order: 5
+      order: 8
       goal: "Define specific fitness goals"
       data_collected:
         - primary_goal
@@ -193,48 +281,17 @@ onboarding:
           description: "When they want to achieve their goals"
           accept_formats: ["X weeks", "X months", "by [date]", "this year"]
 
-    body_composition:
-      order: 6
-      goal: "Get body metrics for personalization"
-      data_collected:
-        - body_fat_estimate
-        - target_weight
-        - physique_goals
-      feature_intro: "Body composition tracking & progress photos"
-      transition_template: |
-        {goals_acknowledgment}
-
-        Let's talk body composition. This helps me understand where you're starting from.
-
-        Do you have a rough idea of your body fat percentage? (It's totally fine to guess or skip this!)
-      quick_replies:
-        - "Not sure"
-        - "Around 15-20%"
-        - "Around 20-25%"
-        - "Over 25%"
-      follow_up_questions:
-        - "What's your target weight, if you have one? Or are you more focused on how you look/feel?"
-      extraction_hints:
-        body_fat_estimate:
-          type: number
-          range: [3, 60]
-          optional: true
-          description: "Estimated body fat percentage"
-        target_weight:
-          type: number
-          optional: true
-          description: "Goal weight in lbs"
-
     limitations:
-      order: 7
+      order: 9
       goal: "Understand any physical limitations"
       data_collected:
         - injuries
         - conditions
         - restrictions
       feature_intro: "Smart exercise filtering - we'll never suggest movements that could hurt you"
+      optional: true
       transition_template: |
-        {composition_acknowledgment}
+        {goals_acknowledgment}
 
         Super important question: Do you have any injuries, physical limitations, or conditions I should know about?
 
@@ -258,40 +315,42 @@ onboarding:
               severity: [mild, moderate, severe]
               avoid_movements: array of strings
 
-    personal_records:
-      order: 8
-      goal: "Baseline strength/cardio levels"
+    current_maxes:
+      order: 10
+      goal: "Current assessed maxes for workout programming"
       data_collected:
         - key_lifts
         - cardio_benchmarks
-        - bodyweight_skills
-      feature_intro: "PR tracking - watch those numbers climb!"
+        - bodyweight_max_reps
+      feature_intro: "Your current maxes help us prescribe the right weights, reps, and intensity"
+      optional: true
       transition_template: |
         {limitations_acknowledgment}
 
-        Last section - let's establish some baselines so we can track your progress!
+        To program your workouts effectively, it helps to know your current abilities.
 
-        Do you know any of your current maxes or PRs? Like bench press, squat, deadlift? Even estimates help!
+        Do you know any of your current maxes? These are what you can lift/do NOW, not necessarily all-time bests.
       quick_replies:
         - "I don't know my maxes"
         - "I have some numbers"
-        - "Mostly cardio focused"
+        - "I'm mostly doing cardio"
       follow_up_questions:
-        - "What about cardio? Do you know your mile time, or how far you can run?"
-        - "Any bodyweight skills? Like pull-ups, push-ups, planks?"
+        - "Any of the big lifts? Bench, squat, deadlift, overhead press?"
+        - "Cardio - do you know your mile time?"
+        - "Bodyweight - how many pull-ups or push-ups can you do?"
       extraction_hints:
-        personal_records:
+        current_maxes:
           type: array
           items:
             type: object
             properties:
               exercise: string
               value: number
-              unit: [lbs, kg, reps, seconds, minutes, miles, km]
-              is_estimate: boolean
+              unit: [lbs, kg, reps, seconds, minutes, "min:sec"]
+          purpose: "Used for calculating working weights in workouts (e.g., 80% of max)"
 
     preferences:
-      order: 9
+      order: 11
       goal: "Training preferences"
       data_collected:
         - workout_duration
@@ -300,7 +359,7 @@ onboarding:
         - workout_days
       feature_intro: "Personalized workout programming"
       transition_template: |
-        Awesome! Last few questions about how you like to train.
+        Awesome! A few questions about how you like to train.
 
         How much time do you typically have for a workout?
       quick_replies:
@@ -323,8 +382,31 @@ onboarding:
           type: array
           values: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
 
+    privacy:
+      order: 12
+      goal: "Set profile visibility preferences"
+      data_collected:
+        - profile_visibility
+      feature_intro: "Control who can see your profile"
+      transition_template: |
+        Almost done! One last thing about your profile.
+
+        Would you like your profile to be public or private?
+
+        **Public** means others can find you when looking for workout partners. If someone wants to add you to their circle, you'll get a request to approve first.
+
+        **Private** means you're invisible to search - you can only join circles through direct invitations.
+      quick_replies:
+        - "Public - I want to meet people"
+        - "Private - invitation only"
+      extraction_hints:
+        profile_visibility:
+          type: enum
+          values: [public, private]
+          default: private
+
     wrap_up:
-      order: 10
+      order: 13
       goal: "Summarize and create profile"
       data_collected: []
       feature_intro: "Your personalized dashboard"
@@ -338,6 +420,31 @@ onboarding:
 
         Let's crush it! 💪
 
+  # Step tracking for resilient onboarding
+  step_tracking:
+    description: "Track status of each step for resilience"
+    statuses:
+      - pending     # Not yet asked
+      - active      # Currently being asked
+      - collected   # User provided data
+      - skipped     # User chose to skip
+      - corrected   # User corrected previous answer
+
+    correction_patterns:
+      - "actually, my"
+      - "correction:"
+      - "i meant to say"
+      - "let me fix"
+      - "that's wrong"
+      - "change that to"
+      - "wait, I'm"
+
+    go_back_patterns:
+      - "go back"
+      - "previous"
+      - "wait, let me"
+      - "back to"
+
   # Data extraction schema for final profile creation
   extraction_schema:
     member:
@@ -345,16 +452,33 @@ onboarding:
         type: string
         required: true
         source: welcome.name_preference
-      date_of_birth:
-        type: date
+      birth_month:
+        type: number
         required: false
-        calculated_from: basics.age
-        calculation: "today minus age in years"
+        source: basics.birth_month
+      birth_year:
+        type: number
+        required: false
+        source: basics.birth_year
       gender:
         type: enum
         values: [male, female, other]
         required: false
         source: basics.gender
+      city:
+        type: string
+        required: false
+        source: location.city
+      profile_visibility:
+        type: enum
+        values: [public, private]
+        required: false
+        default: private
+        source: privacy.profile_visibility
+      profile_picture:
+        type: string
+        required: false
+        source: profile_setup.profile_picture
 
     metrics:
       height_inches:

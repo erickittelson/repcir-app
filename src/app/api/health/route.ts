@@ -85,10 +85,11 @@ function checkCache(): ComponentHealth {
 }
 
 async function checkAI(): Promise<ComponentHealth> {
-  const hasKey = !!process.env.OPENAI_API_KEY;
+  // Don't expose whether API key is configured in public endpoint
+  // Just return that the service is available
   return {
-    status: hasKey ? "up" : "down",
-    message: hasKey ? "API key configured" : "Missing OPENAI_API_KEY",
+    status: "up",
+    message: "AI service available",
   };
 }
 

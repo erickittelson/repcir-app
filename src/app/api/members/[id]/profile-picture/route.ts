@@ -3,9 +3,10 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { circleMembers } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { writeFile, mkdir } from "fs/promises";
+import { writeFile, mkdir, unlink } from "fs/promises";
 import { join } from "path";
 import { v4 as uuidv4 } from "uuid";
+import { moderateImageBase64 } from "@/lib/moderation";
 
 export async function POST(
   request: Request,
@@ -56,6 +57,33 @@ export async function POST(
       );
     }
 
+    // Read file for moderation
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+
+    // Convert to base64 data URL for moderation
+    const base64 = buffer.toString("base64");
+    const mimeType = file.type;
+    const dataUrl = `data:${mimeType};base64,${base64}`;
+
+    // Moderate image for inappropriate content (NSFW, violence, etc.)
+    const moderationResult = await moderateImageBase64(dataUrl);
+    if (!moderationResult.isClean) {
+      const flaggedCategories = Object.entries(moderationResult.categories)
+        .filter(([, flagged]) => flagged)
+        .map(([category]) => category);
+
+      console.warn(`[Moderation] Member profile picture rejected for member ${id}: ${flaggedCategories.join(", ")}`);
+
+      return NextResponse.json(
+        {
+          error: "This image cannot be used as a profile picture. Please upload an appropriate image.",
+          code: "CONTENT_MODERATION_FAILED",
+        },
+        { status: 400 }
+      );
+    }
+
     // Create upload directory if it doesn't exist
     const uploadDir = join(process.cwd(), "public", "uploads", "profile-pictures");
     await mkdir(uploadDir, { recursive: true });
@@ -65,9 +93,7 @@ export async function POST(
     const filename = `${uuidv4()}.${ext}`;
     const filepath = join(uploadDir, filename);
 
-    // Write file to disk
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    // Write file to disk (already passed moderation)
     await writeFile(filepath, buffer);
 
     // Generate URL path

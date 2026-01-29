@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320" width="240" height="320">
+  <!-- Background -->
+  <rect width="240" height="320" rx="20" fill="#0a0a0a"/>
+
+  <!-- 26 - Atomic Number (top left) -->
+  <text x="24" y="40" font-family="SF Pro Display, system-ui, -apple-system, sans-serif" font-size="24" font-weight="700" fill="#6366f1">26</text>
+
+  <!-- Weight Plate -->
+  <!-- Outer ring -->
+  <circle cx="120" cy="120" r="70" fill="none" stroke="#6366f1" stroke-width="14"/>
+  <!-- Middle ring -->
+  <circle cx="120" cy="120" r="52" fill="none" stroke="#6366f1" stroke-width="4" opacity="0.4"/>
+  <!-- Inner ring -->
+  <circle cx="120" cy="120" r="38" fill="none" stroke="#6366f1" stroke-width="2" opacity="0.25"/>
+  <!-- Center hole -->
+  <circle cx="120" cy="120" r="24" fill="#0a0a0a" stroke="#6366f1" stroke-width="3"/>
+
+  <!-- Fe text in center -->
+  <text x="120" y="130" font-family="SF Pro Display, system-ui, -apple-system, sans-serif" font-size="26" font-weight="800" fill="#6366f1" text-anchor="middle">Fe</text>
+
+  <!-- Iron Circle text -->
+  <text x="120" y="230" font-family="SF Pro Display, system-ui, -apple-system, sans-serif" font-size="28" font-weight="700" fill="#ffffff" text-anchor="middle">Iron Circle</text>
+
+  <!-- Tagline -->
+  <text x="120" y="265" font-family="SF Pro Display, system-ui, -apple-system, sans-serif" font-size="12" font-weight="500" fill="#888888" text-anchor="middle" letter-spacing="1.5">FORGED IN THE IRON CIRCLE</text>
+</svg>

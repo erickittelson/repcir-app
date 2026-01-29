@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { DeleteConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface Limitation {
   id: string;
@@ -91,6 +92,8 @@ export function MemberLimitations({ memberId, compact = false }: MemberLimitatio
   const [showDialog, setShowDialog] = useState(false);
   const [editingLimitation, setEditingLimitation] = useState<Limitation | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Limitation | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Form state
   const [type, setType] = useState("injury");
@@ -219,18 +222,22 @@ export function MemberLimitations({ memberId, compact = false }: MemberLimitatio
     }
   };
 
-  const handleDelete = async (limitationId: string) => {
-    if (!confirm("Are you sure you want to delete this limitation?")) return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
 
     try {
-      await fetch(`/api/members/${memberId}/limitations?limitationId=${limitationId}`, {
+      await fetch(`/api/members/${memberId}/limitations?limitationId=${deleteTarget.id}`, {
         method: "DELETE",
       });
       toast.success("Limitation deleted");
       fetchLimitations();
+      setDeleteTarget(null);
     } catch (error) {
       console.error("Failed to delete limitation:", error);
       toast.error("Failed to delete");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -423,7 +430,7 @@ export function MemberLimitations({ memberId, compact = false }: MemberLimitatio
                     limitation={limitation}
                     onEdit={() => openEditDialog(limitation)}
                     onToggle={() => toggleActive(limitation)}
-                    onDelete={() => handleDelete(limitation.id)}
+                    onDelete={() => setDeleteTarget(limitation)}
                   />
                 ))}
               </div>
@@ -438,7 +445,7 @@ export function MemberLimitations({ memberId, compact = false }: MemberLimitatio
                     limitation={limitation}
                     onEdit={() => openEditDialog(limitation)}
                     onToggle={() => toggleActive(limitation)}
-                    onDelete={() => handleDelete(limitation.id)}
+                    onDelete={() => setDeleteTarget(limitation)}
                   />
                 ))}
               </div>
@@ -460,6 +467,15 @@ export function MemberLimitations({ memberId, compact = false }: MemberLimitatio
           {renderForm()}
         </DialogContent>
       </Dialog>
+
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        itemName={deleteTarget?.description}
+        itemType="limitation"
+        onConfirm={handleDelete}
+        loading={deleting}
+      />
     </Card>
   );
 }

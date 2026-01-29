@@ -90,7 +90,7 @@ const workoutSchema = z.object({
   estimatedDuration: z.number().describe("Estimated duration in minutes - MUST match the target duration requested"),
   difficulty: z.string().describe("beginner, intermediate, or advanced"),
   structure: z.string().nullable().describe("Overall workout structure description (e.g., 'A1/A2 Supersets into AMRAP finisher', 'Strength block + Conditioning circuit'). Use null if simple straight sets."),
-  reasoning: z.string().describe("Explain your reasoning for the exercise selection, order, programming, AND show your time calculation to prove it fits the target duration"),
+  reasoning: z.string().describe("Brief summary of exercise selection rationale and time calculation showing total workout duration"),
 });
 
 // Agentic planning schema for complex reasoning
@@ -887,7 +887,7 @@ Generate the final workout structure. Ensure:
 7. Rest periods match the ${restPreference} preference (${restPreference === "short" ? "30-45s" : restPreference === "standard" ? "60-90s" : "2-3 min"})
 8. Total workout fits within ${targetDuration} minutes (estimatedDuration should be close to ${targetDuration})
 9. When members have lifting maxes, use them to suggest appropriate weights in the notes (e.g., "Use ~70% of 1RM")
-10. Explain your reasoning including how you considered each member's PRs, skills, and limitations
+10. Include time calculations in the reasoning field to verify the workout fits the target duration
 
 The workout should feel cohesive and purposeful with ${recommendedExercises}+ exercises, not just a random collection.`,
       });

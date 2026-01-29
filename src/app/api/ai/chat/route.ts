@@ -8,11 +8,17 @@ import {
   buildSystemPrompt,
 } from "@/lib/ai";
 import { streamWithSemanticContext } from "@/lib/ai/orchestrator";
+import {
+  getOrCreateOpenAIConversation,
+  updateLastResponseId,
+  getConversationState,
+} from "@/lib/ai/conversation-state";
 import { aiChatSchema, validateBody } from "@/lib/validations";
 import {
   getCoachingModeForPrompt,
   getProgrammingRulesForPrompt,
 } from "@/lib/ai/schemas/loader";
+import { moderateText } from "@/lib/moderation";
 
 export const runtime = "nodejs";
 export const maxDuration = 60; // 1 minute for AI chat responses
@@ -184,6 +190,23 @@ export async function POST(request: Request) {
       mode = "general",
     } = validation.data;
 
+    // Moderate the latest user message for profanity
+    const userMessageToModerate = messages.filter(m => m.role === "user").pop();
+    if (userMessageToModerate?.content) {
+      const moderationResult = moderateText(userMessageToModerate.content);
+      if (!moderationResult.isClean && moderationResult.severity !== "mild") {
+        console.warn(`[Moderation] AI chat message rejected from user ${session.user.id}: ${moderationResult.flaggedWords.join(", ")}`);
+
+        return new Response(JSON.stringify({
+          error: "Please keep your messages appropriate. I'm here to help with your fitness journey.",
+          code: "CONTENT_MODERATION_FAILED",
+        }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // Verify member belongs to circle
     const member = await db.query.circleMembers.findFirst({
       where: and(
@@ -214,6 +237,26 @@ export async function POST(request: Request) {
         })
         .returning();
       activeConversation = newConv;
+    }
+
+    // Get or create OpenAI conversation for persistent state
+    // Items in OpenAI conversations are NOT subject to 30-day TTL
+    let openaiConversationId: string | null = null;
+    let previousResponseId: string | null = null;
+
+    try {
+      // Get existing conversation state
+      const conversationState = await getConversationState(activeConversation.id);
+      openaiConversationId = conversationState.openaiConversationId;
+      previousResponseId = conversationState.lastResponseId;
+
+      // Create OpenAI conversation if this is a new conversation
+      if (!openaiConversationId) {
+        openaiConversationId = await getOrCreateOpenAIConversation(activeConversation.id);
+      }
+    } catch (error) {
+      // Log but don't fail - we can still work without OpenAI conversation state
+      console.warn("Failed to get/create OpenAI conversation state:", error);
     }
 
     // Convert messages to format expected by AI SDK
@@ -273,9 +316,11 @@ Remember to:
 - Reference their specific goals, limitations, and history when relevant
 - Keep responses focused and actionable
 - If they seem to be struggling emotionally, acknowledge their feelings first
-- Use evidence-based training principles when giving workout advice`;
+- Use evidence-based training principles when giving workout advice
+- NEVER use markdown headers (###, ##, #) in your responses - use plain text only
+- Use simple line breaks and dashes for lists, not markdown formatting`;
 
-    // Stream the response with semantic context and tool access
+    // Stream the response with semantic context, tool access, and conversation state
     const result = await streamWithSemanticContext({
       messages: coreMessages,
       systemPrompt: fullSystemPrompt,
@@ -283,13 +328,25 @@ Remember to:
       enableTools: true, // Enable semantic tools for context exploration
       maxSteps: 5, // Allow multi-step tool calls
       deepThinking: deepThinking || mode !== "general",
-      onFinish: async ({ text }) => {
-        // Save assistant response to database
+      // Pass OpenAI conversation state for persistent context
+      openaiConversationId: openaiConversationId || undefined,
+      previousResponseId: previousResponseId || undefined,
+      onFinish: async ({ text, response }) => {
+        // Extract response ID for chaining
+        const responseId = response?.id;
+
+        // Save assistant response to database with response ID
         await db.insert(coachMessages).values({
           conversationId: activeConversation!.id,
           role: "assistant",
           content: text,
+          openaiResponseId: responseId || null,
         });
+
+        // Update conversation with last response ID for chaining
+        if (responseId) {
+          await updateLastResponseId(activeConversation!.id, responseId);
+        }
 
         // Update conversation timestamp
         await db
@@ -306,6 +363,26 @@ Remember to:
     return response;
   } catch (error) {
     console.error("Error in AI chat:", error);
+    
+    // Handle specific OpenAI error types
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    
+    if (errorMessage.includes("rate limit")) {
+      return new Response("AI service is busy. Please try again in a moment.", { 
+        status: 429,
+        headers: { "Retry-After": "30" }
+      });
+    }
+    
+    if (errorMessage.includes("timeout") || errorMessage.includes("ETIMEDOUT")) {
+      return new Response("Request timed out. Please try again.", { status: 504 });
+    }
+    
+    if (errorMessage.includes("invalid_api_key") || errorMessage.includes("authentication")) {
+      // Don't expose internal error details
+      return new Response("Service configuration error", { status: 503 });
+    }
+    
     return new Response("Failed to process request", { status: 500 });
   }
 }

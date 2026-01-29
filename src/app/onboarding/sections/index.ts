@@ -1,0 +1,13 @@
+export { WelcomeSection } from "./welcome";
+export { ProfilePhotoSection } from "./profile-photo";
+export { BasicsSection } from "./basics";
+export { GoalsSection } from "./goals";
+export { FitnessLevelSection } from "./fitness-level";
+export { ActivitySection } from "./activity";
+export { SportsSection } from "./sports";
+export { MaxesSection } from "./maxes";
+export { LimitationsSection } from "./limitations";
+export { EquipmentSection } from "./equipment";
+export { PreferencesSection } from "./preferences";
+export { CompleteSection } from "./complete";
+export type { SectionProps } from "./types";

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { circleMembers, personalRecords, exercises } from "@/lib/db/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { evaluateAndAwardBadges } from "@/lib/badges";
 
 export async function GET(
   request: Request,
@@ -125,7 +126,29 @@ export async function POST(
       },
     });
 
-    return NextResponse.json(recordWithExercise);
+    // Evaluate badges and check goal completion
+    let badgeResults = { awarded: [] as any[], goalMatches: [] as any[] };
+    if (recordWithExercise?.exercise) {
+      try {
+        badgeResults = await evaluateAndAwardBadges({
+          userId: session.user.id,
+          memberId: id,
+          trigger: "pr",
+          exerciseName: recordWithExercise.exercise.name,
+          exerciseValue: value,
+          exerciseUnit: unit,
+        });
+      } catch (badgeError) {
+        console.error("Error evaluating badges:", badgeError);
+        // Don't fail the PR creation if badge evaluation fails
+      }
+    }
+
+    return NextResponse.json({
+      ...recordWithExercise,
+      badgesAwarded: badgeResults.awarded,
+      goalMatches: badgeResults.goalMatches,
+    });
   } catch (error) {
     console.error("Error creating personal record:", error);
     return NextResponse.json(
@@ -183,7 +206,36 @@ export async function PUT(
         )
       );
 
-    return NextResponse.json({ success: true });
+    // Evaluate badges if value was updated
+    let badgeResults = { awarded: [] as any[], goalMatches: [] as any[] };
+    if (value !== undefined) {
+      try {
+        // Get the exercise name for the updated record
+        const updatedRecord = await db.query.personalRecords.findFirst({
+          where: eq(personalRecords.id, recordId),
+          with: { exercise: true },
+        });
+
+        if (updatedRecord?.exercise) {
+          badgeResults = await evaluateAndAwardBadges({
+            userId: session.user.id,
+            memberId: id,
+            trigger: "pr",
+            exerciseName: updatedRecord.exercise.name,
+            exerciseValue: value,
+            exerciseUnit: unit || updatedRecord.unit,
+          });
+        }
+      } catch (badgeError) {
+        console.error("Error evaluating badges:", badgeError);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      badgesAwarded: badgeResults.awarded,
+      goalMatches: badgeResults.goalMatches,
+    });
   } catch (error) {
     console.error("Error updating personal record:", error);
     return NextResponse.json(

@@ -1,6 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "@neondatabase/auth/ui/tailwind";
+/* Removed @neondatabase/auth/ui/tailwind - it contains a CSS reset that overrides Tailwind utilities */
 
 @custom-variant dark (&:is(.dark *));
 
@@ -298,4 +298,78 @@
     pointer-events: none;
     mix-blend-mode: overlay;
   }
+
+  /* Safe area utilities for iOS/notched devices */
+  .h-safe-area-inset-bottom {
+    height: env(safe-area-inset-bottom, 0px);
+  }
+
+  .pb-safe-area {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .pt-safe-area {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .safe-area-inset-bottom {
+    margin-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Touch target utilities for mobile accessibility */
+  .touch-target {
+    position: relative;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .touch-target-sm {
+    position: relative;
+  }
+
+  .touch-target-sm::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+  }
+}
+
+/* Neon Auth social login styling */
+@layer components {
+  /* Social login buttons (Google, etc.) */
+  [data-slot="social-button"],
+  button[data-provider] {
+    @apply w-full h-11 px-4 rounded-lg border border-border bg-card text-foreground;
+    @apply flex items-center justify-center gap-3 font-medium;
+    @apply hover:bg-muted/50 active:scale-[0.98] transition-all;
+  }
+
+  [data-slot="social-button"] svg,
+  button[data-provider] svg {
+    @apply h-5 w-5;
+  }
+}
+
+/* Neon Auth "Or continue with" divider styling */
+/* Target the separator container and make it full width */
+.flex.items-center.gap-2:has(> .flex-shrink-0.text-muted-foreground) {
+  width: 100% !important;
+  margin: 16px 0 !important;
+}
+
+/* Fix the separator line divs - override !w-auto with flex: 1 */
+.flex.items-center.gap-2 > .bg-border.grow {
+  width: auto !important;
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+}
+
+/* Ensure the text doesn't wrap */
+.flex.items-center.gap-2 > .flex-shrink-0.text-muted-foreground {
+  white-space: nowrap !important;
 }

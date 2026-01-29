@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { contextNotes, circleMembers } from "@/lib/db/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { moderateText } from "@/lib/moderation";
 
 export async function GET(
   request: Request,
@@ -88,6 +89,20 @@ export async function POST(
         { error: "Entity type is required" },
         { status: 400 }
       );
+    }
+
+    // Moderate content for profanity (if provided)
+    if (content) {
+      const moderationResult = moderateText(content);
+      if (!moderationResult.isClean) {
+        return NextResponse.json(
+          {
+            error: "Note content contains inappropriate language. Please revise.",
+            code: "CONTENT_MODERATION_FAILED",
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // Verify member belongs to this circle

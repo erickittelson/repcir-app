@@ -19,20 +19,25 @@ import {
   Sparkles,
   Heart,
   Clock,
+  MapPin,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export interface ExtractedProfileData {
   name?: string;
-  age?: number;
+  profilePicture?: string;
+  birthMonth?: number;
+  birthYear?: number;
   gender?: "male" | "female" | "other";
   heightFeet?: number;
   heightInches?: number;
   weight?: number;
+  city?: string;
   bodyFatPercentage?: number;
   fitnessLevel?: "beginner" | "intermediate" | "advanced" | "elite";
-  primaryMotivation?: string;
+  primaryMotivation?: string[];
   primaryGoal?: {
     type: string;
     description: string;
@@ -42,11 +47,32 @@ export interface ExtractedProfileData {
   secondaryGoals?: string[];
   timeline?: string;
   targetWeight?: number;
+  // Activity level - daily routine outside of workouts
+  activityLevel?: {
+    jobType: "sedentary" | "light" | "moderate" | "active" | "very_active";
+    dailySteps?: number;
+    description?: string;
+  };
   limitations?: Array<{
     bodyPart: string;
     condition: string;
     severity?: "mild" | "moderate" | "severe";
     avoidMovements?: string[];
+  }>;
+  // Specific goals - PRs, sport skills, performance targets
+  specificGoals?: Array<{
+    type: "pr" | "skill" | "time" | "other";
+    exercise?: string; // e.g., "Bench Press", "40 yard dash", "Mile run"
+    targetValue?: number;
+    targetUnit?: string; // e.g., "lbs", "seconds", "minutes"
+    description?: string; // Free text for custom goals like "learn to backflip"
+  }>;
+  // Current assessed maxes - for AI workout programming
+  currentMaxes?: Array<{
+    exercise: string;
+    value: number | "working_on" | "mastered" | "consistent"; // number for measurable, string for skills
+    unit: "lbs" | "reps" | "seconds" | "min:sec" | "skill";
+    isCustom?: boolean;
   }>;
   personalRecords?: Array<{
     exercise: string;
@@ -59,6 +85,9 @@ export interface ExtractedProfileData {
   workoutDays?: string[];
   trainingFrequency?: number;
   currentActivity?: string;
+  profileVisibility?: "public" | "private";
+  // Internal flag - has user seen the welcome intro modal
+  seenIntro?: boolean;
 }
 
 // Phase configuration - matches onboarding conversation flow
@@ -73,6 +102,17 @@ interface PhaseConfig {
   }>;
 }
 
+// Helper to calculate age from birth month/year
+function calculateAge(birthMonth?: number, birthYear?: number): string {
+  if (!birthMonth || !birthYear) return "—";
+  const today = new Date();
+  let age = today.getFullYear() - birthYear;
+  if (today.getMonth() + 1 < birthMonth) {
+    age--;
+  }
+  return `${age} years`;
+}
+
 const PHASES: PhaseConfig[] = [
   {
     id: "welcome",
@@ -80,15 +120,35 @@ const PHASES: PhaseConfig[] = [
     icon: <Sparkles className="w-4 h-4" />,
     fields: [
       { key: "name", label: "Name" },
-      { key: "primaryMotivation", label: "Motivation" },
+      {
+        key: "profilePicture",
+        label: "Photo",
+        format: (v) => v ? "Uploaded" : "—",
+      },
+    ],
+  },
+  {
+    id: "motivation",
+    label: "Motivation",
+    icon: <Heart className="w-4 h-4" />,
+    fields: [
+      {
+        key: "primaryMotivation",
+        label: "Why You're Here",
+        format: (v) => Array.isArray(v) ? v.join(", ") : String(v),
+      },
     ],
   },
   {
     id: "basics",
     label: "Basic Info",
-    icon: <User className="w-4 h-4" />,
+    icon: <Calendar className="w-4 h-4" />,
     fields: [
-      { key: "age", label: "Age", format: (v) => `${v} years` },
+      {
+        key: "birthYear",
+        label: "Age",
+        format: (v, data) => calculateAge(data.birthMonth, data.birthYear),
+      },
       {
         key: "gender",
         label: "Gender",
@@ -106,6 +166,23 @@ const PHASES: PhaseConfig[] = [
     ],
   },
   {
+    id: "location",
+    label: "Location",
+    icon: <MapPin className="w-4 h-4" />,
+    fields: [
+      { key: "city", label: "City" },
+    ],
+  },
+  {
+    id: "body_composition",
+    label: "Body Composition",
+    icon: <Scale className="w-4 h-4" />,
+    fields: [
+      { key: "bodyFatPercentage", label: "Body Fat", format: (v) => `~${v}%` },
+      { key: "targetWeight", label: "Target Weight", format: (v) => `${v} lbs` },
+    ],
+  },
+  {
     id: "fitness_background",
     label: "Fitness Level",
     icon: <Activity className="w-4 h-4" />,
@@ -120,32 +197,26 @@ const PHASES: PhaseConfig[] = [
         label: "Training Days",
         format: (v) => `${v}x per week`,
       },
-      { key: "currentActivity", label: "Current Activity" },
-    ],
-  },
-  {
-    id: "goals",
-    label: "Goals",
-    icon: <Target className="w-4 h-4" />,
-    fields: [
       {
-        key: "primaryGoal",
-        label: "Primary Goal",
+        key: "activityLevel",
+        label: "Daily Activity",
         format: (v) => {
-          const goal = v as ExtractedProfileData["primaryGoal"];
-          return goal?.description || goal?.type || "";
+          const activity = v as ExtractedProfileData["activityLevel"];
+          if (!activity) return "—";
+          const jobLabels: Record<string, string> = {
+            sedentary: "Sedentary (desk job)",
+            light: "Lightly active",
+            moderate: "Moderately active",
+            active: "Active",
+            very_active: "Very active",
+          };
+          let result = jobLabels[activity.jobType] || activity.jobType;
+          if (activity.dailySteps) {
+            result += ` • ~${activity.dailySteps.toLocaleString()} steps`;
+          }
+          return result;
         },
       },
-      { key: "timeline", label: "Timeline" },
-    ],
-  },
-  {
-    id: "body_composition",
-    label: "Body Composition",
-    icon: <Scale className="w-4 h-4" />,
-    fields: [
-      { key: "bodyFatPercentage", label: "Body Fat", format: (v) => `~${v}%` },
-      { key: "targetWeight", label: "Target Weight", format: (v) => `${v} lbs` },
     ],
   },
   {
@@ -155,10 +226,16 @@ const PHASES: PhaseConfig[] = [
     fields: [], // Special handling for limitations array
   },
   {
-    id: "personal_records",
-    label: "Personal Records",
-    icon: <Trophy className="w-4 h-4" />,
-    fields: [], // Special handling for PR array
+    id: "current_maxes",
+    label: "Current Maxes",
+    icon: <Dumbbell className="w-4 h-4" />,
+    fields: [], // Special handling for currentMaxes array
+  },
+  {
+    id: "goals",
+    label: "Goals",
+    icon: <Target className="w-4 h-4" />,
+    fields: [], // Special handling for specificGoals array
   },
   {
     id: "preferences",
@@ -182,6 +259,18 @@ const PHASES: PhaseConfig[] = [
       },
     ],
   },
+  {
+    id: "privacy",
+    label: "Privacy",
+    icon: <Lock className="w-4 h-4" />,
+    fields: [
+      {
+        key: "profileVisibility",
+        label: "Profile Visibility",
+        format: (v) => v === "public" ? "Public" : "Private",
+      },
+    ],
+  },
 ];
 
 interface ProfilePanelProps {
@@ -194,6 +283,23 @@ interface ProfilePanelProps {
   onToggleCollapse?: () => void;
 }
 
+// Map API phase names to panel phase IDs
+const PHASE_TO_PANEL_MAP: Record<string, string> = {
+  welcome: "welcome",
+  profile_setup: "welcome",
+  motivation: "motivation",
+  basics: "basics",
+  location: "location",
+  body_composition: "body_composition",
+  fitness_background: "fitness_background",
+  limitations: "limitations",
+  current_maxes: "current_maxes",
+  goals: "goals",
+  preferences: "preferences",
+  privacy: "privacy",
+  wrap_up: "privacy",
+};
+
 export function ProfilePanel({
   data,
   currentPhase,
@@ -204,15 +310,36 @@ export function ProfilePanel({
   onToggleCollapse,
 }: ProfilePanelProps) {
   const [expandedPhase, setExpandedPhase] = useState<string | null>("welcome");
-  const [highlightedField, setHighlightedField] = useState<string | null>(null);
+  const [userOverride, setUserOverride] = useState(false);
   const [recentlyUpdated, setRecentlyUpdated] = useState<Set<string>>(new Set());
   const prevDataRef = useRef<ExtractedProfileData>({});
+  const prevPhaseRef = useRef<string>(currentPhase);
 
-  // Track changes and highlight newly updated fields
+  // Auto-expand the section matching the current chat phase
+  useEffect(() => {
+    const panelPhase = PHASE_TO_PANEL_MAP[currentPhase] || currentPhase;
+
+    // If phase changed, reset user override and expand current phase section
+    if (currentPhase !== prevPhaseRef.current) {
+      setUserOverride(false);
+      setExpandedPhase(panelPhase);
+      prevPhaseRef.current = currentPhase;
+    } else if (!userOverride) {
+      // If no user override, keep expanding current phase
+      setExpandedPhase(panelPhase);
+    }
+  }, [currentPhase, userOverride]);
+
+  // Handle user manually clicking to expand/collapse a section
+  const handleTogglePhase = (phaseId: string) => {
+    const isCurrentlyExpanded = expandedPhase === phaseId;
+    setUserOverride(true);
+    setExpandedPhase(isCurrentlyExpanded ? null : phaseId);
+  };
+
+  // Track data changes for subtle highlight effect
   useEffect(() => {
     const newUpdates = new Set<string>();
-    let latestField: string | null = null;
-    let latestPhase: string | null = null;
 
     // Check each field for changes
     for (const phase of PHASES) {
@@ -222,8 +349,6 @@ export function ProfilePanel({
 
         if (currValue !== undefined && currValue !== prevValue) {
           newUpdates.add(field.key);
-          latestField = field.key;
-          latestPhase = phase.id;
         }
       }
 
@@ -233,35 +358,32 @@ export function ProfilePanel({
         const currLim = data.limitations;
         if (JSON.stringify(currLim) !== JSON.stringify(prevLim) && currLim?.length) {
           newUpdates.add("limitations");
-          latestField = "limitations";
-          latestPhase = "limitations";
         }
       }
 
-      if (phase.id === "personal_records") {
-        const prevPR = prevDataRef.current.personalRecords;
-        const currPR = data.personalRecords;
-        if (JSON.stringify(currPR) !== JSON.stringify(prevPR) && currPR?.length) {
-          newUpdates.add("personalRecords");
-          latestField = "personalRecords";
-          latestPhase = "personal_records";
+      if (phase.id === "current_maxes") {
+        const prevMaxes = prevDataRef.current.currentMaxes;
+        const currMaxes = data.currentMaxes;
+        if (JSON.stringify(currMaxes) !== JSON.stringify(prevMaxes) && currMaxes !== undefined) {
+          newUpdates.add("currentMaxes");
+        }
+      }
+
+      if (phase.id === "goals") {
+        const prevGoals = prevDataRef.current.specificGoals;
+        const currGoals = data.specificGoals;
+        if (JSON.stringify(currGoals) !== JSON.stringify(prevGoals) && currGoals !== undefined) {
+          newUpdates.add("specificGoals");
         }
       }
     }
 
     if (newUpdates.size > 0) {
       setRecentlyUpdated(newUpdates);
-      setHighlightedField(latestField);
-
-      // Auto-expand the phase with the latest update
-      if (latestPhase) {
-        setExpandedPhase(latestPhase);
-      }
 
       // Clear highlights after animation
       const timeout = setTimeout(() => {
         setRecentlyUpdated(new Set());
-        setHighlightedField(null);
       }, 2000);
 
       prevDataRef.current = { ...data };
@@ -274,17 +396,30 @@ export function ProfilePanel({
   // Get phase progress
   const getPhaseProgress = (phase: PhaseConfig) => {
     if (phase.id === "limitations") {
+      // limitations is tracked as having data even if empty array (user explicitly said none)
+      const hasData = data.limitations !== undefined;
       return {
-        filled: data.limitations?.length ? 1 : 0,
+        filled: hasData ? 1 : 0,
         total: 1,
-        hasData: !!data.limitations?.length,
+        hasData,
       };
     }
-    if (phase.id === "personal_records") {
+    if (phase.id === "current_maxes") {
+      // currentMaxes is tracked as having data even if empty array (user explicitly said none)
+      const hasData = data.currentMaxes !== undefined;
       return {
-        filled: data.personalRecords?.length ? 1 : 0,
+        filled: hasData ? 1 : 0,
         total: 1,
-        hasData: !!data.personalRecords?.length,
+        hasData,
+      };
+    }
+    if (phase.id === "goals") {
+      // specificGoals is tracked as having data even if empty array (user explicitly said none)
+      const hasData = data.specificGoals !== undefined;
+      return {
+        filled: hasData ? 1 : 0,
+        total: 1,
+        hasData,
       };
     }
 
@@ -302,11 +437,12 @@ export function ProfilePanel({
   const allFields = PHASES.flatMap((p) => p.fields);
   const filledFields = allFields.filter((f) => data[f.key] !== undefined).length;
   const totalFields = allFields.length;
-  // Add special fields
-  const totalWithSpecial = totalFields + 2; // limitations + PRs
+  // Add special fields (limitations, currentMaxes, goals are handled as special arrays)
+  const totalWithSpecial = totalFields + 3; // limitations + currentMaxes + goals
   const filledWithSpecial = filledFields +
-    (data.limitations?.length ? 1 : 0) +
-    (data.personalRecords?.length ? 1 : 0);
+    (data.limitations !== undefined ? 1 : 0) +
+    (data.currentMaxes !== undefined ? 1 : 0) +
+    (data.specificGoals !== undefined ? 1 : 0);
   const progressPercent = Math.round((filledWithSpecial / totalWithSpecial) * 100);
 
   // Collapsed view
@@ -329,46 +465,6 @@ export function ProfilePanel({
         >
           <ChevronRight className="w-4 h-4" />
         </Button>
-
-        {/* Progress ring */}
-        <div className="relative w-10 h-10 mb-6">
-          <svg className="w-10 h-10 -rotate-90">
-            <circle
-              cx="20"
-              cy="20"
-              r="16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="3"
-              className="text-muted"
-            />
-            <circle
-              cx="20"
-              cy="20"
-              r="16"
-              fill="none"
-              stroke="url(#progressGradient)"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeDasharray={`${progressPercent} 100`}
-            />
-            <defs>
-              <linearGradient
-                id="progressGradient"
-                x1="0%"
-                y1="0%"
-                x2="100%"
-                y2="100%"
-              >
-                <stop offset="0%" stopColor="oklch(0.65 0.28 280)" />
-                <stop offset="100%" stopColor="oklch(0.70 0.25 330)" />
-              </linearGradient>
-            </defs>
-          </svg>
-          <span className="absolute inset-0 flex items-center justify-center text-xs font-medium">
-            {filledWithSpecial}
-          </span>
-        </div>
 
         {/* Phase indicators */}
         <div className="flex flex-col gap-2">
@@ -412,27 +508,11 @@ export function ProfilePanel({
     >
       {/* Header */}
       <div className="flex-shrink-0 p-4 border-b border-border/50">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between">
           <h2 className="font-semibold text-foreground">Your Profile</h2>
           <Button variant="ghost" size="icon" onClick={onToggleCollapse}>
             <X className="w-4 h-4" />
           </Button>
-        </div>
-
-        {/* Progress bar */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Progress</span>
-            <span className="font-medium text-foreground">{progressPercent}%</span>
-          </div>
-          <div className="h-2 bg-muted rounded-full overflow-hidden">
-            <motion.div
-              className="h-full bg-energy-gradient rounded-full"
-              initial={{ width: 0 }}
-              animate={{ width: `${progressPercent}%` }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
-            />
-          </div>
         </div>
       </div>
 
@@ -444,13 +524,14 @@ export function ProfilePanel({
           const isCurrentPhase = currentPhase === phase.id;
           const hasUpdates = phase.fields.some((f) => recentlyUpdated.has(f.key)) ||
             (phase.id === "limitations" && recentlyUpdated.has("limitations")) ||
-            (phase.id === "personal_records" && recentlyUpdated.has("personalRecords"));
+            (phase.id === "current_maxes" && recentlyUpdated.has("currentMaxes")) ||
+            (phase.id === "goals" && recentlyUpdated.has("specificGoals"));
 
           return (
             <div key={phase.id} className="mb-1">
               {/* Phase header */}
               <button
-                onClick={() => setExpandedPhase(isExpanded ? null : phase.id)}
+                onClick={() => handleTogglePhase(phase.id)}
                 className={cn(
                   "w-full flex items-center justify-between px-4 py-3",
                   "hover:bg-accent/50 transition-all duration-200",
@@ -510,12 +591,11 @@ export function ProfilePanel({
                     transition={{ duration: 0.2 }}
                     className="overflow-hidden"
                   >
-                    <div className="px-4 pb-2 space-y-1">
+                    <div className="px-4 pb-3 pt-1" style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
                       {/* Regular fields */}
                       {phase.fields.map((field) => {
                         const value = data[field.key];
                         const isFilled = value !== undefined;
-                        const isHighlighted = highlightedField === field.key;
                         const isRecentlyUpdated = recentlyUpdated.has(field.key);
                         const displayValue = isFilled
                           ? field.format
@@ -526,14 +606,13 @@ export function ProfilePanel({
                         return (
                           <motion.div
                             key={field.key}
-                            initial={isRecentlyUpdated ? { scale: 1.02, backgroundColor: "oklch(0.65 0.28 280 / 0.15)" } : false}
-                            animate={{ scale: 1, backgroundColor: isHighlighted ? "oklch(0.65 0.28 280 / 0.1)" : "transparent" }}
-                            transition={{ duration: 0.3 }}
+                            initial={isRecentlyUpdated ? { backgroundColor: "oklch(0.65 0.28 280 / 0.08)" } : false}
+                            animate={{ backgroundColor: "transparent" }}
+                            transition={{ duration: 0.8 }}
                             className={cn(
                               "group flex items-center justify-between py-2 px-3 rounded-lg",
                               "transition-colors duration-200",
-                              isHighlighted && "ring-1 ring-brand/30",
-                              isFilled && !isHighlighted && "hover:bg-accent/30",
+                              isFilled && "hover:bg-accent/30",
                               !isFilled && "opacity-50"
                             )}
                           >
@@ -566,14 +645,25 @@ export function ProfilePanel({
 
                       {/* Limitations special handling */}
                       {phase.id === "limitations" && (
-                        <>
+                        <div className="group">
+                          <div className="flex items-center justify-between" style={{ marginBottom: "0.5rem" }}>
+                            <span className="text-xs text-muted-foreground uppercase tracking-wide">Injuries/Limitations</span>
+                            {data.limitations !== undefined && onEdit && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => onEdit("limitations", data.limitations)}
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-accent"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </Button>
+                            )}
+                          </div>
                           {data.limitations && data.limitations.length > 0 ? (
-                            <div className="space-y-2">
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                               {data.limitations.map((lim, idx) => (
-                                <motion.div
+                                <div
                                   key={idx}
-                                  initial={recentlyUpdated.has("limitations") ? { scale: 1.02 } : false}
-                                  animate={{ scale: 1 }}
                                   className="flex items-start gap-2 py-2 px-3 rounded-lg bg-destructive/10"
                                 >
                                   <AlertTriangle className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0" />
@@ -586,47 +676,156 @@ export function ProfilePanel({
                                       {lim.severity && ` (${lim.severity})`}
                                     </p>
                                   </div>
-                                </motion.div>
+                                </div>
                               ))}
                             </div>
+                          ) : data.limitations !== undefined ? (
+                            <button
+                              onClick={() => onEdit?.("limitations", data.limitations)}
+                              className="w-full text-left px-3 py-2 rounded-lg hover:bg-accent/50 transition-colors group/add"
+                            >
+                              <span className="text-sm text-muted-foreground">No limitations</span>
+                              <span className="text-xs text-brand ml-2 opacity-0 group-hover/add:opacity-100 transition-opacity">
+                                + Add
+                              </span>
+                            </button>
                           ) : (
                             <p className="text-sm text-muted-foreground px-3 py-2 opacity-50">
-                              No limitations mentioned
+                              Not discussed yet
                             </p>
                           )}
-                        </>
+                        </div>
                       )}
 
-                      {/* Personal records special handling */}
-                      {phase.id === "personal_records" && (
-                        <>
-                          {data.personalRecords && data.personalRecords.length > 0 ? (
-                            <div className="space-y-2">
-                              {data.personalRecords.map((pr, idx) => (
-                                <motion.div
-                                  key={idx}
-                                  initial={recentlyUpdated.has("personalRecords") ? { scale: 1.02 } : false}
-                                  animate={{ scale: 1 }}
-                                  className="flex items-center justify-between py-2 px-3 rounded-lg bg-success/10"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <Trophy className="w-4 h-4 text-success" />
-                                    <span className="text-sm text-foreground">
-                                      {pr.exercise}
-                                    </span>
+                      {/* Current maxes special handling */}
+                      {phase.id === "current_maxes" && (
+                        <div className="group">
+                          <div className="flex items-center justify-between" style={{ marginBottom: "0.5rem" }}>
+                            <span className="text-xs text-muted-foreground uppercase tracking-wide">Your Maxes</span>
+                            {data.currentMaxes !== undefined && onEdit && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => onEdit("currentMaxes", data.currentMaxes)}
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-accent"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </Button>
+                            )}
+                          </div>
+                          {data.currentMaxes && data.currentMaxes.length > 0 ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                              {data.currentMaxes.map((max, idx) => {
+                                const isSkill = max.unit === "skill";
+                                const skillLabel = isSkill
+                                  ? max.value === "mastered" ? "Mastered"
+                                    : max.value === "consistent" ? "Consistent"
+                                    : "Working On"
+                                  : null;
+                                const skillColor = isSkill
+                                  ? max.value === "mastered" ? "bg-green-500/20 text-green-600"
+                                    : max.value === "consistent" ? "bg-blue-500/20 text-blue-600"
+                                    : "bg-amber-500/20 text-amber-600"
+                                  : "bg-brand/10";
+
+                                return (
+                                  <div
+                                    key={idx}
+                                    className={cn(
+                                      "flex items-center justify-between py-2 px-3 rounded-lg",
+                                      skillColor
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <Dumbbell className="w-4 h-4 text-brand" />
+                                      <span className="text-sm text-foreground">
+                                        {max.exercise}
+                                      </span>
+                                    </div>
+                                    {isSkill ? (
+                                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-current/10">
+                                        ✓ {skillLabel}
+                                      </span>
+                                    ) : (
+                                      <span className="text-sm font-medium text-brand">
+                                        {max.value} {max.unit}
+                                      </span>
+                                    )}
                                   </div>
-                                  <span className="text-sm font-medium text-success">
-                                    {pr.value} {pr.unit}
-                                  </span>
-                                </motion.div>
-                              ))}
+                                );
+                              })}
                             </div>
+                          ) : data.currentMaxes !== undefined ? (
+                            <button
+                              onClick={() => onEdit?.("currentMaxes", data.currentMaxes)}
+                              className="w-full text-left px-3 py-2 rounded-lg hover:bg-accent/50 transition-colors group/add"
+                            >
+                              <span className="text-sm text-muted-foreground">No maxes recorded</span>
+                              <span className="text-xs text-brand ml-2 opacity-0 group-hover/add:opacity-100 transition-opacity">
+                                + Add
+                              </span>
+                            </button>
                           ) : (
                             <p className="text-sm text-muted-foreground px-3 py-2 opacity-50">
-                              No records shared yet
+                              Not discussed yet
                             </p>
                           )}
-                        </>
+                        </div>
+                      )}
+
+                      {/* Goals special handling */}
+                      {phase.id === "goals" && (
+                        <div className="group">
+                          <div className="flex items-center justify-between" style={{ marginBottom: "0.5rem" }}>
+                            <span className="text-xs text-muted-foreground uppercase tracking-wide">Performance Goals</span>
+                            {data.specificGoals !== undefined && onEdit && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => onEdit("specificGoals", data.specificGoals)}
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-accent"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </Button>
+                            )}
+                          </div>
+                          {data.specificGoals && data.specificGoals.length > 0 ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                              {data.specificGoals.map((goal, idx) => (
+                                <div
+                                  key={idx}
+                                  className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <Target className="w-4 h-4 text-brand" />
+                                    <span className="text-sm text-foreground">
+                                      {goal.exercise || goal.description}
+                                    </span>
+                                  </div>
+                                  {goal.targetValue && (
+                                    <span className="text-sm font-medium text-brand">
+                                      → {goal.targetValue} {goal.targetUnit}
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ) : data.specificGoals !== undefined ? (
+                            <button
+                              onClick={() => onEdit?.("specificGoals", data.specificGoals)}
+                              className="w-full text-left px-3 py-2 rounded-lg hover:bg-accent/50 transition-colors group/add"
+                            >
+                              <span className="text-sm text-muted-foreground">No specific targets set</span>
+                              <span className="text-xs text-brand ml-2 opacity-0 group-hover/add:opacity-100 transition-opacity">
+                                + Add
+                              </span>
+                            </button>
+                          ) : (
+                            <p className="text-sm text-muted-foreground px-3 py-2 opacity-50">
+                              Not discussed yet
+                            </p>
+                          )}
+                        </div>
                       )}
                     </div>
                   </motion.div>

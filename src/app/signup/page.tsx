@@ -30,7 +30,7 @@ const features = [
 
 export default function SignUpPage() {
   return (
-    <div className="min-h-screen flex bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen flex mesh-gradient">
       {/* Left side - Features */}
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-center p-12">
         <div className="max-w-md">
@@ -79,8 +79,10 @@ export default function SignUpPage() {
               Sign up to start tracking your workouts
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <AuthView path="sign-up" />
+          <CardContent className="overflow-visible">
+            <div className="w-full [&>*]:w-full">
+              <AuthView path="sign-up" />
+            </div>
           </CardContent>
         </Card>
       </div>

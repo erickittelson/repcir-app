@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { goals, milestones, circleMembers } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
+import { moderateText } from "@/lib/moderation";
 
 export async function GET() {
   try {
@@ -79,6 +80,19 @@ export async function POST(request: Request) {
     if (!memberId || !title || !category) {
       return NextResponse.json(
         { error: "Member, title, and category are required" },
+        { status: 400 }
+      );
+    }
+
+    // Moderate title and description for profanity
+    const textToCheck = [title, description].filter(Boolean).join(" ");
+    const moderationResult = moderateText(textToCheck);
+    if (!moderationResult.isClean) {
+      return NextResponse.json(
+        {
+          error: "Goal title or description contains inappropriate language. Please revise.",
+          code: "CONTENT_MODERATION_FAILED",
+        },
         { status: 400 }
       );
     }

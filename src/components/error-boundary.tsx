@@ -64,7 +64,7 @@ export class ErrorBoundary extends Component<Props, State> {
                   Try Again
                 </Button>
                 <Button asChild className="flex-1">
-                  <Link href="/dashboard">
+                  <Link href="/">
                     <Home className="mr-2 h-4 w-4" />
                     Go Home
                   </Link>

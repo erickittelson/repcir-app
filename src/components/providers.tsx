@@ -4,11 +4,11 @@ import { useEffect } from "react";
 import { NeonAuthUIProvider } from "@neondatabase/auth/react/ui";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
+import { CookieBanner } from "@/components/consent/cookie-banner";
 import { authClient } from "@/lib/neon-auth/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { registerServiceWorker } from "@/lib/pwa";
-import "@neondatabase/auth/ui/css";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -22,7 +22,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <ThemeProvider
       attribute="class"
       defaultTheme="dark"
-      enableSystem
+      forcedTheme="dark"
       disableTransitionOnChange
     >
       <NeonAuthUIProvider
@@ -30,7 +30,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         navigate={router.push}
         replace={router.replace}
         onSessionChange={() => router.refresh()}
-        redirectTo="/onboarding"
+        redirectTo="/"
         Link={Link}
         social={{ providers: ["google"] }}
         localization={{
@@ -48,6 +48,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         }}
       >
         {children}
+        <CookieBanner />
         <Toaster />
       </NeonAuthUIProvider>
     </ThemeProvider>

@@ -12,6 +12,7 @@ import {
 import { eq, and, desc } from "drizzle-orm";
 import { generateText } from "ai";
 import { aiModel, getMemberContext, buildSystemPrompt, getReasoningOptions } from "@/lib/ai";
+import { evaluateAndAwardBadges } from "@/lib/badges";
 
 export async function POST(
   request: Request,
@@ -100,10 +101,27 @@ export async function POST(
       }
     }
 
+    // Get the user ID for badge evaluation
+    const member = await db.query.circleMembers.findFirst({
+      where: eq(circleMembers.id, workoutSession.memberId),
+    });
+    const userId = member?.userId;
+
     // Check for personal records and generate AI analysis (non-blocking)
     detectPersonalRecordsAndAnalyze(id, workoutSession.memberId).catch((err) => {
       console.error("Background PR/analysis error:", err);
     });
+
+    // Evaluate badges for workout completion (non-blocking)
+    if (userId) {
+      evaluateAndAwardBadges({
+        userId,
+        memberId: workoutSession.memberId,
+        trigger: "workout",
+      }).catch((err) => {
+        console.error("Background badge evaluation error:", err);
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

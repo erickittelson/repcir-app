@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -23,11 +25,11 @@ import {
 } from "@/components/ui/select";
 import {
   Dumbbell,
-  Search,
   Plus,
   Loader2,
   Filter,
   X,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -80,9 +82,50 @@ const muscleGroups = [
   "full body",
 ];
 
+const PAGE_SIZE = 24;
+
+// Simple debounce hook
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
+// Exercise card skeleton
+function ExerciseCardSkeleton() {
+  return (
+    <Card className="overflow-hidden">
+      <Skeleton className="w-full h-40" />
+      <CardHeader className="pb-2">
+        <Skeleton className="h-5 w-3/4" />
+      </CardHeader>
+      <CardContent>
+        <Skeleton className="h-4 w-full mb-2" />
+        <Skeleton className="h-4 w-2/3 mb-3" />
+        <div className="flex gap-1">
+          <Skeleton className="h-5 w-16 rounded-full" />
+          <Skeleton className="h-5 w-20 rounded-full" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ExercisesPage() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [difficultyFilter, setDifficultyFilter] = useState("");
@@ -90,6 +133,12 @@ export default function ExercisesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
+
+  // Cache for filtered results
+  const cacheRef = useRef<Map<string, Exercise[]>>(new Map());
+
+  const debouncedSearch = useDebounce(search, 300);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -101,35 +150,73 @@ export default function ExercisesPage() {
     difficulty: "",
   });
 
-  useEffect(() => {
-    fetchExercises();
-  }, [categoryFilter, difficultyFilter, muscleFilter]);
+  // Generate cache key from current filters
+  const getCacheKey = useCallback((offset = 0) => {
+    return `${debouncedSearch}|${categoryFilter}|${difficultyFilter}|${muscleFilter}|${offset}`;
+  }, [debouncedSearch, categoryFilter, difficultyFilter, muscleFilter]);
 
-  const fetchExercises = async () => {
-    setLoading(true);
+  // Fetch exercises with pagination
+  const fetchExercises = useCallback(async (reset = false) => {
+    const offset = reset ? 0 : exercises.length;
+    const cacheKey = getCacheKey(offset);
+
+    // Check cache first
+    if (!reset && cacheRef.current.has(cacheKey)) {
+      const cached = cacheRef.current.get(cacheKey)!;
+      setExercises((prev) => [...prev, ...cached]);
+      setHasMore(cached.length === PAGE_SIZE);
+      return;
+    }
+
+    if (reset) {
+      setInitialLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
+
     try {
       const params = new URLSearchParams();
-      if (search) params.append("search", search);
+      if (debouncedSearch) params.append("search", debouncedSearch);
       if (categoryFilter) params.append("category", categoryFilter);
       if (difficultyFilter) params.append("difficulty", difficultyFilter);
       if (muscleFilter) params.append("muscleGroup", muscleFilter);
+      params.append("limit", PAGE_SIZE.toString());
+      params.append("offset", offset.toString());
 
       const response = await fetch(`/api/exercises?${params}`);
       if (response.ok) {
         const data = await response.json();
-        setExercises(data);
+
+        // Cache the results
+        cacheRef.current.set(cacheKey, data);
+
+        if (reset) {
+          setExercises(data);
+        } else {
+          setExercises((prev) => [...prev, ...data]);
+        }
+
+        setHasMore(data.length === PAGE_SIZE);
+        setTotalCount((prev) => reset ? data.length : prev + data.length);
       }
     } catch (error) {
       console.error("Failed to fetch exercises:", error);
       toast.error("Failed to load exercises");
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
+      setLoadingMore(false);
     }
-  };
+  }, [exercises.length, debouncedSearch, categoryFilter, difficultyFilter, muscleFilter, getCacheKey]);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchExercises();
+  // Initial load and filter changes
+  useEffect(() => {
+    fetchExercises(true);
+  }, [debouncedSearch, categoryFilter, difficultyFilter, muscleFilter]);
+
+  const handleLoadMore = () => {
+    if (!loadingMore && hasMore) {
+      fetchExercises(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -160,7 +247,9 @@ export default function ExercisesPage() {
           equipment: "",
           difficulty: "",
         });
-        fetchExercises();
+        // Clear cache and refetch
+        cacheRef.current.clear();
+        fetchExercises(true);
       } else {
         const data = await response.json();
         toast.error(data.error || "Failed to add exercise");
@@ -340,18 +429,13 @@ export default function ExercisesPage() {
       {/* Search and Filters */}
       <Card>
         <CardContent className="pt-6">
-          <form onSubmit={handleSearch} className="flex gap-4 flex-wrap">
-            <div className="flex-1 min-w-[200px]">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search exercises..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
+          <div className="flex gap-4 flex-wrap">
+            <SearchInput
+              placeholder="Search exercises..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              containerClassName="flex-1 min-w-[200px]"
+            />
 
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
               <SelectTrigger className="w-[150px]">
@@ -392,25 +476,30 @@ export default function ExercisesPage() {
               </SelectContent>
             </Select>
 
-            <Button type="submit">
-              <Filter className="mr-2 h-4 w-4" />
-              Filter
-            </Button>
-
             {hasFilters && (
               <Button type="button" variant="ghost" onClick={clearFilters}>
                 <X className="mr-2 h-4 w-4" />
                 Clear
               </Button>
             )}
-          </form>
+          </div>
         </CardContent>
       </Card>
 
+      {/* Exercise count */}
+      {!initialLoading && (
+        <p className="text-sm text-muted-foreground">
+          Showing {exercises.length} exercises
+          {hasMore && " • Scroll down for more"}
+        </p>
+      )}
+
       {/* Exercise List */}
-      {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      {initialLoading ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <ExerciseCardSkeleton key={i} />
+          ))}
         </div>
       ) : exercises.length === 0 ? (
         <Card>
@@ -425,62 +514,88 @@ export default function ExercisesPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {exercises.map((exercise) => (
-            <Card
-              key={exercise.id}
-              className="cursor-pointer hover:border-primary transition-colors overflow-hidden"
-              onClick={() => setSelectedExercise(exercise)}
-            >
-              {exercise.imageUrl && (
-                <div className="relative w-full h-40 bg-muted">
-                  <img
-                    src={exercise.imageUrl}
-                    alt={exercise.name}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = "none";
-                    }}
-                  />
-                </div>
-              )}
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between">
-                  <CardTitle className="text-lg">{exercise.name}</CardTitle>
-                  {exercise.isCustom && (
-                    <Badge variant="secondary">Custom</Badge>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-                  {exercise.description || "No description"}
-                </p>
-                <div className="flex flex-wrap gap-1 mb-2">
-                  <Badge variant="outline">{exercise.category}</Badge>
-                  {exercise.difficulty && (
-                    <Badge variant="outline">{exercise.difficulty}</Badge>
-                  )}
-                </div>
-                {exercise.muscleGroups && exercise.muscleGroups.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {exercise.muscleGroups.slice(0, 3).map((muscle) => (
-                      <Badge key={muscle} variant="secondary" className="text-xs">
-                        {muscle}
-                      </Badge>
-                    ))}
-                    {exercise.muscleGroups.length > 3 && (
-                      <Badge variant="secondary" className="text-xs">
-                        +{exercise.muscleGroups.length - 3}
-                      </Badge>
-                    )}
+        <>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {exercises.map((exercise) => (
+              <Card
+                key={exercise.id}
+                className="cursor-pointer hover:border-primary transition-colors overflow-hidden"
+                onClick={() => setSelectedExercise(exercise)}
+              >
+                {exercise.imageUrl && (
+                  <div className="relative w-full h-40 bg-muted">
+                    <img
+                      src={exercise.imageUrl}
+                      alt={exercise.name}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none";
+                      }}
+                    />
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                <CardHeader className="pb-2">
+                  <div className="flex items-start justify-between">
+                    <CardTitle className="text-lg">{exercise.name}</CardTitle>
+                    {exercise.isCustom && (
+                      <Badge variant="secondary">Custom</Badge>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                    {exercise.description || "No description"}
+                  </p>
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    <Badge variant="outline">{exercise.category}</Badge>
+                    {exercise.difficulty && (
+                      <Badge variant="outline">{exercise.difficulty}</Badge>
+                    )}
+                  </div>
+                  {exercise.muscleGroups && exercise.muscleGroups.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {exercise.muscleGroups.slice(0, 3).map((muscle) => (
+                        <Badge key={muscle} variant="secondary" className="text-xs">
+                          {muscle}
+                        </Badge>
+                      ))}
+                      {exercise.muscleGroups.length > 3 && (
+                        <Badge variant="secondary" className="text-xs">
+                          +{exercise.muscleGroups.length - 3}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Load More */}
+          {hasMore && (
+            <div className="flex justify-center pt-4">
+              <Button
+                variant="outline"
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className="min-w-[200px]"
+              >
+                {loadingMore ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="mr-2 h-4 w-4" />
+                    Load More Exercises
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Exercise Detail Dialog */}
