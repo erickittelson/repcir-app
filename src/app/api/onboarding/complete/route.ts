@@ -80,7 +80,7 @@ const onboardingDataSchema = z.object({
   currentMaxes: z.array(z.object({
     exercise: z.string(),
     value: z.union([z.number(), z.enum(["working_on", "mastered", "consistent"])]),
-    unit: z.enum(["lbs", "reps", "seconds", "min:sec", "skill"]),
+    unit: z.string(), // Accept any unit string (lbs, kg, reps, seconds, etc.)
     isCustom: z.boolean().optional(),
   })).optional(),
   // Specific goals (PRs, skills, targets)
@@ -110,8 +110,6 @@ const onboardingDataSchema = z.object({
     icon: z.string().optional(),
   })).optional(),
   sportsAcknowledged: z.boolean().optional(),
-  // Training preferences
-  trainingFrequency: z.number().optional(),
 });
 
 export async function POST(request: Request) {
@@ -202,14 +200,14 @@ export async function POST(request: Request) {
     }
 
     // Build workout preferences from collected onboarding data
-    const workoutPreferences = {
-      workoutDays: data.workoutDays || undefined,
-      workoutDuration: data.workoutDuration || undefined,
-      trainingFrequency: data.trainingFrequency || undefined,
-      activityLevel: data.activityLevel || undefined,
-      currentActivity: data.currentActivity || undefined,
-      secondaryGoals: data.secondaryGoals || undefined,
-    };
+    // Filter out undefined values to keep the JSON clean
+    const workoutPreferences: Record<string, unknown> = {};
+    if (data.workoutDays) workoutPreferences.workoutDays = data.workoutDays;
+    if (data.workoutDuration) workoutPreferences.workoutDuration = data.workoutDuration;
+    if (data.trainingFrequency) workoutPreferences.trainingFrequency = data.trainingFrequency;
+    if (data.activityLevel) workoutPreferences.activityLevel = data.activityLevel;
+    if (data.currentActivity) workoutPreferences.currentActivity = data.currentActivity;
+    if (data.secondaryGoals) workoutPreferences.secondaryGoals = data.secondaryGoals;
 
     // Create or update user_profiles with user-level data
     // This is separate from circle_members as it's user-wide settings
@@ -478,8 +476,9 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Error completing onboarding:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: "Failed to complete onboarding" },
+      { error: `Failed to complete onboarding: ${errorMessage}` },
       { status: 500 }
     );
   }

@@ -268,7 +268,8 @@ export default function OnboardingPage() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to complete onboarding");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to complete onboarding");
       }
 
       // Clear localStorage
