@@ -202,15 +202,15 @@ async function enhanceExercises() {
       safetyNotes += " This is an advanced movement - ensure proper progression before attempting.";
     }
     
-    // Use raw SQL to handle the text[] array properly
+    // Schema: benefits and common_mistakes are both jsonb (common_mistakes stores string[])
     const benefitsJson = JSON.stringify(benefits);
-    const mistakesArray = `{${commonMistakes.map(m => `"${m.replace(/"/g, '\\"')}"`).join(',')}}`;
+    const commonMistakesJson = JSON.stringify(commonMistakes);
     
     await db.execute(sql`
       UPDATE exercises 
       SET 
         benefits = ${benefitsJson}::jsonb,
-        common_mistakes = ${mistakesArray}::text[],
+        common_mistakes = ${commonMistakesJson}::jsonb,
         safety_notes = ${safetyNotes}
       WHERE id = ${exercise.id}
     `);

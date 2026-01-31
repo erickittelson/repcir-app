@@ -431,9 +431,17 @@ async function enhancePrograms() {
 // CHALLENGE ENHANCEMENTS
 // =============================================================================
 
+/** Schema-compliant daily task: challenges.dailyTasks is jsonb with name, description?, type, isRequired */
+type DailyTaskSchema = {
+  name: string;
+  description?: string;
+  type: "workout" | "nutrition" | "mindset" | "recovery" | "custom";
+  isRequired: boolean;
+};
+
 interface ChallengeEnhancement {
   rules: string[];
-  dailyTasks: { day?: number; task: string; target?: string }[];
+  dailyTasks: DailyTaskSchema[];
 }
 
 const CHALLENGE_DATA: Record<string, ChallengeEnhancement> = {
@@ -446,13 +454,13 @@ const CHALLENGE_DATA: Record<string, ChallengeEnhancement> = {
       "Knee push-ups count for beginners"
     ],
     dailyTasks: [
-      { day: 1, task: "Push-ups", target: "15 reps" },
-      { day: 5, task: "Push-ups", target: "25 reps" },
-      { day: 10, task: "Push-ups", target: "40 reps" },
-      { day: 15, task: "Push-ups", target: "55 reps" },
-      { day: 20, task: "Push-ups", target: "70 reps" },
-      { day: 25, task: "Push-ups", target: "85 reps" },
-      { day: 30, task: "Push-ups", target: "100 reps" }
+      { name: "Push-ups", description: "15 reps", type: "workout", isRequired: true },
+      { name: "Push-ups", description: "25 reps", type: "workout", isRequired: true },
+      { name: "Push-ups", description: "40 reps", type: "workout", isRequired: true },
+      { name: "Push-ups", description: "55 reps", type: "workout", isRequired: true },
+      { name: "Push-ups", description: "70 reps", type: "workout", isRequired: true },
+      { name: "Push-ups", description: "85 reps", type: "workout", isRequired: true },
+      { name: "Push-ups", description: "100 reps", type: "workout", isRequired: true }
     ]
   },
   "100 Burpees a Day": {
@@ -464,9 +472,9 @@ const CHALLENGE_DATA: Record<string, ChallengeEnhancement> = {
       "Rest days are not allowed - consistency is key"
     ],
     dailyTasks: [
-      { task: "Complete 100 burpees", target: "100 burpees before midnight" },
-      { task: "Log your time", target: "Track total time to completion" },
-      { task: "Rate difficulty 1-10", target: "Track perceived effort" }
+      { name: "Complete 100 burpees", description: "100 burpees before midnight", type: "workout", isRequired: true },
+      { name: "Log your time", description: "Track total time to completion", type: "custom", isRequired: true },
+      { name: "Rate difficulty 1-10", description: "Track perceived effort", type: "custom", isRequired: true }
     ]
   },
   "10K Steps Daily": {
@@ -478,9 +486,9 @@ const CHALLENGE_DATA: Record<string, ChallengeEnhancement> = {
       "Outdoor steps preferred but treadmill counts"
     ],
     dailyTasks: [
-      { task: "Morning walk", target: "3,000 steps before noon" },
-      { task: "Lunch walk", target: "2,000 steps during lunch" },
-      { task: "Evening walk", target: "5,000 steps in evening" }
+      { name: "Morning walk", description: "3,000 steps before noon", type: "workout", isRequired: true },
+      { name: "Lunch walk", description: "2,000 steps during lunch", type: "workout", isRequired: true },
+      { name: "Evening walk", description: "5,000 steps in evening", type: "workout", isRequired: true }
     ]
   },
   "Couch to 5K": {
@@ -492,9 +500,9 @@ const CHALLENGE_DATA: Record<string, ChallengeEnhancement> = {
       "Finish all 9 weeks to complete the challenge"
     ],
     dailyTasks: [
-      { day: 1, task: "Week 1 workout", target: "60 sec run / 90 sec walk x8" },
-      { day: 3, task: "Week 1 workout", target: "60 sec run / 90 sec walk x8" },
-      { day: 5, task: "Week 1 workout", target: "60 sec run / 90 sec walk x8" }
+      { name: "Week 1 workout", description: "60 sec run / 90 sec walk x8", type: "workout", isRequired: true },
+      { name: "Week 1 workout", description: "60 sec run / 90 sec walk x8", type: "workout", isRequired: true },
+      { name: "Week 1 workout", description: "60 sec run / 90 sec walk x8", type: "workout", isRequired: true }
     ]
   },
   "Pull-Up Progress": {
@@ -506,9 +514,9 @@ const CHALLENGE_DATA: Record<string, ChallengeEnhancement> = {
       "Goal: Add 5+ reps to your max in 60 days"
     ],
     dailyTasks: [
-      { task: "Greasing the groove", target: "5 sets throughout the day" },
-      { task: "Max attempt", target: "Test max reps once per week" },
-      { task: "Accessory work", target: "Lat pulldowns, rows, hangs" }
+      { name: "Greasing the groove", description: "5 sets throughout the day", type: "workout", isRequired: true },
+      { name: "Max attempt", description: "Test max reps once per week", type: "workout", isRequired: true },
+      { name: "Accessory work", description: "Lat pulldowns, rows, hangs", type: "workout", isRequired: true }
     ]
   },
   "Summer Shred": {
@@ -520,9 +528,9 @@ const CHALLENGE_DATA: Record<string, ChallengeEnhancement> = {
       "Rest days are for active recovery only"
     ],
     dailyTasks: [
-      { task: "HIIT workout", target: "30-45 min high intensity" },
-      { task: "Track nutrition", target: "Log all meals" },
-      { task: "Stay hydrated", target: "1 gallon water minimum" }
+      { name: "HIIT workout", description: "30-45 min high intensity", type: "workout", isRequired: true },
+      { name: "Track nutrition", description: "Log all meals", type: "nutrition", isRequired: true },
+      { name: "Stay hydrated", description: "1 gallon water minimum", type: "nutrition", isRequired: true }
     ]
   },
   "Flexibility Flow": {
@@ -534,9 +542,9 @@ const CHALLENGE_DATA: Record<string, ChallengeEnhancement> = {
       "Take photos to track progress"
     ],
     dailyTasks: [
-      { task: "Morning stretch routine", target: "10 min upon waking" },
-      { task: "Evening stretch routine", target: "15 min before bed" },
-      { task: "Foam rolling", target: "5 min on tight areas" }
+      { name: "Morning stretch routine", description: "10 min upon waking", type: "recovery", isRequired: true },
+      { name: "Evening stretch routine", description: "15 min before bed", type: "recovery", isRequired: true },
+      { name: "Foam rolling", description: "5 min on tight areas", type: "recovery", isRequired: true }
     ]
   },
   "HIIT Warrior": {
@@ -548,9 +556,9 @@ const CHALLENGE_DATA: Record<string, ChallengeEnhancement> = {
       "Stay hydrated throughout"
     ],
     dailyTasks: [
-      { task: "HIIT session", target: "20-30 min all-out effort" },
-      { task: "Active recovery", target: "10 min walking/stretching" },
-      { task: "Nutrition", target: "High protein post-workout meal" }
+      { name: "HIIT session", description: "20-30 min all-out effort", type: "workout", isRequired: true },
+      { name: "Active recovery", description: "10 min walking/stretching", type: "recovery", isRequired: true },
+      { name: "Nutrition", description: "High protein post-workout meal", type: "nutrition", isRequired: true }
     ]
   },
   "Morning Yoga": {
@@ -562,9 +570,9 @@ const CHALLENGE_DATA: Record<string, ChallengeEnhancement> = {
       "Journal any insights or progress"
     ],
     dailyTasks: [
-      { task: "Morning flow", target: "15-30 min yoga practice" },
-      { task: "Meditation", target: "5 min post-practice meditation" },
-      { task: "Journal", target: "Note any observations" }
+      { name: "Morning flow", description: "15-30 min yoga practice", type: "workout", isRequired: true },
+      { name: "Meditation", description: "5 min post-practice meditation", type: "mindset", isRequired: true },
+      { name: "Journal", description: "Note any observations", type: "mindset", isRequired: true }
     ]
   },
   "Muscle Up Mission": {
@@ -576,10 +584,10 @@ const CHALLENGE_DATA: Record<string, ChallengeEnhancement> = {
       "Goal: First strict muscle-up in 90 days"
     ],
     dailyTasks: [
-      { task: "Pull-up progression", target: "5x5 weighted or strict" },
-      { task: "Dip progression", target: "5x5 weighted or strict" },
-      { task: "Transition work", target: "Hip-to-bar drills" },
-      { task: "Skill practice", target: "Banded muscle-up attempts" }
+      { name: "Pull-up progression", description: "5x5 weighted or strict", type: "workout", isRequired: true },
+      { name: "Dip progression", description: "5x5 weighted or strict", type: "workout", isRequired: true },
+      { name: "Transition work", description: "Hip-to-bar drills", type: "workout", isRequired: true },
+      { name: "Skill practice", description: "Banded muscle-up attempts", type: "workout", isRequired: true }
     ]
   }
 };
@@ -620,14 +628,13 @@ async function enhanceChallenges() {
       }
       
       if (!currentTasks || currentTasks.length === 0) {
+        const defaultDailyTasks: DailyTaskSchema[] = [
+          { name: "Complete daily workout", description: "As prescribed", type: "workout", isRequired: true },
+          { name: "Log progress", description: "Track in app", type: "custom", isRequired: true },
+          { name: "Stay hydrated", description: "8+ glasses of water", type: "nutrition", isRequired: true }
+        ];
         await db.update(challenges)
-          .set({
-            dailyTasks: [
-              { task: "Complete daily workout", target: "As prescribed" },
-              { task: "Log progress", target: "Track in app" },
-              { task: "Stay hydrated", target: "8+ glasses of water" }
-            ],
-          })
+          .set({ dailyTasks: defaultDailyTasks })
           .where(eq(challenges.id, challenge.id));
       }
     }
