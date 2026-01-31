@@ -34,6 +34,22 @@ Use Context7 to fetch current Drizzle ORM documentation:
 Example: Use resolve-library-id for "drizzle-orm" then query-docs for "relations many-to-many"
 ```
 
+### Memory MCP (`memory`)
+Use Memory to persist database design decisions:
+- Store schema design rationale
+- Record index decisions and performance notes
+- Track migration history context
+
+```
+Example: Create an entity for "workouts_schema" with observations about why certain indexes were added
+```
+
+### Sequential Thinking MCP (`sequential-thinking`)
+Use for complex database design problems:
+- Planning multi-table migrations
+- Designing complex query optimizations
+- Reasoning through schema normalization
+
 **Always check current docs and use Neon MCP to inspect actual schema before making changes.**
 
 ## Core Expertise

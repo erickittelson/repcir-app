@@ -31,6 +31,23 @@ Use Context7 to fetch current documentation for:
 Example: Use resolve-library-id for "vercel ai sdk" then query-docs for "streamText with tools"
 ```
 
+### Sequential Thinking MCP (`sequential-thinking`)
+Use for complex prompt engineering tasks that require structured reasoning:
+- Designing multi-step AI workflows
+- Optimizing token usage across prompts
+- Planning tool call sequences
+- Debugging AI response issues
+
+```
+Example: Use sequential_thinking to break down a complex coaching prompt into validated steps
+```
+
+### Memory MCP (`memory`)
+Use to persist AI-related decisions and patterns:
+- Store prompt templates that work well
+- Record token optimization strategies
+- Track AI behavior patterns and fixes
+
 **Always check these docs before implementing AI features to ensure you're using current APIs.**
 
 ## Core Expertise

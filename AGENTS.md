@@ -6,6 +6,10 @@ This file configures AI agent behavior for the Family Workout App.
 
 Always use the following MCP servers proactively without being explicitly asked:
 
+---
+
+### Core Development MCPs
+
 ### OpenAI Developer Docs (`openaiDeveloperDocs`)
 Use for any OpenAI API, Vercel AI SDK, prompt engineering, or AI-related work.
 - Chat Completions API
@@ -31,6 +35,59 @@ Use for up-to-date documentation on any library in the project:
 **Usage pattern:**
 1. `resolve-library-id` to find the library
 2. `query-docs` to search for specific topics
+
+### GitHub (`github`)
+Use for repository operations, PRs, issues, and code review.
+- Create and manage pull requests
+- Search code and issues
+- Review and comment on PRs
+- Manage branches and releases
+
+---
+
+### Reasoning & Memory MCPs
+
+### Sequential Thinking (`sequential-thinking`)
+Use for complex problem-solving that requires structured, step-by-step reasoning.
+- Break down complex problems into steps
+- Validate reasoning at each stage
+- Support revision and branching of thought paths
+- Ideal for architecture decisions, debugging, and planning
+
+### Memory (`memory`)
+Use for persistent context across sessions (stored in `.cursor/memory.json`).
+- Create entities (concepts, decisions, patterns)
+- Store observations about the codebase
+- Build relationships between concepts
+- Query past context and decisions
+
+---
+
+### Web & Content MCPs
+
+### Fetch (`fetch`)
+Use to retrieve and convert web content to markdown for analysis.
+- Fetch documentation pages
+- Convert web content for LLM consumption
+- Access external resources
+
+### Vercel (`vercel`)
+Use for deployment and project management on Vercel.
+- Deploy projects
+- Check deployment status and logs
+- Manage environment variables
+- Search Vercel documentation
+
+---
+
+### Design & Testing MCPs
+
+### Figma (`figma`) - Requires token setup
+Use for design-to-code workflows (set FIGMA_ACCESS_TOKEN first).
+- Extract design context from Figma files
+- Get design system variables (colors, spacing, typography)
+- Map Figma components to code components
+- Generate screenshots of designs
 
 ### Greptile (`plugin-greptile-greptile`)
 Use for automated code review and codebase search.

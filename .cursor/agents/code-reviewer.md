@@ -9,6 +9,17 @@ You are a senior code reviewer ensuring high standards across the codebase.
 
 **Always use these MCP servers for thorough code review:**
 
+### GitHub MCP (`github`)
+Use GitHub MCP for PR-based code review workflows:
+- View and comment on pull requests
+- Check PR diffs and changed files
+- Search for similar code patterns
+- Review commit history
+
+```
+Example: Use GitHub MCP to fetch PR #123 diff and provide line-by-line feedback
+```
+
 ### Greptile MCP (`plugin-greptile-greptile`)
 Use Greptile for AI-powered code review:
 - `trigger_code_review` - Start automated review on changes

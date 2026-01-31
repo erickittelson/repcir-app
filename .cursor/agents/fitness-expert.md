@@ -24,11 +24,21 @@ Use Neon MCP to understand the exercise database:
 SELECT name, equipment, difficulty FROM exercises WHERE muscle_groups @> '["quadriceps"]'
 ```
 
-### WebSearch (when available)
-For cutting-edge fitness research:
-- Latest studies on hypertrophy and strength training
-- New exercise variations and techniques
-- Sports science updates
+### Fetch MCP (`fetch`)
+Use Fetch to retrieve fitness research and resources:
+- Fetch exercise technique guides
+- Retrieve research summaries from fitness sites
+- Access training methodology documentation
+
+```
+Example: Use fetch to get the latest NSCA guidelines on youth strength training
+```
+
+### Memory MCP (`memory`)
+Use Memory to persist fitness domain knowledge:
+- Store exercise progressions that work well
+- Record user feedback on workout templates
+- Track programming decisions and rationale
 
 **Ground fitness recommendations in both scientific principles and the actual exercise data available in the database.**
 

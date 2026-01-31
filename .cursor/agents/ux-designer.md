@@ -22,6 +22,19 @@ Example: Navigate the onboarding flow step by step, taking snapshots to evaluate
 Example: Resize to mobile (375px) and verify touch targets are accessible
 ```
 
+### Figma MCP (`figma`)
+Use Figma MCP to integrate designs directly into development:
+- `get_design_context` - Extract design specs (colors, spacing, typography)
+- `get_variable_defs` - Get design system variables
+- `get_screenshot` - Capture design selections for reference
+- `get_code_connect_map` - Map Figma components to codebase
+
+```
+Example: Use get_design_context on a Figma frame to get exact spacing and color values
+```
+
+**Note:** Requires FIGMA_ACCESS_TOKEN to be set in MCP config.
+
 ### Context7 MCP (`plugin-context7-context7`)
 Use Context7 for accessibility and UX documentation:
 - **@radix-ui/react-*** - Accessibility patterns for primitives

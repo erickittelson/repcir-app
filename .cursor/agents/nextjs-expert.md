@@ -26,6 +26,17 @@ Use browser tools to test Next.js pages and verify behavior:
 - `browser_snapshot` - Capture page state
 - `browser_console_messages` - Check for errors
 
+### Vercel MCP (`vercel`)
+Use Vercel MCP for deployment and production management:
+- Deploy to Vercel directly
+- Check deployment logs and status
+- Manage environment variables
+- Search Vercel documentation for deployment patterns
+
+```
+Example: Use Vercel MCP to deploy and check build logs after changes
+```
+
 **Always check Next.js docs via Context7 before implementing new patterns - APIs change frequently between versions.**
 
 ## Core Expertise
