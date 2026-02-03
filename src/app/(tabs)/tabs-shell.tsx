@@ -1,16 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import {
   BottomTabBar,
   WorkoutMiniPlayer,
-  CreateSheet,
+  QuickLogSheet,
   CircleSwitcher,
+  CreateActionSheet,
 } from "@/components/navigation";
-import { AICoachSheet } from "@/components/sheets";
 import { PostLoginExperience } from "@/components/onboarding/post-login-experience";
-import { Sparkles } from "lucide-react";
+import { RallyproofLogo } from "@/components/ui/rallyproof-logo";
+import type { RallyMember } from "@/components/social/rally-member-selector";
 
 interface UserData {
   name: string;
@@ -59,8 +60,9 @@ interface TabsShellProps {
 }
 
 export function TabsShell({ session, children }: TabsShellProps) {
-  const [createSheetOpen, setCreateSheetOpen] = useState(false);
-  const [aiCoachOpen, setAiCoachOpen] = useState(false);
+  const [actionSheetOpen, setActionSheetOpen] = useState(false);
+  const [quickLogOpen, setQuickLogOpen] = useState(false);
+  const [preSelectedMembers, setPreSelectedMembers] = useState<RallyMember[]>([]);
   const [showPostLogin, setShowPostLogin] = useState(false);
   const [postLoginData, setPostLoginData] = useState<UserData | null>(null);
 
@@ -97,23 +99,21 @@ export function TabsShell({ session, children }: TabsShellProps) {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      {/* Header with circle switcher */}
+      {/* Header */}
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur-lg supports-[backdrop-filter]:bg-background/80">
+        {/* Left: Logo + App Name (links to home) */}
+        <Link href="/dashboard" className="flex items-center gap-2">
+          <RallyproofLogo variant="icon" size="sm" />
+          <span className="font-display text-lg tracking-wider text-brand">
+            RALLYPROOF
+          </span>
+        </Link>
+
+        {/* Right: Rally Switcher */}
         <CircleSwitcher
           activeCircle={session.activeCircle}
           circles={session.circles}
         />
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setAiCoachOpen(true)}
-            className="gap-1.5"
-          >
-            <Sparkles className="h-4 w-4 text-brand" />
-            <span className="hidden sm:inline">AI Coach</span>
-          </Button>
-        </div>
       </header>
 
       {/* Main content area */}
@@ -125,13 +125,27 @@ export function TabsShell({ session, children }: TabsShellProps) {
       <WorkoutMiniPlayer />
 
       {/* Bottom tab bar */}
-      <BottomTabBar onCreateClick={() => setCreateSheetOpen(true)} />
+      <BottomTabBar onCreateClick={() => setActionSheetOpen(true)} />
 
-      {/* Create action sheet */}
-      <CreateSheet open={createSheetOpen} onOpenChange={setCreateSheetOpen} />
+      {/* Create action sheet (first step) */}
+      <CreateActionSheet
+        open={actionSheetOpen}
+        onOpenChange={setActionSheetOpen}
+        onLogWorkout={(members) => {
+          setPreSelectedMembers(members || []);
+          setQuickLogOpen(true);
+        }}
+      />
 
-      {/* AI Coach slide-over panel */}
-      <AICoachSheet open={aiCoachOpen} onOpenChange={setAiCoachOpen} />
+      {/* Quick log workout sheet (when "Log" is selected) */}
+      <QuickLogSheet
+        open={quickLogOpen}
+        onOpenChange={(open) => {
+          setQuickLogOpen(open);
+          if (!open) setPreSelectedMembers([]);
+        }}
+        preSelectedMembers={preSelectedMembers}
+      />
 
       {/* Post-login onboarding experience */}
       {showPostLogin && postLoginData && (

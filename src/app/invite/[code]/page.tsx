@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dumbbell, Users, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { Users, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { RallyproofLogo } from "@/components/ui/rallyproof-logo";
 import { authClient } from "@/lib/neon-auth/client";
 
 interface InvitationDetails {
@@ -90,7 +91,7 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || "Failed to join circle");
+        setError(data.error || "Failed to join rally");
         return;
       }
 
@@ -101,7 +102,7 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
         router.refresh();
       }, 2000);
     } catch {
-      setError("Failed to join circle");
+      setError("Failed to join rally");
     } finally {
       setAccepting(false);
     }
@@ -167,12 +168,12 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <Dumbbell className="h-6 w-6 text-primary" />
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center">
+            <RallyproofLogo variant="icon" size="lg" />
           </div>
-          <CardTitle>You&apos;re Invited!</CardTitle>
+          <CardTitle className="font-display tracking-wider">YOU&apos;RE INVITED</CardTitle>
           <CardDescription>
-            Join <span className="font-semibold">{invitation?.circleName}</span> on Workout Circle
+            Join <span className="font-semibold text-brand">{invitation?.circleName}</span> on Rallyproof
           </CardDescription>
         </CardHeader>
 
@@ -225,14 +226,14 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
                     Joining...
                   </>
                 ) : (
-                  "Join Circle"
+                  "Join Rally"
                 )}
               </Button>
             </div>
           ) : (
             <div className="space-y-4">
               <p className="text-sm text-center text-muted-foreground">
-                Sign in or create an account to join this circle
+                Sign in or create an account to join this rally
               </p>
               <Button onClick={handleSignIn} className="w-full">
                 Sign In to Join

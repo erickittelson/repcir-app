@@ -1,11 +1,11 @@
 # Semantic Layer Manifest
 # Version-controlled source of truth for AI context
 #
-# This manifest defines the semantic layer structure for the Workout Circle app.
+# This manifest defines the semantic layer structure for the Rallyproof app.
 # YAML files are compiled to JSON at build time and selectively loaded at runtime.
 
 version: "1.0.0"
-name: "workout-circle-semantic-layer"
+name: "rallyproof-semantic-layer"
 description: "Semantic knowledge base for AI-powered fitness coaching"
 last_updated: "2026-01-20"
 

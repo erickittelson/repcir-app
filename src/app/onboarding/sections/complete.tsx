@@ -1,13 +1,11 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { 
-  Check, 
-  Loader2, 
-  Sparkles, 
-  PartyPopper, 
-  AlertCircle, 
-  ChevronUp, 
+import {
+  Check,
+  Loader2,
+  AlertCircle,
+  ChevronUp,
   Pencil,
   User,
   Target,
@@ -122,30 +120,10 @@ export function CompleteSection({
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
           >
-            <h2 className="text-3xl font-bold mb-2">You&apos;re all set!</h2>
+            <h2 className="text-3xl font-display tracking-wider mb-2">DONE</h2>
             <p className="text-muted-foreground text-lg">
               Taking you to your dashboard...
             </p>
-          </motion.div>
-
-          {/* Celebration particles */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.6 }}
-            className="mt-8 flex justify-center gap-4"
-          >
-            {["🎉", "💪", "🔥", "⭐", "🏆"].map((emoji, i) => (
-              <motion.span
-                key={emoji}
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.8 + i * 0.1 }}
-                className="text-3xl"
-              >
-                {emoji}
-              </motion.span>
-            ))}
           </motion.div>
         </motion.div>
       </div>
@@ -171,11 +149,11 @@ export function CompleteSection({
             <AlertCircle className="w-10 h-10 text-amber-500" />
           </motion.div>
 
-          <h2 className="text-2xl md:text-3xl font-bold mb-2">
-            Almost there!
+          <h2 className="text-2xl md:text-3xl font-display tracking-wider mb-2">
+            INCOMPLETE
           </h2>
           <p className="text-muted-foreground mb-6">
-            Complete these sections to finish setup
+            Finish these sections to proceed
           </p>
 
           {/* Missing sections */}
@@ -233,16 +211,16 @@ export function CompleteSection({
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.2, type: "spring" }}
-            className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-energy-gradient flex items-center justify-center shadow-xl glow-brand"
+            className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-card border border-brand/20 flex items-center justify-center shadow-xl glow-earned"
           >
-            <PartyPopper className="w-8 h-8 text-white" />
+            <Check className="w-8 h-8 text-brand" />
           </motion.div>
 
-          <h2 className="text-2xl font-bold mb-1">
-            Looking good, {data.name}!
+          <h2 className="text-2xl font-display tracking-wider mb-1">
+            READY, {data.name?.toUpperCase()}
           </h2>
           <p className="text-muted-foreground text-sm">
-            Review your profile before we get started
+            Review your profile before we begin
           </p>
         </div>
 
@@ -410,18 +388,15 @@ export function CompleteSection({
           <Button
             onClick={onComplete}
             disabled={isSubmitting}
-            className="w-full h-14 text-lg bg-energy-gradient hover:opacity-90 rounded-xl group shadow-lg"
+            className="w-full h-14 text-lg bg-brand hover:bg-brand/90 text-brand-foreground rounded-xl shadow-lg"
           >
             {isSubmitting ? (
               <>
                 <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                Creating your profile...
+                Building your profile...
               </>
             ) : (
-              <>
-                <Sparkles className="w-5 h-5 mr-2" />
-                Start Training
-              </>
+              "Enter"
             )}
           </Button>
           <p className="text-xs text-center text-muted-foreground mt-2">

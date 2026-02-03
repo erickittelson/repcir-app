@@ -9,7 +9,31 @@ import {
   workoutSessions,
   userProfiles,
 } from "@/lib/db/schema";
-import { eq, and, desc, gte, sql } from "drizzle-orm";
+import { eq, and, desc, gte, sql, ne } from "drizzle-orm";
+
+// Valid options for enum-like fields
+const VALID_VISIBILITY = ["public", "private"] as const;
+const VALID_JOIN_TYPES = ["open", "request", "invite_only"] as const;
+const VALID_CATEGORIES = [
+  "fitness", "strength", "running", "crossfit", "yoga",
+  "cycling", "swimming", "martial_arts", "sports", "weight_loss",
+  "family", "other"
+] as const;
+const VALID_FOCUS_AREAS = [
+  "strength", "cardio", "wellness", "sports", "flexibility", "outdoor",
+  "weight_loss", "endurance", "muscle_gain", "athletic_performance",
+  "rehabilitation", "general"
+] as const;
+const VALID_TARGET_DEMOGRAPHICS = [
+  "beginners", "intermediate", "advanced", "seniors",
+  "women", "men", "teens", "parents", "all"
+] as const;
+const VALID_ACTIVITY_TYPES = [
+  "challenges", "workout_plans", "accountability", "social", "coaching"
+] as const;
+const VALID_SCHEDULE_TYPES = [
+  "daily_challenges", "weekly_workouts", "monthly_goals", "self_paced"
+] as const;
 
 export async function GET(
   request: NextRequest,
@@ -173,6 +197,300 @@ export async function GET(
     console.error("Error fetching circle:", error);
     return NextResponse.json(
       { error: "Failed to fetch circle" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+
+  try {
+    // Check if circle exists
+    const circle = await db.query.circles.findFirst({
+      where: eq(circles.id, id),
+    });
+
+    if (!circle) {
+      return NextResponse.json({ error: "Circle not found" }, { status: 404 });
+    }
+
+    // Check if user is admin or owner
+    const membership = await db.query.circleMembers.findFirst({
+      where: and(
+        eq(circleMembers.circleId, id),
+        eq(circleMembers.userId, session.user.id)
+      ),
+    });
+
+    if (!membership || (membership.role !== "admin" && membership.role !== "owner")) {
+      return NextResponse.json(
+        { error: "Only admins and owners can edit this rally" },
+        { status: 403 }
+      );
+    }
+
+    const body = await request.json();
+    const {
+      name,
+      description,
+      imageUrl,
+      visibility,
+      category,
+      focusArea,
+      targetDemographic,
+      activityType,
+      scheduleType,
+      maxMembers,
+      joinType,
+      rules,
+      tags,
+    } = body;
+
+    // Validate name if provided
+    if (name !== undefined) {
+      if (typeof name !== "string" || !name.trim()) {
+        return NextResponse.json({ error: "Name cannot be empty" }, { status: 400 });
+      }
+      if (name.trim().length > 50) {
+        return NextResponse.json(
+          { error: "Name must be 50 characters or less" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate description if provided
+    if (description !== undefined && description !== null) {
+      if (typeof description !== "string") {
+        return NextResponse.json(
+          { error: "Description must be a string" },
+          { status: 400 }
+        );
+      }
+      if (description.length > 500) {
+        return NextResponse.json(
+          { error: "Description must be 500 characters or less" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate enum fields
+    if (visibility !== undefined && visibility !== null && !VALID_VISIBILITY.includes(visibility)) {
+      return NextResponse.json(
+        { error: "Invalid visibility. Must be 'public' or 'private'" },
+        { status: 400 }
+      );
+    }
+
+    if (joinType !== undefined && joinType !== null && !VALID_JOIN_TYPES.includes(joinType)) {
+      return NextResponse.json(
+        { error: "Invalid joinType. Must be 'open', 'request', or 'invite_only'" },
+        { status: 400 }
+      );
+    }
+
+    if (category !== undefined && category !== null && !VALID_CATEGORIES.includes(category)) {
+      return NextResponse.json(
+        { error: "Invalid category" },
+        { status: 400 }
+      );
+    }
+
+    if (focusArea !== undefined && focusArea !== null && !VALID_FOCUS_AREAS.includes(focusArea)) {
+      return NextResponse.json(
+        { error: "Invalid focusArea" },
+        { status: 400 }
+      );
+    }
+
+    if (targetDemographic !== undefined && targetDemographic !== null && !VALID_TARGET_DEMOGRAPHICS.includes(targetDemographic)) {
+      return NextResponse.json(
+        { error: "Invalid targetDemographic" },
+        { status: 400 }
+      );
+    }
+
+    if (activityType !== undefined && activityType !== null && !VALID_ACTIVITY_TYPES.includes(activityType)) {
+      return NextResponse.json(
+        { error: "Invalid activityType" },
+        { status: 400 }
+      );
+    }
+
+    if (scheduleType !== undefined && scheduleType !== null && !VALID_SCHEDULE_TYPES.includes(scheduleType)) {
+      return NextResponse.json(
+        { error: "Invalid scheduleType" },
+        { status: 400 }
+      );
+    }
+
+    // Validate maxMembers
+    if (maxMembers !== undefined && maxMembers !== null) {
+      if (typeof maxMembers !== "number" || !Number.isInteger(maxMembers)) {
+        return NextResponse.json(
+          { error: "maxMembers must be an integer" },
+          { status: 400 }
+        );
+      }
+      if (maxMembers < 2 || maxMembers > 10000) {
+        return NextResponse.json(
+          { error: "maxMembers must be between 2 and 10000" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate rules array
+    if (rules !== undefined && rules !== null) {
+      if (!Array.isArray(rules)) {
+        return NextResponse.json(
+          { error: "rules must be an array" },
+          { status: 400 }
+        );
+      }
+      if (rules.length > 10) {
+        return NextResponse.json(
+          { error: "Maximum 10 rules allowed" },
+          { status: 400 }
+        );
+      }
+      if (!rules.every((r: unknown) => typeof r === "string" && r.length <= 500)) {
+        return NextResponse.json(
+          { error: "Each rule must be a string of 500 characters or less" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate tags array
+    if (tags !== undefined && tags !== null) {
+      if (!Array.isArray(tags)) {
+        return NextResponse.json(
+          { error: "tags must be an array" },
+          { status: 400 }
+        );
+      }
+      if (tags.length > 10) {
+        return NextResponse.json(
+          { error: "Maximum 10 tags allowed" },
+          { status: 400 }
+        );
+      }
+      if (!tags.every((t: unknown) => typeof t === "string" && t.length <= 50)) {
+        return NextResponse.json(
+          { error: "Each tag must be a string of 50 characters or less" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Check if new name is taken (excluding current circle)
+    if (name && name !== circle.name) {
+      const existing = await db.query.circles.findFirst({
+        where: and(
+          eq(circles.name, name.trim()),
+          ne(circles.id, id)
+        ),
+      });
+
+      if (existing) {
+        return NextResponse.json(
+          { error: "A rally with this name already exists" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Build update object with only provided fields
+    const updateData: Partial<typeof circles.$inferInsert> = {
+      updatedAt: new Date(),
+    };
+
+    if (name !== undefined) updateData.name = name.trim();
+    if (description !== undefined) updateData.description = description?.trim() || null;
+    if (imageUrl !== undefined) updateData.imageUrl = imageUrl || null;
+    if (visibility !== undefined) updateData.visibility = visibility;
+    if (category !== undefined) updateData.category = category || null;
+    if (focusArea !== undefined) updateData.focusArea = focusArea || null;
+    if (targetDemographic !== undefined) updateData.targetDemographic = targetDemographic || null;
+    if (activityType !== undefined) updateData.activityType = activityType || null;
+    if (scheduleType !== undefined) updateData.scheduleType = scheduleType || null;
+    if (maxMembers !== undefined) updateData.maxMembers = maxMembers;
+    if (joinType !== undefined) updateData.joinType = joinType;
+    if (rules !== undefined) updateData.rules = rules || [];
+    if (tags !== undefined) updateData.tags = tags || [];
+
+    // Update the circle
+    const [updatedCircle] = await db
+      .update(circles)
+      .set(updateData)
+      .where(eq(circles.id, id))
+      .returning();
+
+    return NextResponse.json(updatedCircle);
+  } catch (error) {
+    console.error("Error updating circle:", error);
+    return NextResponse.json(
+      { error: "Failed to update circle" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+
+  try {
+    // Check if circle exists
+    const circle = await db.query.circles.findFirst({
+      where: eq(circles.id, id),
+    });
+
+    if (!circle) {
+      return NextResponse.json({ error: "Circle not found" }, { status: 404 });
+    }
+
+    // Check if user is the owner
+    const membership = await db.query.circleMembers.findFirst({
+      where: and(
+        eq(circleMembers.circleId, id),
+        eq(circleMembers.userId, session.user.id)
+      ),
+    });
+
+    if (!membership || membership.role !== "owner") {
+      return NextResponse.json(
+        { error: "Only the owner can delete this rally" },
+        { status: 403 }
+      );
+    }
+
+    // Delete the circle (cascade will delete members, etc.)
+    await db.delete(circles).where(eq(circles.id, id));
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting circle:", error);
+    return NextResponse.json(
+      { error: "Failed to delete circle" },
       { status: 500 }
     );
   }

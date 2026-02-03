@@ -44,7 +44,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getDifficultyBrand, getDifficultyLabel } from "@/lib/difficulty-branding";
-import { CircleCreateSheet } from "@/components/discover/circle-create-sheet";
+import { CreateRallyExperience } from "@/components/rally";
 import {
   WorkoutDetailSheet,
   ChallengeDetailSheet,
@@ -217,7 +217,7 @@ interface DiscoverPageProps {
 const TABS: Array<{ id: TabType; label: string; icon: React.ElementType }> = [
   { id: "workouts", label: "Workouts", icon: Dumbbell },
   { id: "challenges", label: "Challenges", icon: Trophy },
-  { id: "circles", label: "Circles", icon: Users },
+  { id: "circles", label: "Rallies", icon: Users },
 ];
 
 type SortOption = "popular" | "newest" | "rating" | "duration";
@@ -513,9 +513,9 @@ export function DiscoverPage({
     setJoiningCircles((prev) => new Set(prev).add(circleId));
     try {
       await fetch(`/api/circles/${circleId}/join`, { method: "POST" });
-      toast.success("Joined circle!");
+      toast.success("Joined rally!");
     } catch {
-      toast.error("Failed to join circle");
+      toast.error("Failed to join rally");
     } finally {
       setJoiningCircles((prev) => {
         const next = new Set(prev);
@@ -1320,10 +1320,10 @@ export function DiscoverPage({
           </div>
         )}
 
-        {/* ==================== CIRCLES TAB ==================== */}
+        {/* ==================== RALLIES TAB ==================== */}
         {activeTab === "circles" && (
           <div className="space-y-3">
-            {/* Create Circle CTA */}
+            {/* Create Rally CTA */}
             <Card className="bg-gradient-to-br from-energy/10 to-brand/10 border-energy/20">
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
@@ -1331,7 +1331,7 @@ export function DiscoverPage({
                     <Users className="h-5 w-5 text-energy" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-medium">Start Your Circle</p>
+                    <p className="font-medium">Start Your Rally</p>
                     <p className="text-xs text-muted-foreground">Create a group & invite via handle or link</p>
                   </div>
                   <Button size="sm" onClick={() => setShowCreateCircle(true)}>
@@ -1342,11 +1342,11 @@ export function DiscoverPage({
               </CardContent>
             </Card>
 
-            {/* Info about finding circles */}
+            {/* Info about finding rallies */}
             <div className="bg-muted/50 rounded-lg p-3 text-sm">
               <p className="text-muted-foreground">
-                <span className="font-medium text-foreground">Find circles</span> by searching their name or handle. 
-                Share your circle link on Instagram, TikTok, or Linktree to grow your community.
+                <span className="font-medium text-foreground">Find rallies</span> by searching their name or handle.
+                Share your rally link on Instagram, TikTok, or Linktree to grow your community.
               </p>
             </div>
 
@@ -1461,8 +1461,8 @@ export function DiscoverPage({
         )}
       </div>
 
-      {/* Sheets */}
-      <CircleCreateSheet open={showCreateCircle} onOpenChange={setShowCreateCircle} />
+      {/* Create Rally Experience */}
+      <CreateRallyExperience open={showCreateCircle} onOpenChange={setShowCreateCircle} />
       
       {/* Detail Sheets */}
       <WorkoutDetailSheet

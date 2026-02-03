@@ -52,9 +52,9 @@ onboarding:
         - name_preference
       feature_intro: "AI coaching capabilities"
       opening_message: |
-        Hey! I'm your AI coach here at Workout Circle.
+        I'm your AI coach at Rallyproof.
 
-        Before we start building workouts together, I'd love to get to know you a bit.
+        Before we build your training program, I need to know who I'm working with.
 
         What should I call you?
       quick_replies:
@@ -75,7 +75,7 @@ onboarding:
       transition_message: |
         Nice to meet you, {name}!
 
-        Would you like to add a profile picture? It helps make Workout Circle feel more personal, and if you decide to go public later, others can see who they're connecting with.
+        Would you like to add a profile picture? Your cohort will see it when you train together.
       quick_replies:
         - "Add a photo"
         - "Skip for now"
@@ -96,7 +96,7 @@ onboarding:
       transition_message: |
         {profile_acknowledgment}
 
-        So what brings you to Workout Circle? What's driving you to level up your fitness right now?
+        What's the goal? Why are you here?
       quick_replies:
         - "Get stronger"
         - "Lose weight"

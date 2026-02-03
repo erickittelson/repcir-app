@@ -951,6 +951,30 @@ export const userFollows = pgTable(
   ]
 );
 
+/**
+ * User connections/friendships - bidirectional connections with status
+ * Unlike follows, connections require mutual acceptance
+ */
+export const connections = pgTable(
+  "connections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    requesterId: text("requester_id").notNull(), // Neon Auth user ID - who sent the request
+    addresseeId: text("addressee_id").notNull(), // Neon Auth user ID - who received the request
+    status: text("status").notNull().default("pending"), // 'pending' | 'accepted' | 'rejected' | 'blocked'
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (connection) => [
+    index("connections_requester_idx").on(connection.requesterId),
+    index("connections_addressee_idx").on(connection.addresseeId),
+    index("connections_status_idx").on(connection.status),
+    index("connections_requester_status_idx").on(connection.requesterId, connection.status),
+    index("connections_addressee_status_idx").on(connection.addresseeId, connection.status),
+    uniqueIndex("connections_unique_pair_idx").on(connection.requesterId, connection.addresseeId),
+  ]
+);
+
 // ============================================================================
 // SOCIAL FEATURES - Activity Feed
 // ============================================================================
@@ -1029,8 +1053,11 @@ export const challenges = pgTable(
     dailyTasks: jsonb("daily_tasks").$type<{
       name: string;
       description?: string;
-      type: "workout" | "nutrition" | "mindset" | "recovery" | "custom";
+      type: "workout" | "nutrition" | "mindset" | "recovery" | "custom" | "pr_check" | "hydration";
       isRequired: boolean;
+      exercise?: string;
+      targetValue?: number;
+      targetUnit?: string;
     }[]>().default([]).notNull(),
     // Challenge behavior
     progressionType: text("progression_type").default("linear"), // linear, pyramid, random, custom
@@ -1931,6 +1958,11 @@ export const userFollowsRelations = relations(userFollows, ({ }) => ({
   // Relations are via userId text fields, not foreign keys
 }));
 
+export const connectionsRelations = relations(connections, ({ }) => ({
+  // Relations are via userId text fields (Neon Auth), not foreign keys
+  // Requester and addressee reference neon_auth.users.id
+}));
+
 export const activityFeedRelations = relations(activityFeed, ({ }) => ({
   // Relations are via userId text field
 }));
@@ -2767,6 +2799,8 @@ export type CircleRequest = typeof circleRequests.$inferSelect;
 export type NewCircleRequest = typeof circleRequests.$inferInsert;
 export type UserFollow = typeof userFollows.$inferSelect;
 export type NewUserFollow = typeof userFollows.$inferInsert;
+export type Connection = typeof connections.$inferSelect;
+export type NewConnection = typeof connections.$inferInsert;
 export type ActivityFeed = typeof activityFeed.$inferSelect;
 export type NewActivityFeed = typeof activityFeed.$inferInsert;
 export type CircleJoinRequest = typeof circleJoinRequests.$inferSelect;

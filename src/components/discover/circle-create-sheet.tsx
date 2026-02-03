@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * @deprecated Use CreateRallyExperience from @/components/rally instead.
+ * This component is kept for backward compatibility and for editing existing rallies.
+ * For creating new rallies, the CreateRallyExperience provides a better UX with
+ * wizard, celebration, and member invitation flows.
+ *
+ * @see {@link @/components/rally/create-rally-experience.tsx}
+ */
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -44,6 +53,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { CircleImageUpload } from "@/components/circles/circle-image-upload";
 
 // ============================================================================
 // TYPES & CONSTANTS
@@ -69,6 +79,7 @@ interface CircleFormData {
   joinType: "open" | "request" | "invite_only";
   rules: string[];
   tags: string[];
+  imageUrl: string;
 }
 
 const CATEGORIES = [
@@ -160,6 +171,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
     joinType: "request",
     rules: [],
     tags: [],
+    imageUrl: "",
   });
 
   const updateField = <K extends keyof CircleFormData>(field: K, value: CircleFormData[K]) => {
@@ -204,6 +216,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
       joinType: "request",
       rules: [],
       tags: [],
+      imageUrl: "",
     });
     setNewTag("");
     setNewRule("");
@@ -213,7 +226,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
     e.preventDefault();
 
     if (!formData.name.trim()) {
-      toast.error("Please enter a circle name");
+      toast.error("Please enter a rally name");
       return;
     }
 
@@ -238,16 +251,20 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
           joinType: formData.joinType,
           rules: formData.rules,
           tags: formData.tags,
+          // Only include imageUrl if it's a valid URL (not a data URL from preview)
+          imageUrl: formData.imageUrl && !formData.imageUrl.startsWith("data:")
+            ? formData.imageUrl
+            : null,
         }),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Failed to save circle");
+        throw new Error(error.error || "Failed to save rally");
       }
 
       const circle = await response.json();
-      toast.success(editData?.id ? "Circle updated!" : "Circle created!");
+      toast.success(editData?.id ? "Rally updated!" : "Rally created!");
       onOpenChange(false);
       resetForm();
       
@@ -256,7 +273,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
       }
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to save circle");
+      toast.error(error instanceof Error ? error.message : "Failed to save rally");
     } finally {
       setIsSubmitting(false);
     }
@@ -276,12 +293,12 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
             <SheetHeader>
               <SheetTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5 text-brand" />
-                {editData?.id ? "Edit Circle" : "Create a Circle"}
+                {editData?.id ? "Edit Rally" : "Create a Rally"}
               </SheetTitle>
               <SheetDescription>
-                {editData?.id 
-                  ? "Update your circle's settings and information"
-                  : "Create a fitness circle to workout with others who share your goals"}
+                {editData?.id
+                  ? "Update your rally's settings and information"
+                  : "Create a fitness rally to workout with others who share your goals"}
               </SheetDescription>
             </SheetHeader>
           </div>
@@ -294,8 +311,21 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
                   Basic Info
                 </h3>
 
+                {/* Circle Image Upload */}
+                <div className="flex flex-col items-center gap-2">
+                  <CircleImageUpload
+                    currentImage={formData.imageUrl || undefined}
+                    circleId={editData?.id}
+                    onImageChange={(url) => updateField("imageUrl", url)}
+                    size="lg"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Rally image (optional)
+                  </p>
+                </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="name">Circle Name *</Label>
+                  <Label htmlFor="name">Rally Name *</Label>
                   <Input
                     id="name"
                     value={formData.name}
@@ -311,7 +341,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
                     id="description"
                     value={formData.description}
                     onChange={(e) => updateField("description", e.target.value)}
-                    placeholder="What's this circle about? What can members expect?"
+                    placeholder="What's this rally about? What can members expect?"
                     rows={3}
                     maxLength={500}
                   />
@@ -367,7 +397,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
                     )}
                     <div>
                       <p className="font-medium text-sm">
-                        {formData.visibility === "public" ? "Public Circle" : "Private Circle"}
+                        {formData.visibility === "public" ? "Public Rally" : "Private Rally"}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {formData.visibility === "public"
@@ -440,7 +470,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
                       <Label>Target Demographic</Label>
                       <Select value={formData.targetDemographic} onValueChange={(v) => updateField("targetDemographic", v)}>
                         <SelectTrigger>
-                          <SelectValue placeholder="Who is this circle for?" />
+                          <SelectValue placeholder="Who is this rally for?" />
                         </SelectTrigger>
                         <SelectContent>
                           {TARGET_DEMOGRAPHICS.map((demo) => (
@@ -496,12 +526,12 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
                   <AccordionTrigger className="text-sm">
                     <div className="flex items-center gap-2">
                       <Scroll className="h-4 w-4" />
-                      Circle Rules ({formData.rules.length})
+                      Rally Rules ({formData.rules.length})
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="space-y-4 pt-4">
                     <p className="text-sm text-muted-foreground">
-                      Set expectations for your circle members (max 10 rules)
+                      Set expectations for your rally members (max 10 rules)
                     </p>
                     
                     {formData.rules.map((rule, index) => (
@@ -543,7 +573,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
                   </AccordionTrigger>
                   <AccordionContent className="space-y-4 pt-4">
                     <p className="text-sm text-muted-foreground">
-                      Add tags to help people find your circle (max 10)
+                      Add tags to help people find your rally (max 10)
                     </p>
 
                     <div className="flex flex-wrap gap-1">
@@ -620,7 +650,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
                     {editData?.id ? "Saving..." : "Creating..."}
                   </>
                 ) : (
-                  editData?.id ? "Save Changes" : "Create Circle"
+                  editData?.id ? "Save Changes" : "Create Rally"
                 )}
               </Button>
             </div>

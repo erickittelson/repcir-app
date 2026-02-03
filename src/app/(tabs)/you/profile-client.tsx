@@ -79,6 +79,7 @@ import { CompletenessCard } from "@/components/profile/completeness-card";
 import { generateRecommendations } from "@/components/profile/recommended-actions";
 import { DeleteConfirmDialog } from "@/components/ui/confirm-dialog";
 import { AchievementModal } from "@/components/badges/achievement-modal";
+import { ConnectionsSheet } from "@/components/social/connections-sheet";
 import { toast } from "sonner";
 
 // Badge type for achievement modal
@@ -1504,7 +1505,7 @@ function VisibilityBadge({
 }) {
   const options = [
     { value: "public" as const, label: "🌐 Public", description: "Anyone can see" },
-    { value: "circles" as const, label: "👥 Circles", description: "Circle members only" },
+    { value: "circles" as const, label: "👥 Rallies", description: "Rally members only" },
     { value: "private" as const, label: "🔒 Private", description: "Only you" },
   ];
 
@@ -1951,6 +1952,10 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
   const [passwordResetModal, setPasswordResetModal] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
+  // Connections state
+  const [connectionsSheet, setConnectionsSheet] = useState(false);
+  const [connectionCount, setConnectionCount] = useState(0);
+
   // Accordion state
   const sectionFromUrl = searchParams.get("section") || "";
   const [openSections, setOpenSections] = useState<string[]>(sectionFromUrl ? [sectionFromUrl] : []);
@@ -1961,6 +1966,22 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
       setTimeout(() => { document.querySelector(`[data-section="${sectionFromUrl}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 100);
     }
   }, [sectionFromUrl]);
+
+  // Fetch connection count on mount
+  useEffect(() => {
+    const fetchConnectionCount = async () => {
+      try {
+        const response = await fetch("/api/connections/count");
+        if (response.ok) {
+          const data = await response.json();
+          setConnectionCount(data.count || 0);
+        }
+      } catch (error) {
+        console.error("Failed to fetch connection count:", error);
+      }
+    };
+    fetchConnectionCount();
+  }, []);
 
   const displayName = profile?.displayName || user.name;
   const profileImage = profile?.profilePicture || user.image;
@@ -2266,8 +2287,16 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
       </Card>
 
       {/* ==================== QUICK STATS ==================== */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{circles.length}</p><p className="text-xs text-muted-foreground">Circles</p></CardContent></Card>
+      <div className="grid grid-cols-4 gap-3">
+        <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{circles.length}</p><p className="text-xs text-muted-foreground">Rallies</p></CardContent></Card>
+        <button onClick={() => setConnectionsSheet(true)} className="text-left">
+          <Card className="h-full hover:border-brand/50 transition-colors cursor-pointer">
+            <CardContent className="pt-4 pb-3 text-center">
+              <p className="text-2xl font-bold text-brand">{connectionCount}</p>
+              <p className="text-xs text-muted-foreground">Connections</p>
+            </CardContent>
+          </Card>
+        </button>
         <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{workoutPlans.length}</p><p className="text-xs text-muted-foreground">Workouts</p></CardContent></Card>
         <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{badges.length}</p><p className="text-xs text-muted-foreground">Badges</p></CardContent></Card>
       </div>
@@ -2462,12 +2491,12 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
           </AccordionContent>
         </AccordionItem>
 
-        {/* Circles */}
+        {/* Rallies */}
         <AccordionItem value="circles" data-section="circles" className="!border rounded-xl px-4">
           <AccordionTrigger className="hover:no-underline py-3">
             <div className="flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-energy/20"><Users className="h-4 w-4 text-energy" /></div>
-              <span className="font-medium text-sm">Circles</span>
+              <span className="font-medium text-sm">Rallies</span>
               <Badge variant="secondary" className="ml-auto mr-2 text-xs">{circles.length}</Badge>
             </div>
           </AccordionTrigger>
@@ -2480,7 +2509,7 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </div>
               ))}
-              <Button variant="outline" size="sm" className="w-full" onClick={() => router.push("/discover?tab=circles")}><Plus className="mr-1 h-4 w-4" />Join or Create Circle</Button>
+              <Button variant="outline" size="sm" className="w-full" onClick={() => router.push("/discover?tab=circles")}><Plus className="mr-1 h-4 w-4" />Join or Create Rally</Button>
             </div>
           </AccordionContent>
         </AccordionItem>
@@ -2571,6 +2600,9 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
       <SocialLinksModal open={socialLinksModal} onOpenChange={setSocialLinksModal} socialLinks={profile?.socialLinks || {}} onSave={handleSaveSocialLinks} />
       <ChangeEmailModal open={changeEmailModal} onOpenChange={setChangeEmailModal} currentEmail={user.email} />
       <PasswordResetModal open={passwordResetModal} onOpenChange={setPasswordResetModal} email={user.email} />
+
+      {/* Connections Sheet */}
+      <ConnectionsSheet open={connectionsSheet} onOpenChange={setConnectionsSheet} />
 
       {/* Achievement Celebration Modal */}
       {showAchievementModal && newlyEarnedBadges.length > 0 && (

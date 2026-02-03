@@ -139,7 +139,7 @@ export function ProfilePreviewDialog({
     if (!privacy) return "Hidden";
     const visibility = privacy[field];
     if (visibility === "private") return "Set to Private";
-    if (visibility === "circle" && viewMode === "public") return "Circle Only";
+    if (visibility === "circle" && viewMode === "public") return "Rally Only";
     return "Hidden";
   };
 
@@ -165,7 +165,7 @@ export function ProfilePreviewDialog({
             </TabsTrigger>
             <TabsTrigger value="circle" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
-              Circle Member View
+              Rally Member View
             </TabsTrigger>
           </TabsList>
 
@@ -191,12 +191,12 @@ export function ProfilePreviewDialog({
           <AlertTriangle className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
           <div className="text-sm">
             <p className="font-medium text-blue-800 dark:text-blue-200">
-              {viewMode === "public" ? "Public View" : "Circle Member View"}
+              {viewMode === "public" ? "Public View" : "Rally Member View"}
             </p>
             <p className="text-blue-600 dark:text-blue-300">
               {viewMode === "public"
-                ? "This is how strangers and non-circle members see your profile."
-                : "This is how members of your circles see your profile."}
+                ? "This is how strangers and non-rally members see your profile."
+                : "This is how members of your rallies see your profile."}
             </p>
           </div>
         </div>
@@ -502,7 +502,7 @@ export function ProfilePreviewButtons({
       </Button>
       <Button variant="outline" size="sm" onClick={() => onPreview("circle")}>
         <Users className="mr-2 h-4 w-4" />
-        Circle View
+        Rally View
       </Button>
     </div>
   );

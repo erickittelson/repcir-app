@@ -95,8 +95,8 @@ const VISIBILITY_OPTIONS: {
   },
   {
     value: "circle",
-    label: "Circle Only",
-    description: "Only circle members",
+    label: "Rally Only",
+    description: "Only rally members",
     icon: <Users className="h-4 w-4" />,
     color: "text-blue-600",
   },
@@ -241,8 +241,8 @@ const PRESETS = [
     },
   },
   {
-    name: "Circle Only",
-    description: "Share with circle members",
+    name: "Rally Only",
+    description: "Share with rally members",
     settings: {
       nameVisibility: "public" as const,
       profilePictureVisibility: "public" as const,
@@ -423,7 +423,7 @@ export function PrivacySettingsComponent({ onPreview }: PrivacySettingsProps) {
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4 text-blue-600" />
           <span className="text-sm">
-            {Object.values(settings).filter(v => v === "circle").length} Circle Only
+            {Object.values(settings).filter(v => v === "circle").length} Rally Only
           </span>
         </div>
         <div className="flex items-center gap-2">

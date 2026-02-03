@@ -108,7 +108,7 @@ export function CircleDetailSheet({
       fetch(`/api/circles/${circleId}`)
         .then((res) => res.json())
         .then((data) => setCircle(data))
-        .catch(() => toast.error("Failed to load circle"))
+        .catch(() => toast.error("Failed to load rally"))
         .finally(() => setLoading(false));
     }
   }, [open, circleId]);
@@ -131,15 +131,15 @@ export function CircleDetailSheet({
           setCircle((prev) =>
             prev ? { ...prev, isMember: true, userRole: "member" } : prev
           );
-          toast.success("Welcome to the circle!");
+          toast.success("Welcome to the rally!");
         }
         if (onJoin) onJoin(circleId);
       } else {
         const data = await res.json();
-        toast.error(data.error || "Failed to join circle");
+        toast.error(data.error || "Failed to join rally");
       }
     } catch {
-      toast.error("Failed to join circle");
+      toast.error("Failed to join rally");
     } finally {
       setJoining(false);
     }
@@ -484,14 +484,14 @@ export function CircleDetailSheet({
                   )}
                   {circle.visibility === "private"
                     ? "Request to Join"
-                    : "Join Circle"}
+                    : "Join Rally"}
                 </Button>
               )}
             </div>
           </ScrollArea>
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground">
-            Circle not found
+            Rally not found
           </div>
         )}
       </SheetContent>

@@ -1,13 +1,22 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Bebas_Neue, Geist_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Body font - Clean, professional, highly legible
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
+// Heading font - Commanding, military precision, Roman column proportions
+const bebasNeue = Bebas_Neue({
+  variable: "--font-bebas",
+  weight: "400",
+  subsets: ["latin"],
+});
+
+// Mono font for technical elements
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
@@ -15,29 +24,29 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Workout Circle",
-    template: "%s | Workout Circle",
+    default: "Rallyproof",
+    template: "%s | Rallyproof",
   },
-  description: "Track workouts and achieve fitness goals together",
+  description: "We show up. Built by those who do.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Workout Circle",
+    title: "Rallyproof",
   },
   formatDetection: {
     telephone: false,
   },
   openGraph: {
     type: "website",
-    siteName: "Workout Circle",
-    title: "Workout Circle",
-    description: "Track workouts and achieve fitness goals together",
+    siteName: "Rallyproof",
+    title: "Rallyproof",
+    description: "We show up. Built by those who do.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Workout Circle",
-    description: "Track workouts and achieve fitness goals together",
+    title: "Rallyproof",
+    description: "We show up. Built by those who do.",
   },
   icons: {
     icon: [
@@ -52,9 +61,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  // Rallyproof Black theme color
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#09090b" },
+    { media: "(prefers-color-scheme: light)", color: "#1A1A2E" },
+    { media: "(prefers-color-scheme: dark)", color: "#1A1A2E" },
   ],
   width: "device-width",
   initialScale: 1,
@@ -71,7 +81,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${inter.variable} ${bebasNeue.variable} ${geistMono.variable} font-sans antialiased`}
       >
         <Providers>{children}</Providers>
       </body>

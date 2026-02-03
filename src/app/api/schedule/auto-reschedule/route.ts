@@ -34,7 +34,7 @@ export async function POST(request: Request) {
 
     if (!parseResult.success) {
       return Response.json(
-        { error: "Invalid request", details: parseResult.error.errors },
+        { error: "Invalid request", details: parseResult.error.issues },
         { status: 400 }
       );
     }

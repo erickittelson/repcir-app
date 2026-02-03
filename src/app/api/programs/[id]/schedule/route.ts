@@ -78,8 +78,17 @@ export async function GET(
       });
     }
 
-    // Build query for scheduled workouts
-    const workoutsQuery = db
+    // Build where condition based on date filters
+    const whereCondition = startDate && endDate
+      ? and(
+          eq(scheduledWorkouts.scheduleId, schedule.id),
+          gte(scheduledWorkouts.scheduledDate, startDate),
+          lte(scheduledWorkouts.scheduledDate, endDate)
+        )
+      : eq(scheduledWorkouts.scheduleId, schedule.id);
+
+    // Query scheduled workouts
+    const workouts = await db
       .select({
         id: scheduledWorkouts.id,
         scheduledDate: scheduledWorkouts.scheduledDate,
@@ -99,22 +108,8 @@ export async function GET(
       })
       .from(scheduledWorkouts)
       .innerJoin(programWorkouts, eq(scheduledWorkouts.programWorkoutId, programWorkouts.id))
-      .where(eq(scheduledWorkouts.scheduleId, schedule.id))
+      .where(whereCondition)
       .orderBy(asc(scheduledWorkouts.scheduledDate));
-
-    // Apply date filters if provided
-    let workouts;
-    if (startDate && endDate) {
-      workouts = await workoutsQuery.where(
-        and(
-          eq(scheduledWorkouts.scheduleId, schedule.id),
-          gte(scheduledWorkouts.scheduledDate, startDate),
-          lte(scheduledWorkouts.scheduledDate, endDate)
-        )
-      );
-    } else {
-      workouts = await workoutsQuery;
-    }
 
     return Response.json({
       schedule: {
@@ -159,7 +154,7 @@ export async function PUT(
     const parseResult = schedulePreferencesSchema.safeParse(body);
     if (!parseResult.success) {
       return Response.json(
-        { error: "Invalid preferences", details: parseResult.error.errors },
+        { error: "Invalid preferences", details: parseResult.error.issues },
         { status: 400 }
       );
     }

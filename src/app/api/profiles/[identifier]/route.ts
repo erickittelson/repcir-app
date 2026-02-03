@@ -180,7 +180,11 @@ export async function GET(request: NextRequest, { params }: Params) {
         .innerJoin(badgeDefinitions, eq(userBadges.badgeId, badgeDefinitions.id))
         .where(eq(userBadges.userId, profileUserId))
         .limit(10);
-      badges = badgesData;
+      badges = badgesData.map((b) => ({
+        name: b.name,
+        icon: b.icon || "",
+        tier: b.tier,
+      }));
     }
 
     // Metrics (age calculated, not raw birthYear)

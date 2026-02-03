@@ -1,22 +1,22 @@
 {
-  "name": "Workout Circle",
-  "short_name": "Workout",
-  "description": "Track workouts and achieve fitness goals together",
+  "name": "Rallyproof",
+  "short_name": "Rallyproof",
+  "description": "Earn your circle. Built by those who show up.",
   "start_url": "/dashboard",
   "display": "standalone",
-  "background_color": "#09090b",
-  "theme_color": "#7c3aed",
+  "background_color": "#1A1A2E",
+  "theme_color": "#C9A227",
   "orientation": "portrait-primary",
   "scope": "/",
   "icons": [
     {
-      "src": "/icons/icon.svg",
+      "src": "/rallyproof-logo.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon.svg",
+      "src": "/rallyproof-logo.svg",
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "maskable"
@@ -25,15 +25,15 @@
   "categories": ["health", "fitness", "lifestyle"],
   "shortcuts": [
     {
-      "name": "Start Workout",
-      "short_name": "Workout",
-      "description": "Start a new workout session",
+      "name": "Train",
+      "short_name": "Train",
+      "description": "Start your training session",
       "url": "/workouts/active"
     },
     {
-      "name": "Log Progress",
+      "name": "Log Work",
       "short_name": "Log",
-      "description": "Log your workout progress",
+      "description": "Log your work",
       "url": "/workouts/log"
     }
   ],

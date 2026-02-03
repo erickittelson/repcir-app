@@ -1,108 +1,124 @@
 /**
- * Fun difficulty branding for challenges and workouts
- * 
- * Instead of boring labels like "beginner" and "advanced",
- * we use fun, engaging labels that motivate users.
+ * RALLYPROOF Difficulty Branding
+ *
+ * Premium, earned, meritocratic difficulty labels.
+ * No emojis. No fluff. Earned respect.
+ *
+ * "Earn Your Circle. Effort is the standard."
  */
 
 export interface DifficultyBrand {
   label: string;
-  emoji: string;
+  shortLabel: string;
   color: string; // Tailwind color class
   bgColor: string;
   borderColor: string;
-  theme: "playful" | "fire" | "zen" | "military";
+  theme: "foundation" | "standard" | "earned" | "elite";
 }
 
 export const DIFFICULTY_BRANDS: Record<string, DifficultyBrand> = {
   beginner: {
-    label: "Getting Started",
-    emoji: "🌱",
-    color: "text-green-600",
-    bgColor: "bg-green-500/20",
-    borderColor: "border-green-500/30",
-    theme: "playful",
+    label: "Foundation",
+    shortLabel: "FND",
+    color: "text-stone-400",
+    bgColor: "bg-stone-500/15",
+    borderColor: "border-stone-500/25",
+    theme: "foundation",
   },
   easy: {
-    label: "Easy Does It",
-    emoji: "🌿",
-    color: "text-emerald-600",
-    bgColor: "bg-emerald-500/20",
-    borderColor: "border-emerald-500/30",
-    theme: "zen",
+    label: "Entry Level",
+    shortLabel: "ENT",
+    color: "text-stone-300",
+    bgColor: "bg-stone-400/15",
+    borderColor: "border-stone-400/25",
+    theme: "foundation",
   },
   intermediate: {
-    label: "Leveling Up",
-    emoji: "💪",
-    color: "text-blue-600",
-    bgColor: "bg-blue-500/20",
-    borderColor: "border-blue-500/30",
-    theme: "fire",
+    label: "Standard",
+    shortLabel: "STD",
+    color: "text-amber-600",
+    bgColor: "bg-amber-500/15",
+    borderColor: "border-amber-500/25",
+    theme: "standard",
   },
   moderate: {
-    label: "Getting Serious",
-    emoji: "⚡",
-    color: "text-cyan-600",
-    bgColor: "bg-cyan-500/20",
-    borderColor: "border-cyan-500/30",
-    theme: "fire",
+    label: "Proven",
+    shortLabel: "PRV",
+    color: "text-amber-500",
+    bgColor: "bg-amber-400/15",
+    borderColor: "border-amber-400/25",
+    theme: "standard",
   },
   advanced: {
-    label: "Beast Mode",
-    emoji: "🔥",
-    color: "text-orange-600",
-    bgColor: "bg-orange-500/20",
-    borderColor: "border-orange-500/30",
-    theme: "fire",
+    label: "Earned",
+    shortLabel: "ERN",
+    color: "text-brand",
+    bgColor: "bg-brand/15",
+    borderColor: "border-brand/25",
+    theme: "earned",
   },
   hard: {
-    label: "No Pain No Gain",
-    emoji: "💥",
+    label: "Forged",
+    shortLabel: "FRG",
     color: "text-red-500",
-    bgColor: "bg-red-500/20",
-    borderColor: "border-red-500/30",
-    theme: "military",
+    bgColor: "bg-red-500/15",
+    borderColor: "border-red-500/25",
+    theme: "earned",
   },
   extreme: {
-    label: "Insane",
-    emoji: "☠️",
+    label: "Blood Oath",
+    shortLabel: "BTH",
     color: "text-red-600",
-    bgColor: "bg-red-600/20",
-    borderColor: "border-red-600/30",
-    theme: "military",
+    bgColor: "bg-red-600/15",
+    borderColor: "border-red-600/25",
+    theme: "elite",
   },
   elite: {
     label: "Elite",
-    emoji: "👑",
-    color: "text-purple-600",
-    bgColor: "bg-purple-500/20",
-    borderColor: "border-purple-500/30",
-    theme: "military",
+    shortLabel: "ELT",
+    color: "text-brand",
+    bgColor: "bg-brand/20",
+    borderColor: "border-brand/30",
+    theme: "elite",
   },
 };
 
 /**
- * Get the fun difficulty branding for a given difficulty level
+ * Get the Rallyproof difficulty branding for a given difficulty level
  */
-export function getDifficultyBrand(difficulty: string | null | undefined): DifficultyBrand {
+export function getDifficultyBrand(
+  difficulty: string | null | undefined
+): DifficultyBrand {
   if (!difficulty) {
     return DIFFICULTY_BRANDS.intermediate;
   }
-  
+
   const normalized = difficulty.toLowerCase().trim();
   return DIFFICULTY_BRANDS[normalized] || DIFFICULTY_BRANDS.intermediate;
 }
 
 /**
- * Get the full branded label with emoji
+ * Get the branded label (no emoji - per Rallyproof brand guidelines)
  */
-export function getDifficultyLabel(difficulty: string | null | undefined): string {
+export function getDifficultyLabel(
+  difficulty: string | null | undefined
+): string {
   const brand = getDifficultyBrand(difficulty);
-  return `${brand.emoji} ${brand.label}`;
+  return brand.label;
 }
 
 /**
- * Get the fun label for a custom difficulty_label field (from database)
+ * Get the short military-style label
+ */
+export function getDifficultyShortLabel(
+  difficulty: string | null | undefined
+): string {
+  const brand = getDifficultyBrand(difficulty);
+  return brand.shortLabel;
+}
+
+/**
+ * Get the label for a custom difficulty_label field (from database)
  * Falls back to computing from the base difficulty
  */
 export function getCustomOrDefaultLabel(
@@ -117,28 +133,44 @@ export function getCustomOrDefaultLabel(
 
 /**
  * Theme-specific styling helpers
+ * Rallyproof palette: Gold (earned), Stone (foundation), Red (accountability)
  */
 export function getThemeStyles(theme: DifficultyBrand["theme"]) {
   switch (theme) {
-    case "playful":
+    case "foundation":
       return {
-        gradient: "from-green-400 to-emerald-500",
-        accent: "text-green-500",
+        gradient: "from-stone-500 to-stone-600",
+        accent: "text-stone-400",
+        message: "Build the base.",
       };
-    case "fire":
+    case "standard":
       return {
-        gradient: "from-orange-400 to-red-500",
-        accent: "text-orange-500",
+        gradient: "from-amber-500 to-amber-600",
+        accent: "text-amber-500",
+        message: "The work begins.",
       };
-    case "zen":
+    case "earned":
       return {
-        gradient: "from-teal-400 to-cyan-500",
-        accent: "text-teal-500",
+        gradient: "from-brand to-amber-600",
+        accent: "text-brand",
+        message: "Earn it.",
       };
-    case "military":
+    case "elite":
       return {
-        gradient: "from-red-500 to-red-700",
-        accent: "text-red-600",
+        gradient: "from-brand to-red-600",
+        accent: "text-brand",
+        message: "For those who show up.",
       };
   }
+}
+
+/**
+ * Get an accountability message based on difficulty
+ */
+export function getDifficultyMessage(
+  difficulty: string | null | undefined
+): string {
+  const brand = getDifficultyBrand(difficulty);
+  const styles = getThemeStyles(brand.theme);
+  return styles.message;
 }

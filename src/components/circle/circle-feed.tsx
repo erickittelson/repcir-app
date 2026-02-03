@@ -21,6 +21,8 @@ import {
   Trash2,
   Loader2,
   X,
+  Mic,
+  MicOff,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -32,6 +34,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { DeleteConfirmDialog } from "@/components/ui/confirm-dialog";
+import { VoiceInputWithTranscription } from "@/components/voice-input";
+import { haptics } from "@/lib/haptics";
 
 interface CirclePost {
   id: string;
@@ -218,13 +222,27 @@ export function CircleFeed({ circleId, userId, userRole }: CircleFeedProps) {
               <AvatarFallback className="bg-brand/20 text-brand">U</AvatarFallback>
             </Avatar>
             <div className="flex-1">
-              <Textarea
-                placeholder="Share something with your circle..."
-                value={newPostContent}
-                onChange={(e) => setNewPostContent(e.target.value)}
-                className="min-h-[60px] resize-none"
-                rows={2}
-              />
+              <div className="relative">
+                <Textarea
+                  placeholder="Share something with your circle..."
+                  value={newPostContent}
+                  onChange={(e) => setNewPostContent(e.target.value)}
+                  className="min-h-[60px] resize-none pr-12"
+                  rows={2}
+                />
+                {/* Voice input button */}
+                <div className="absolute right-2 top-2">
+                  <VoiceInputWithTranscription
+                    onSubmit={(text) => {
+                      setNewPostContent((prev) =>
+                        prev ? `${prev} ${text}` : text
+                      );
+                      haptics.success();
+                    }}
+                    disabled={isPosting}
+                  />
+                </div>
+              </div>
               <div className="flex items-center justify-between mt-3">
                 <div className="flex gap-2">
                   <Button variant="ghost" size="sm" disabled>

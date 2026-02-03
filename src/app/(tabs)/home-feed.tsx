@@ -414,7 +414,7 @@ function getActivityDisplay(activity: HomeFeedProps["activityFeed"][0]) {
     case "joined_circle":
       return {
         icon: Zap,
-        text: "Joined a new circle",
+        text: "Joined a new rally",
         color: "bg-brand/20 text-brand",
       };
     default:

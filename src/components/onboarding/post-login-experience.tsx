@@ -24,7 +24,7 @@ import confetti from "canvas-confetti";
 interface UserData {
   name: string;
   goals?: string[];
-  primaryGoal?: string;
+  primaryGoal?: string | { type: string; description?: string };
   personalRecords?: Array<{
     exerciseName: string;
     value: number;
@@ -165,7 +165,10 @@ const FEATURE_STEPS: Array<{
 
 function getRecommendedBadges(userData: UserData): RecommendedBadge[] {
   const recommendations: RecommendedBadge[] = [];
-  const goal = userData.primaryGoal?.toLowerCase() || "";
+  const goalValue = typeof userData.primaryGoal === "string"
+    ? userData.primaryGoal
+    : userData.primaryGoal?.type;
+  const goal = goalValue?.toLowerCase() || "";
   const prs = userData.personalRecords || [];
 
   // Helper to get PR value by exercise name (case-insensitive partial match)

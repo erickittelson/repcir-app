@@ -762,7 +762,7 @@ export function DashboardTabs({
             <button className="text-center group" onClick={() => router.push("/you?section=circles")}>
               <p className="text-2xl font-bold">{stats.circleCount}</p>
               <p className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">
-                Circles
+                Rallies
               </p>
             </button>
           </div>
@@ -916,12 +916,12 @@ export function DashboardTabs({
               </CardContent>
             </Card>
 
-            {/* Your Circles */}
+            {/* Your Rallies */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <CardTitle className="text-base font-medium flex items-center gap-2">
                   <Users className="h-4 w-4 text-muted-foreground" />
-                  Your Circles
+                  Your Rallies
                 </CardTitle>
                 <Button asChild variant="ghost" size="sm">
                   <Link href="/discover">
@@ -935,10 +935,10 @@ export function DashboardTabs({
                   <div className="text-center py-6">
                     <Users className="mx-auto h-10 w-10 text-muted-foreground/50" />
                     <p className="text-sm text-muted-foreground mt-2">
-                      No circles yet
+                      No rallies yet
                     </p>
                     <Button asChild size="sm" className="mt-3">
-                      <Link href="/discover">Join Circle</Link>
+                      <Link href="/discover">Join Rally</Link>
                     </Button>
                   </div>
                 ) : (

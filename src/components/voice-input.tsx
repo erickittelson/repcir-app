@@ -6,6 +6,7 @@ import { Mic, MicOff, X } from "lucide-react";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { haptics } from "@/lib/haptics";
 
 interface VoiceInputProps {
   onTranscript: (text: string) => void;
@@ -49,6 +50,7 @@ export function VoiceInput({
     if (isListening) {
       stopListening();
       setHasStarted(false);
+      haptics.light(); // Haptic on recording stop
       // Submit final transcript if exists
       const finalText = transcript || interimTranscript;
       if (finalText?.trim()) {
@@ -58,6 +60,7 @@ export function VoiceInput({
       resetTranscript();
       startListening();
       setHasStarted(true);
+      haptics.medium(); // Haptic on recording start
     }
   }, [
     isSupported,
@@ -287,9 +290,11 @@ export function VoiceInputWithTranscription({
   const handleToggle = useCallback(() => {
     if (isListening) {
       stopListening();
+      haptics.light(); // Haptic on recording stop
     } else {
       resetTranscript();
       startListening();
+      haptics.medium(); // Haptic on recording start
     }
   }, [isListening, startListening, stopListening, resetTranscript]);
 
@@ -297,6 +302,7 @@ export function VoiceInputWithTranscription({
     const text = (transcript + " " + interimTranscript).trim();
     if (text) {
       onSubmit(text);
+      haptics.success(); // Haptic on successful send
     }
     stopListening();
     resetTranscript();
@@ -305,6 +311,7 @@ export function VoiceInputWithTranscription({
   const handleCancel = useCallback(() => {
     stopListening();
     resetTranscript();
+    haptics.light();
   }, [stopListening, resetTranscript]);
 
   if (!isSupported) return null;

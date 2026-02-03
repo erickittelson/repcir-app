@@ -70,7 +70,7 @@ export function CreateSheet({ open, onOpenChange }: CreateSheetProps) {
     {
       icon: MessageSquare,
       label: "Share Update",
-      description: "Post to your circles",
+      description: "Post to your rally",
       onClick: async () => {
         const shareData = {
           title: "My Fitness Update",

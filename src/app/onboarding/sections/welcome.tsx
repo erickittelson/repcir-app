@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Dumbbell, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { RallyproofLogo } from "@/components/ui/rallyproof-logo";
 import type { SectionProps } from "./types";
 
 export function WelcomeSection({ data, onUpdate, onNext }: SectionProps) {
@@ -45,8 +46,8 @@ export function WelcomeSection({ data, onUpdate, onNext }: SectionProps) {
           transition={{ delay: 0.2, duration: 0.5 }}
           className="mb-8"
         >
-          <div className="w-20 h-20 mx-auto rounded-2xl bg-energy-gradient flex items-center justify-center shadow-xl glow-brand">
-            <Dumbbell className="w-10 h-10 text-white" />
+          <div className="w-20 h-20 mx-auto rounded-2xl bg-card flex items-center justify-center shadow-xl glow-earned border border-brand/20">
+            <RallyproofLogo variant="icon" size="xl" />
           </div>
         </motion.div>
 
@@ -55,19 +56,26 @@ export function WelcomeSection({ data, onUpdate, onNext }: SectionProps) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, duration: 0.5 }}
-          className="text-3xl md:text-4xl font-bold mb-3"
+          className="text-3xl md:text-4xl font-display tracking-wider mb-3"
         >
-          Welcome to{" "}
-          <span className="text-brand-gradient">Workout Circle</span>
+          <span className="text-brand-gradient">RALLYPROOF</span>
         </motion.h1>
 
         <motion.p
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5, duration: 0.5 }}
-          className="text-muted-foreground text-lg mb-10"
+          className="text-muted-foreground text-lg mb-2"
         >
-          Let&apos;s set up your profile in just a few minutes
+          You showed up. That&apos;s more than most.
+        </motion.p>
+        <motion.p
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6, duration: 0.5 }}
+          className="text-muted-foreground text-sm mb-10"
+        >
+          That&apos;s step one.
         </motion.p>
 
         {/* Name Input */}
@@ -84,7 +92,7 @@ export function WelcomeSection({ data, onUpdate, onNext }: SectionProps) {
               </label>
               <Input
                 type="text"
-                placeholder="Your name or nickname"
+                placeholder="Your name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -99,9 +107,9 @@ export function WelcomeSection({ data, onUpdate, onNext }: SectionProps) {
             <Button
               onClick={handleSubmit}
               disabled={!name.trim()}
-              className="w-full h-14 text-lg bg-energy-gradient hover:opacity-90 rounded-xl group"
+              className="w-full h-14 text-lg bg-brand hover:bg-brand/90 text-brand-foreground rounded-xl group"
             >
-              Get Started
+              Enter
               <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
             </Button>
           </motion.div>

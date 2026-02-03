@@ -1665,9 +1665,9 @@ export async function GET() {
 
     // New user - create progress record and send welcome
     const welcomePhase = schema.onboarding.phases.welcome;
-    const welcomeMessage = welcomePhase.opening_message || `Hey! I'm your AI coach here at Workout Circle.
+    const welcomeMessage = welcomePhase.opening_message || `I'm your AI coach at Rallyproof.
 
-Before we start building workouts together, I'd love to get to know you a bit.
+Before we build your training program, I need to know who I'm working with.
 
 What should I call you?`;
 

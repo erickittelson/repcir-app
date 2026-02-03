@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ChevronDown, Check, Plus, Settings, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CreateRallyExperience } from "@/components/rally";
 
 interface Circle {
   id: string;
@@ -37,6 +38,7 @@ export function CircleSwitcher({
 }: CircleSwitcherProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [showCreateRally, setShowCreateRally] = useState(false);
 
   const handleSwitch = async (circleId: string) => {
     if (circleId === activeCircle?.id) return;
@@ -68,6 +70,11 @@ export function CircleSwitcher({
       .slice(0, 2);
   };
 
+  // Display "Rally" instead of "Circle" for branding
+  const getDisplayName = (name: string) => {
+    return name.replace(/Circle/gi, "Rally");
+  };
+
   const getRoleBadge = (role: string) => {
     if (role === "owner") return "Owner";
     if (role === "admin") return "Admin";
@@ -76,14 +83,23 @@ export function CircleSwitcher({
 
   if (!activeCircle) {
     return (
-      <Button
-        variant="outline"
-        className={cn("gap-2", className)}
-        onClick={() => router.push("/onboarding")}
-      >
-        <Plus className="h-4 w-4" />
-        Create Circle
-      </Button>
+      <>
+        <Button
+          variant="outline"
+          className={cn("gap-2", className)}
+          onClick={() => setShowCreateRally(true)}
+        >
+          <Plus className="h-4 w-4" />
+          Create Rally
+        </Button>
+        <CreateRallyExperience
+          open={showCreateRally}
+          onOpenChange={setShowCreateRally}
+          onComplete={() => {
+            router.refresh();
+          }}
+        />
+      </>
     );
   }
 
@@ -105,14 +121,14 @@ export function CircleSwitcher({
             </AvatarFallback>
           </Avatar>
           <span className="max-w-[120px] truncate font-medium">
-            {activeCircle.name}
+            {getDisplayName(activeCircle.name)}
           </span>
           <ChevronDown className="h-4 w-4 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
         <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-          Switch Circle
+          Switch Rally
         </DropdownMenuLabel>
         {circles.map((circle) => {
           const isActive = circle.id === activeCircle.id;
@@ -132,7 +148,7 @@ export function CircleSwitcher({
               </Avatar>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="truncate font-medium">{circle.name}</span>
+                  <span className="truncate font-medium">{getDisplayName(circle.name)}</span>
                   {roleBadge && (
                     <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
                       {roleBadge}
@@ -150,16 +166,23 @@ export function CircleSwitcher({
           className="gap-3"
         >
           <Users className="h-4 w-4" />
-          Manage Circles
+          Manage Rallies
         </DropdownMenuItem>
         <DropdownMenuItem
-          onClick={() => router.push("/onboarding")}
+          onClick={() => setShowCreateRally(true)}
           className="gap-3"
         >
           <Plus className="h-4 w-4" />
-          Create New Circle
+          Create New Rally
         </DropdownMenuItem>
       </DropdownMenuContent>
+      <CreateRallyExperience
+        open={showCreateRally}
+        onOpenChange={setShowCreateRally}
+        onComplete={() => {
+          router.refresh();
+        }}
+      />
     </DropdownMenu>
   );
 }

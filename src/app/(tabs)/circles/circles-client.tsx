@@ -17,7 +17,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CircleCreateSheet } from "@/components/discover/circle-create-sheet";
+import { CreateRallyExperience } from "@/components/rally";
 
 interface CircleData {
   id: string;
@@ -79,11 +79,11 @@ export function CirclesClient({ circles, userId }: CirclesClientProps) {
   };
 
   return (
-    <div className="space-y-4 pb-20">
+    <div className="space-y-4 px-4 py-6 pb-20">
       {/* Header */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Circles</h1>
+          <h1 className="text-2xl font-bold">Rallies</h1>
           <Button size="sm" onClick={() => setShowCreateCircle(true)}>
             <Plus className="h-4 w-4 mr-1" />
             Create
@@ -94,7 +94,7 @@ export function CirclesClient({ circles, userId }: CirclesClientProps) {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search your circles..."
+            placeholder="Search your rallies..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
@@ -102,7 +102,7 @@ export function CirclesClient({ circles, userId }: CirclesClientProps) {
         </div>
       </div>
 
-      {/* Discover Circles CTA */}
+      {/* Discover Rallies CTA */}
       <Card className="bg-gradient-to-br from-brand/10 to-success/10 border-brand/20">
         <CardContent className="p-4">
           <div className="flex items-center gap-3">
@@ -110,7 +110,7 @@ export function CirclesClient({ circles, userId }: CirclesClientProps) {
               <Compass className="h-5 w-5 text-brand" />
             </div>
             <div className="flex-1">
-              <p className="font-medium">Find New Circles</p>
+              <p className="font-medium">Find New Rallies</p>
               <p className="text-xs text-muted-foreground">
                 Join communities that match your fitness goals
               </p>
@@ -126,19 +126,19 @@ export function CirclesClient({ circles, userId }: CirclesClientProps) {
         </CardContent>
       </Card>
 
-      {/* Circles List */}
+      {/* Rallies List */}
       {filteredCircles.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
           {circles.length === 0 ? (
             <>
-              <p className="font-medium">No circles yet</p>
+              <p className="font-medium">No rallies yet</p>
               <p className="text-sm mt-1">
-                Create your own circle or discover communities to join
+                Create your own rally or discover communities to join
               </p>
             </>
           ) : (
-            <p>No circles match your search</p>
+            <p>No rallies match your search</p>
           )}
         </div>
       ) : (
@@ -218,10 +218,15 @@ export function CirclesClient({ circles, userId }: CirclesClientProps) {
         </div>
       )}
 
-      {/* Create Circle Sheet */}
-      <CircleCreateSheet
+      {/* Create Rally Experience */}
+      <CreateRallyExperience
         open={showCreateCircle}
         onOpenChange={setShowCreateCircle}
+        onComplete={(rallyId) => {
+          // The experience handles navigation internally
+          // This callback is optional for additional handling
+          console.log("Rally created:", rallyId);
+        }}
       />
     </div>
   );

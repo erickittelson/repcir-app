@@ -59,7 +59,7 @@ export async function POST(
 
   try {
     const body = await request.json();
-    const { completedTasks, notes } = body;
+    let { completedTasks, notes } = body;
 
     // Get challenge
     const challenge = await db.query.challenges.findFirst({

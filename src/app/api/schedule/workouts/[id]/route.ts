@@ -107,7 +107,7 @@ export async function PUT(
     const parseResult = workoutUpdateSchema.safeParse(body);
     if (!parseResult.success) {
       return Response.json(
-        { error: "Invalid request", details: parseResult.error.errors },
+        { error: "Invalid request", details: parseResult.error.issues },
         { status: 400 }
       );
     }

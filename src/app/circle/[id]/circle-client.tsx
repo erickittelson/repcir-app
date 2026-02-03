@@ -3,21 +3,19 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft,
-  Calendar,
+  Check,
+  Clock,
   Crown,
   Dumbbell,
   MessageCircle,
-  Plus,
   Settings,
-  Target,
   Trophy,
   UserPlus,
   Users,
@@ -50,28 +48,10 @@ interface CircleClientProps {
     joinedAt: Date | null;
     name: string;
     profilePicture: string | null;
+    trainedToday: boolean;
+    workoutsThisWeek: number;
   }>;
-  workouts: Array<{
-    id: string;
-    name: string;
-    category: string | null;
-    estimatedDuration: number | null;
-    createdAt: Date | null;
-  }>;
-  challenges: Array<{
-    id: string;
-    name: string;
-    shortDescription: string | null;
-    durationDays: number | null;
-    participantCount: number | null;
-  }>;
-  activity: Array<{
-    id: string;
-    activityType: string | null;
-    metadata: unknown;
-    createdAt: Date | null;
-    userId: string | null;
-  }>;
+  trainedTodayCount: number;
   userId: string;
 }
 
@@ -79,17 +59,15 @@ export function CircleClient({
   circle,
   membership,
   members,
-  workouts,
-  challenges,
-  activity,
+  trainedTodayCount,
   userId,
 }: CircleClientProps) {
   const router = useRouter();
   const [isJoining, setIsJoining] = useState(false);
   const [activeTab, setActiveTab] = useState("feed");
 
-  const isOwner = membership?.role === "owner";
   const isAdmin = membership?.role === "admin" || membership?.role === "owner";
+  const totalMembers = members.length;
 
   const handleJoin = async () => {
     setIsJoining(true);
@@ -98,10 +76,10 @@ export function CircleClient({
         method: "POST",
       });
       if (!res.ok) throw new Error("Failed to join");
-      toast.success("Joined circle!");
+      toast.success("Joined rally!");
       router.refresh();
     } catch {
-      toast.error("Failed to join circle");
+      toast.error("Failed to join rally");
     } finally {
       setIsJoining(false);
     }
@@ -111,7 +89,7 @@ export function CircleClient({
     navigator.clipboard.writeText(
       `${window.location.origin}/circle/${circle.id}`
     );
-    toast.success("Circle link copied!");
+    toast.success("Rally link copied!");
   };
 
   return (
@@ -163,22 +141,26 @@ export function CircleClient({
               </div>
             </div>
 
-            {/* Stats */}
+            {/* Accountability Stats */}
             <div className="grid grid-cols-3 gap-4 mt-6">
               <div className="text-center">
                 <Users className="h-5 w-5 mx-auto text-brand" />
-                <p className="text-lg font-bold mt-1">{members.length}</p>
+                <p className="text-lg font-bold mt-1">{totalMembers}</p>
                 <p className="text-xs text-muted-foreground">Members</p>
               </div>
               <div className="text-center">
-                <Dumbbell className="h-5 w-5 mx-auto text-energy" />
-                <p className="text-lg font-bold mt-1">{workouts.length}</p>
-                <p className="text-xs text-muted-foreground">Workouts</p>
+                <Check className="h-5 w-5 mx-auto text-success" />
+                <p className="text-lg font-bold mt-1">
+                  {trainedTodayCount}/{totalMembers}
+                </p>
+                <p className="text-xs text-muted-foreground">Today</p>
               </div>
               <div className="text-center">
-                <Target className="h-5 w-5 mx-auto text-success" />
-                <p className="text-lg font-bold mt-1">{challenges.length}</p>
-                <p className="text-xs text-muted-foreground">Challenges</p>
+                <Dumbbell className="h-5 w-5 mx-auto text-energy" />
+                <p className="text-lg font-bold mt-1">
+                  {members.reduce((sum, m) => sum + m.workoutsThisWeek, 0)}
+                </p>
+                <p className="text-xs text-muted-foreground">This Week</p>
               </div>
             </div>
 
@@ -224,8 +206,8 @@ export function CircleClient({
             <TabsTrigger value="members" className="flex-1">
               Members
             </TabsTrigger>
-            <TabsTrigger value="workouts" className="flex-1">
-              Workouts
+            <TabsTrigger value="leaderboard" className="flex-1">
+              Leaderboard
             </TabsTrigger>
           </TabsList>
 
@@ -259,7 +241,12 @@ export function CircleClient({
                     {members.map((member) => (
                       <div
                         key={member.id}
-                        className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg"
+                        className={cn(
+                          "flex items-center gap-3 p-3 rounded-lg",
+                          member.trainedToday
+                            ? "bg-success/10 border border-success/30"
+                            : "bg-muted/50"
+                        )}
                       >
                         <Avatar className="h-10 w-10">
                           <AvatarImage src={member.profilePicture || undefined} />
@@ -282,14 +269,14 @@ export function CircleClient({
                             )}
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            Joined{" "}
-                            {member.joinedAt
-                              ? formatDistanceToNow(new Date(member.joinedAt), {
-                                  addSuffix: true,
-                                })
-                              : "recently"}
+                            {member.workoutsThisWeek} workouts this week
                           </p>
                         </div>
+                        {member.trainedToday ? (
+                          <Check className="h-5 w-5 text-success" />
+                        ) : (
+                          <Clock className="h-5 w-5 text-muted-foreground" />
+                        )}
                       </div>
                     ))}
                   </div>
@@ -298,90 +285,66 @@ export function CircleClient({
             </Card>
           </TabsContent>
 
-          {/* Workouts Tab */}
-          <TabsContent value="workouts" className="mt-4">
+          {/* Leaderboard Tab */}
+          <TabsContent value="leaderboard" className="mt-4">
             <Card>
-              <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                <CardTitle className="text-base">Circle Workouts</CardTitle>
-                {membership && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => router.push("/workout/new")}
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add
-                  </Button>
-                )}
-              </CardHeader>
-              <CardContent>
-                {workouts.length > 0 ? (
-                  <div className="space-y-2">
-                    {workouts.map((workout) => (
-                      <div
-                        key={workout.id}
-                        className="flex items-center justify-between p-3 bg-muted/50 rounded-lg cursor-pointer hover:bg-muted"
-                        onClick={() => router.push(`/workout/${workout.id}`)}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Dumbbell className="h-5 w-5 text-brand" />
-                          <div>
-                            <p className="font-medium text-sm">{workout.name}</p>
-                            {workout.estimatedDuration && (
-                              <p className="text-xs text-muted-foreground">
-                                ~{workout.estimatedDuration} min
-                              </p>
-                            )}
-                          </div>
+              <CardContent className="p-0">
+                <div className="divide-y divide-border">
+                  {members.map((member, index) => (
+                    <div
+                      key={member.id}
+                      className={cn(
+                        "flex items-center justify-between px-4 py-3",
+                        index < 3 && "bg-brand/5"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={cn(
+                            "text-sm font-bold w-6",
+                            index === 0 && "text-yellow-500",
+                            index === 1 && "text-gray-400",
+                            index === 2 && "text-amber-600"
+                          )}
+                        >
+                          {index + 1}
+                        </span>
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={member.profilePicture || undefined} />
+                          <AvatarFallback className="text-xs">
+                            {member.name.charAt(0)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm truncate">
+                            {member.name}
+                          </p>
+                          {member.trainedToday && (
+                            <p className="text-xs text-success">Trained today</p>
+                          )}
                         </div>
-                        {workout.category && (
-                          <Badge variant="outline" className="text-xs">
-                            {workout.category}
-                          </Badge>
-                        )}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Dumbbell className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p>No workouts yet</p>
-                  </div>
-                )}
+                      <div className="flex items-center gap-1">
+                        <Dumbbell className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-bold">{member.workoutsThisWeek}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
 
-            {/* Challenges */}
-            {challenges.length > 0 && (
-              <Card className="mt-4">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Circle Challenges</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {challenges.map((challenge) => (
-                      <div
-                        key={challenge.id}
-                        className="flex items-center justify-between p-3 bg-muted/50 rounded-lg cursor-pointer hover:bg-muted"
-                        onClick={() => router.push(`/challenge/${challenge.id}`)}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Trophy className="h-5 w-5 text-energy" />
-                          <div>
-                            <p className="font-medium text-sm">{challenge.name}</p>
-                            {challenge.shortDescription && (
-                              <p className="text-xs text-muted-foreground line-clamp-1">
-                                {challenge.shortDescription}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <Badge variant="outline" className="text-xs">
-                          {challenge.durationDays} days
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
+            {/* Weekly Summary */}
+            {trainedTodayCount === totalMembers && totalMembers > 1 && (
+              <Card className="mt-4 border-success/50 bg-success/5">
+                <CardContent className="py-6 text-center">
+                  <Trophy className="h-8 w-8 text-success mx-auto mb-2" />
+                  <p className="font-display tracking-wider text-success">
+                    RALLYPROOF COMPLETE
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Everyone trained today. This is what a unit looks like.
+                  </p>
                 </CardContent>
               </Card>
             )}

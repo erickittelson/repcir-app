@@ -5,11 +5,9 @@ import {
   circles,
   circleMembers,
   userProfiles,
-  workoutPlans,
-  challenges,
-  activityFeed,
+  workoutSessions,
 } from "@/lib/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, gte, inArray } from "drizzle-orm";
 import { CircleClient } from "./circle-client";
 
 interface CirclePageProps {
@@ -41,6 +39,14 @@ export default async function CirclePage({ params }: CirclePageProps) {
     ),
   });
 
+  // Get today's date boundaries
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Get this week's start (Monday)
+  const weekStart = new Date(today);
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
+
   // Get circle members with profiles
   const membersData = await db
     .select({
@@ -50,51 +56,69 @@ export default async function CirclePage({ params }: CirclePageProps) {
     .from(circleMembers)
     .leftJoin(userProfiles, eq(userProfiles.userId, circleMembers.userId))
     .where(eq(circleMembers.circleId, id))
-    .orderBy(desc(circleMembers.createdAt))
-    .limit(20);
+    .orderBy(desc(circleMembers.createdAt));
 
-  const members = membersData.map((row) => ({
-    id: row.member.id,
-    memberId: row.member.id, // Use id as memberId
-    userId: row.member.userId,
-    role: row.member.role,
-    joinedAt: row.member.createdAt,
-    name: row.profile?.displayName || row.member.name || "Anonymous",
-    profilePicture: row.profile?.profilePicture || null,
-  }));
+  const memberIds = membersData.map((row) => row.member.id);
 
-  // Get circle workouts
-  const workoutsData = await db.query.workoutPlans.findMany({
-    where: eq(workoutPlans.circleId, id),
-    orderBy: [desc(workoutPlans.createdAt)],
-    limit: 10,
+  // Fetch accountability data in parallel
+  const [todayWorkouts, weekWorkouts] = await Promise.all([
+    // Workouts completed TODAY by circle members
+    memberIds.length > 0
+      ? db.query.workoutSessions.findMany({
+          where: and(
+            inArray(workoutSessions.memberId, memberIds),
+            gte(workoutSessions.date, today),
+            eq(workoutSessions.status, "completed")
+          ),
+        })
+      : [],
+    // Workouts this week by circle members
+    memberIds.length > 0
+      ? db.query.workoutSessions.findMany({
+          where: and(
+            inArray(workoutSessions.memberId, memberIds),
+            gte(workoutSessions.date, weekStart),
+            eq(workoutSessions.status, "completed")
+          ),
+        })
+      : [],
+  ]);
+
+  // Calculate who has trained today
+  const trainedTodayMemberIds = new Set(todayWorkouts.map((w) => w.memberId));
+
+  // Build member accountability data
+  const members = membersData.map((row) => {
+    const memberWeekWorkouts = weekWorkouts.filter((w) => w.memberId === row.member.id);
+    const trainedToday = trainedTodayMemberIds.has(row.member.id);
+
+    return {
+      id: row.member.id,
+      memberId: row.member.id,
+      userId: row.member.userId,
+      role: row.member.role,
+      joinedAt: row.member.createdAt,
+      name: row.profile?.displayName || row.member.name || "Anonymous",
+      profilePicture: row.profile?.profilePicture || null,
+      trainedToday,
+      workoutsThisWeek: memberWeekWorkouts.length,
+    };
   });
 
-  // Get circle challenges
-  const challengesData = await db.query.challenges.findMany({
-    where: eq(challenges.circleId, id),
-    orderBy: [desc(challenges.createdAt)],
-    limit: 10,
+  // Sort by workouts this week (leaderboard)
+  members.sort((a, b) => {
+    if (a.trainedToday !== b.trainedToday) return a.trainedToday ? -1 : 1;
+    return b.workoutsThisWeek - a.workoutsThisWeek;
   });
 
-  // Get recent activity for circle members
-  const memberUserIds = members.map((m) => m.userId).filter(Boolean) as string[];
-  const activityData = memberUserIds.length > 0 
-    ? await db.query.activityFeed.findMany({
-        where: eq(activityFeed.visibility, "public"),
-        orderBy: [desc(activityFeed.createdAt)],
-        limit: 20,
-      })
-    : [];
+  const trainedTodayCount = members.filter((m) => m.trainedToday).length;
 
   return (
     <CircleClient
       circle={circle}
       membership={membership || null}
       members={members}
-      workouts={workoutsData}
-      challenges={challengesData}
-      activity={activityData}
+      trainedTodayCount={trainedTodayCount}
       userId={session.user.id}
     />
   );

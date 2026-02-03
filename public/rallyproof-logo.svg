@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!--
+    RALLYPROOF Logo - "The Earned Ring"
+    An incomplete circle representing that the circle must be actively
+    completed through effort. The gap is intentional: membership is earned, not given.
+  -->
+
+  <!-- The Earned Ring - incomplete circle with gap at top -->
+  <path
+    d="M 85 50
+       A 35 35 0 1 1 50 15"
+    stroke="#C9A227"
+    stroke-width="8"
+    stroke-linecap="round"
+    fill="none"
+  />
+
+  <!-- Inner arrow/chevron pointing up - representing ascent/earning -->
+  <path
+    d="M 50 70 L 50 38 M 38 50 L 50 38 L 62 50"
+    stroke="#C9A227"
+    stroke-width="5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+  />
+</svg>

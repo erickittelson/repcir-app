@@ -13,7 +13,7 @@
 
 import { useState, useMemo, useCallback } from "react";
 import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isToday, isPast, isFuture, addWeeks, subWeeks, startOfMonth, endOfMonth, isSameMonth, addMonths, subMonths } from "date-fns";
-import { ChevronLeft, ChevronRight, Calendar, List, Clock, CheckCircle, XCircle, AlertCircle, GripVertical, MoreHorizontal, Play, Skip } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, List, Clock, CheckCircle, XCircle, AlertCircle, GripVertical, MoreHorizontal, Play, SkipForward } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -192,7 +192,7 @@ function WorkoutCard({
             )}
             {canReschedule && onSkip && (
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onSkip(workout.id); }}>
-                <Skip className="h-4 w-4 mr-2" />
+                <SkipForward className="h-4 w-4 mr-2" />
                 Skip Workout
               </DropdownMenuItem>
             )}

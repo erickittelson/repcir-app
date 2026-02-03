@@ -43,17 +43,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   
   if (!data?.profile) {
     return {
-      title: "Profile Not Found | FitCircle",
+      title: "Profile Not Found | Rallyproof",
     };
   }
 
   const { profile } = data;
   const displayName = profile.displayName || "User";
   const handle = profile.handle ? `@${profile.handle}` : "";
-  
+
   return {
-    title: `${displayName} ${handle} | FitCircle`,
-    description: profile.bio || `Check out ${displayName}'s fitness profile on FitCircle`,
+    title: `${displayName} ${handle} | Rallyproof`,
+    description: profile.bio || `${displayName}'s profile on Rallyproof`,
     openGraph: {
       title: `${displayName} ${handle}`,
       description: profile.bio || `Check out ${displayName}'s fitness profile`,

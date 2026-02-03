@@ -5,10 +5,10 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
   Home,
-  Compass,
   Plus,
   Users,
   User,
+  Sparkles,
 } from "lucide-react";
 
 interface TabItem {
@@ -18,11 +18,15 @@ interface TabItem {
   isAction?: boolean;
 }
 
+// New navigation: Home (Feed) | Rallies | Log (FAB) | Coach | You
+// Removed: Discover tab (content-focused)
+// Changed: Create → Log (quick workout logging)
+// Added: Coach tab (AI-powered)
 const tabs: TabItem[] = [
   { href: "/", icon: Home, label: "Home" },
-  { href: "/discover", icon: Compass, label: "Discover" },
-  { href: "#create", icon: Plus, label: "Create", isAction: true },
-  { href: "/circles", icon: Users, label: "Circles" },
+  { href: "/circles", icon: Users, label: "Rallies" },
+  { href: "#log", icon: Plus, label: "Log", isAction: true },
+  { href: "/coach", icon: Sparkles, label: "Coach" },
   { href: "/you", icon: User, label: "You" },
 ];
 
@@ -68,7 +72,7 @@ export function BottomTabBar({ onCreateClick }: BottomTabBarProps) {
                 key={tab.href}
                 onClick={onCreateClick}
                 className="relative -mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-brand-gradient shadow-lg shadow-brand/30 transition-transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 focus:ring-offset-background"
-                aria-label={`${tab.label} new workout or challenge`}
+                aria-label="Log workout"
               >
                 <Icon className="h-7 w-7 text-white" aria-hidden="true" />
               </button>

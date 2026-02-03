@@ -17,16 +17,16 @@ interface Limitation {
 }
 
 const BODY_PARTS = [
-  { id: "shoulder", label: "Shoulder", emoji: "💪" },
-  { id: "back_upper", label: "Upper Back", emoji: "🔙" },
-  { id: "back_lower", label: "Lower Back", emoji: "⬇️" },
-  { id: "knee", label: "Knee", emoji: "🦵" },
-  { id: "hip", label: "Hip", emoji: "🦴" },
-  { id: "wrist", label: "Wrist/Hand", emoji: "✋" },
-  { id: "ankle", label: "Ankle/Foot", emoji: "🦶" },
-  { id: "neck", label: "Neck", emoji: "🔝" },
-  { id: "elbow", label: "Elbow", emoji: "💪" },
-  { id: "core", label: "Core/Abs", emoji: "🎯" },
+  { id: "shoulder", label: "Shoulder" },
+  { id: "back_upper", label: "Upper Back" },
+  { id: "back_lower", label: "Lower Back" },
+  { id: "knee", label: "Knee" },
+  { id: "hip", label: "Hip" },
+  { id: "wrist", label: "Wrist/Hand" },
+  { id: "ankle", label: "Ankle/Foot" },
+  { id: "neck", label: "Neck" },
+  { id: "elbow", label: "Elbow" },
+  { id: "core", label: "Core/Abs" },
 ];
 
 const SEVERITIES = [
@@ -188,9 +188,6 @@ export function LimitationsSection({ data, onUpdate, onNext }: SectionProps) {
                       className="flex items-center justify-between bg-card rounded-lg border border-border p-2"
                     >
                       <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                        <span className="text-sm flex-shrink-0">
-                          {BODY_PARTS.find((b) => b.id === l.bodyPart)?.emoji}
-                        </span>
                         <div className="text-left min-w-0">
                           <span className="font-medium text-xs block truncate">
                             {BODY_PARTS.find((b) => b.id === l.bodyPart)?.label}
@@ -232,18 +229,17 @@ export function LimitationsSection({ data, onUpdate, onNext }: SectionProps) {
                 </p>
                 <div className="grid grid-cols-2 gap-1.5 mb-4 max-h-[120px] overflow-y-auto overscroll-contain pr-1">
                   {BODY_PARTS.filter((b) => !limitations.some((l) => l.bodyPart === b.id)).map(
-                    ({ id, label, emoji }) => (
+                    ({ id, label }) => (
                       <button
                         key={id}
                         onClick={() => addBodyPart(id)}
                         className={cn(
-                          "h-10 px-2 rounded-lg border-2 transition-all",
-                          "flex items-center gap-1.5",
+                          "h-10 px-3 rounded-lg border-2 transition-all",
+                          "flex items-center",
                           "hover:border-amber-500 hover:bg-amber-500/5",
                           "border-border bg-card"
                         )}
                       >
-                        <span className="text-sm">{emoji}</span>
                         <span className="text-xs font-medium truncate">{label}</span>
                       </button>
                     )
@@ -269,10 +265,7 @@ export function LimitationsSection({ data, onUpdate, onNext }: SectionProps) {
             animate={{ opacity: 1, x: 0 }}
             className="text-left"
           >
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-xl">
-                {BODY_PARTS.find((b) => b.id === currentLimitation.bodyPart)?.emoji}
-              </span>
+            <div className="mb-4">
               <h3 className="text-lg font-bold">
                 {BODY_PARTS.find((b) => b.id === currentLimitation.bodyPart)?.label}
               </h3>
