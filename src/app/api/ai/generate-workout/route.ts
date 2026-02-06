@@ -29,6 +29,7 @@ import {
   getRepRangeForGoal,
   applyIntensityModifiers,
 } from "@/lib/ai/schemas/loader";
+import { checkAIPersonalizationConsent, createConsentRequiredResponse } from "@/lib/consent";
 
 export const runtime = "nodejs";
 export const maxDuration = 120; // 2 minutes for AI generation
@@ -135,24 +136,63 @@ const planningSchema = z.object({
   equipmentConsiderations: z.string().nullable().describe("How the available equipment influenced exercise selection. Use null if not applicable."),
 });
 
+// Request validation schema
+const workoutRequestSchema = z.object({
+  memberIds: z.array(z.string().uuid()).optional(),
+  memberId: z.string().uuid().optional(),
+  focus: z.string().max(100).optional(),
+  customFocus: z.string().max(500).optional(),
+  saveAsPlan: z.boolean().optional().default(false),
+  intensity: z.enum(["light", "moderate", "hard", "max"]).optional().default("moderate"),
+  targetDuration: z.number().int().min(10).max(180).optional().default(45),
+  restPreference: z.enum(["minimal", "short", "standard", "long"]).optional().default("standard"),
+  includeWarmup: z.boolean().optional().default(true),
+  includeCooldown: z.boolean().optional().default(true),
+  reasoningLevel: z.enum(["none", "quick", "standard", "deep", "max"]).optional().default("standard"),
+  trainingGoal: z.string().max(100).optional(),
+  sport: z.string().max(100).optional(),
+  workoutStructure: z.string().max(100).optional(),
+  preset: z.string().max(50).optional(),
+  volumeGoal: z.enum(["strength", "hypertrophy", "endurance", "power"]).optional(),
+  periodizationPhase: z.enum(["accumulation", "intensification", "deload"]).optional(),
+  muscleRecoveryOverride: z.record(z.string(), z.boolean()).optional(),
+  enableTempo: z.boolean().optional().default(false),
+}).refine(
+  (data) => data.memberIds?.length || data.memberId,
+  { message: "Either memberIds or memberId is required" }
+);
+
 // Get coaching insights from recent conversations for workout context
 async function getCoachingInsights(memberIds: string[]): Promise<string> {
+  if (memberIds.length === 0) return "";
+
+  // Batch fetch all conversations for all members in ONE query (fixes N+1)
+  const allConversations = await db.query.coachConversations.findMany({
+    where: inArray(coachConversations.memberId, memberIds),
+    with: {
+      member: true,
+      messages: {
+        orderBy: [desc(coachMessages.createdAt)],
+        limit: 10,
+      },
+    },
+    orderBy: [desc(coachConversations.lastMessageAt)],
+  });
+
+  // Group conversations by memberId in memory
+  const conversationsByMember = new Map<string, typeof allConversations>();
+  for (const conv of allConversations) {
+    const existing = conversationsByMember.get(conv.memberId) || [];
+    if (existing.length < 5) { // Limit to 5 per member
+      existing.push(conv);
+      conversationsByMember.set(conv.memberId, existing);
+    }
+  }
+
   const insights: string[] = [];
 
   for (const memberId of memberIds) {
-    const recentConversations = await db.query.coachConversations.findMany({
-      where: eq(coachConversations.memberId, memberId),
-      with: {
-        member: true,
-        messages: {
-          orderBy: [desc(coachMessages.createdAt)],
-          limit: 10,
-        },
-      },
-      orderBy: [desc(coachConversations.lastMessageAt)],
-      limit: 5,
-    });
-
+    const recentConversations = conversationsByMember.get(memberId) || [];
     if (recentConversations.length === 0) continue;
 
     const memberName = recentConversations[0]?.member?.name || "Member";
@@ -240,6 +280,12 @@ export async function POST(request: Request) {
       return new Response("Unauthorized", { status: 401 });
     }
 
+    // Check GDPR consent for AI processing of health data
+    const consent = await checkAIPersonalizationConsent(session.user.id);
+    if (!consent.hasConsent) {
+      return createConsentRequiredResponse();
+    }
+
     // Apply rate limiting
     const rateLimitResult = applyRateLimit(
       `ai-workout:${session.user.id}`,
@@ -250,31 +296,37 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
+
+    // Validate request body
+    const validation = workoutRequestSchema.safeParse(body);
+    if (!validation.success) {
+      return new Response(
+        JSON.stringify({ error: validation.error.issues.map((e) => e.message).join(", ") }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     const {
       memberIds,
       memberId,
       focus,
       customFocus,
       saveAsPlan,
-      intensity = "moderate",
-      targetDuration = 45,
-      restPreference = "standard",
-      includeWarmup = true,
-      includeCooldown = true,
-      reasoningLevel = "standard" as ReasoningLevel,
-      // Training goal type for schema injection
+      intensity,
+      targetDuration,
+      restPreference,
+      includeWarmup,
+      includeCooldown,
+      reasoningLevel,
       trainingGoal,
-      // Sport-specific training
       sport,
-      // Workout structure preference
       workoutStructure,
-      // New parameters from workout-generation-config.yaml
-      preset, // e.g., "quick_pump", "strength_session", "hiit_circuit"
-      volumeGoal, // e.g., "strength", "hypertrophy", "endurance", "power"
-      periodizationPhase, // e.g., "accumulation", "intensification", "deload"
-      muscleRecoveryOverride, // Override recovery recommendations
-      enableTempo = false, // Include tempo prescriptions
-    } = body;
+      preset,
+      volumeGoal,
+      periodizationPhase,
+      muscleRecoveryOverride,
+      enableTempo,
+    } = validation.data;
 
     // If a preset is specified, use its default values
     let effectiveIntensity = intensity;
@@ -285,9 +337,9 @@ export async function POST(request: Request) {
     if (preset) {
       const presetConfig = getWorkoutPreset(preset);
       if (presetConfig) {
-        effectiveIntensity = presetConfig.intensity;
+        effectiveIntensity = presetConfig.intensity as typeof intensity;
         effectiveDuration = presetConfig.duration;
-        effectiveRestPreference = presetConfig.rest_periods;
+        effectiveRestPreference = presetConfig.rest_periods as typeof restPreference;
         effectiveExerciseCountRange = {
           min: presetConfig.exercise_count[0],
           max: presetConfig.exercise_count[1],
@@ -355,10 +407,8 @@ export async function POST(request: Request) {
         fastResults.forEach((c) => {
           if (c) fastContexts!.set(c.memberId, c);
         });
-        console.log(`Using fast context for ${fastResults.length} members (snapshot tables)`);
       } else {
         // Fall back to full context for members without snapshots
-        console.log(`Some snapshots missing, falling back to full context loading`);
         memberContexts = await Promise.all(
           memberIdArray.map((id) => getMemberContext(id))
         );
@@ -851,8 +901,9 @@ Add tempo prescription in the notes field when relevant.\n`;
     }
 
     // Add training goal-specific context if provided
-    if (trainingGoal) {
-      const goalContext = getTrainingGoalForPrompt(trainingGoal);
+    const validTrainingGoals = ["aesthetics", "powerlifting", "calisthenics", "general_fitness", "strength", "hypertrophy"] as const;
+    if (trainingGoal && validTrainingGoals.includes(trainingGoal as typeof validTrainingGoals[number])) {
+      const goalContext = getTrainingGoalForPrompt(trainingGoal as typeof validTrainingGoals[number]);
       contextPrompt += `\n\n${goalContext}\n`;
     }
 
@@ -865,8 +916,9 @@ Add tempo prescription in the notes field when relevant.\n`;
     }
 
     // Add sport-specific protocol if provided
-    if (sport) {
-      const sportContext = getSportProtocolForPrompt(sport);
+    const validSports = ["sprinting", "cheerleading", "football", "baseball", "basketball", "soccer", "youth"] as const;
+    if (sport && validSports.includes(sport as typeof validSports[number])) {
+      const sportContext = getSportProtocolForPrompt(sport as typeof validSports[number]);
       contextPrompt += `\n\n${sportContext}\n`;
     }
 
@@ -897,7 +949,6 @@ Add tempo prescription in the notes field when relevant.\n`;
     // Try to get cached response first
     const cachedWorkout = await getCachedResponse<typeof workoutSchema._output>(cacheKey);
     if (cachedWorkout && !saveAsPlan) {
-      console.log(`Cache HIT for workout generation (key: ${cacheKey.slice(0, 16)}...)`);
       workout = cachedWorkout.data;
       cacheHit = true;
     } else {
@@ -908,7 +959,6 @@ Add tempo prescription in the notes field when relevant.\n`;
 
       if (skipPlanning) {
         // Single-step generation for faster response
-        console.log(`Generating workout directly with GPT-5.2 (${reasoningLevel} reasoning - no planning step)...`);
 
       const workoutResult = await generateObject({
         model: aiModel,
@@ -940,7 +990,6 @@ Generate a cohesive, purposeful workout with ${recommendedExercises}+ exercises.
       workout = workoutResult.object;
     } else {
       // Two-step generation for deeper reasoning (standard, deep, max)
-      console.log(`Step 1: Agentic planning with GPT-5.2 (${reasoningLevel} reasoning)...`);
 
       const planningResult = await generateObject({
         model: aiModel,
@@ -973,10 +1022,8 @@ Provide your detailed analysis and exercise plan.`,
       });
 
       planningResultObj = planningResult.object;
-      console.log("Planning complete. Strategy:", planningResultObj.strategy);
 
       // Step 2: Generate the final structured workout based on the plan
-      console.log(`Step 2: Generating structured workout with GPT-5.2 (${reasoningLevel} reasoning)...`);
 
       const workoutResult = await generateObject({
         model: aiModel,
@@ -1009,7 +1056,6 @@ The workout should feel cohesive and purposeful with ${recommendedExercises}+ ex
       workout = workoutResult.object;
 
       const generationTimeMs = Math.round(performance.now() - generationStart);
-      console.log(`Workout generated in ${generationTimeMs}ms:`, workout.name, "with", workout.exercises.length, "exercises");
 
       // Cache the generated workout for future similar requests
       await setCachedResponse(cacheKey, "workout_generation", workout, {
@@ -1020,8 +1066,6 @@ The workout should feel cohesive and purposeful with ${recommendedExercises}+ ex
       });
     }
     }
-
-    console.log("Workout ready:", workout.name, "with", workout.exercises.length, "exercises", cacheHit ? "(from cache)" : "(freshly generated)");
 
     // Fix invalid supersets - supersets must have at least 2 exercises
     // Count exercises per supersetGroup
@@ -1038,7 +1082,6 @@ The workout should feel cohesive and purposeful with ${recommendedExercises}+ ex
       if (ex.supersetGroup !== null && ex.supersetGroup !== undefined) {
         const count = supersetCounts.get(ex.supersetGroup) || 0;
         if (count < 2) {
-          console.log(`Fixing invalid superset: ${ex.name} was alone in supersetGroup ${ex.supersetGroup}`);
           ex.supersetGroup = null;
           if (ex.structureType === "superset") {
             ex.structureType = "standard";
@@ -1048,9 +1091,6 @@ The workout should feel cohesive and purposeful with ${recommendedExercises}+ ex
       }
     }
 
-    if (fixedSupersets > 0) {
-      console.log(`Fixed ${fixedSupersets} invalid superset(s) (exercises that were alone in their group)`);
-    }
 
     // Fix invalid circuits - circuits should have at least 2 exercises (ideally 3+)
     const circuitCounts = new Map<number, number>();
@@ -1065,7 +1105,6 @@ The workout should feel cohesive and purposeful with ${recommendedExercises}+ ex
       if (ex.circuitGroup !== null && ex.circuitGroup !== undefined) {
         const count = circuitCounts.get(ex.circuitGroup) || 0;
         if (count < 2) {
-          console.log(`Fixing invalid circuit: ${ex.name} was alone in circuitGroup ${ex.circuitGroup}`);
           ex.circuitGroup = null;
           if (ex.structureType === "circuit") {
             ex.structureType = "standard";
@@ -1073,10 +1112,6 @@ The workout should feel cohesive and purposeful with ${recommendedExercises}+ ex
           fixedCircuits++;
         }
       }
-    }
-
-    if (fixedCircuits > 0) {
-      console.log(`Fixed ${fixedCircuits} invalid circuit(s) (exercises that were alone in their group)`);
     }
 
     // Validate exercise count - reject if too few
@@ -1088,6 +1123,19 @@ The workout should feel cohesive and purposeful with ${recommendedExercises}+ ex
         {
           error: `Generated workout only has ${workout.exercises.length} exercises, but a ${effectiveDuration}-minute workout needs at least ${minExercises}. Please try again.`,
           details: "The AI generated too few exercises for the requested duration.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate exercise count - reject if too many (prevents wasted tokens and unrealistic workouts)
+    // Note: maxExercises is already defined above from effectiveExerciseCountRange
+    if (workout.exercises.length > maxExercises) {
+      console.error(`Workout rejected: ${workout.exercises.length} exercises exceeds maximum of ${maxExercises}`);
+      return Response.json(
+        {
+          error: `Generated workout has ${workout.exercises.length} exercises, but a ${effectiveDuration}-minute workout should have at most ${maxExercises}. Please try again.`,
+          details: "The AI generated too many exercises for the requested duration.",
         },
         { status: 400 }
       );
@@ -1137,7 +1185,6 @@ The workout should feel cohesive and purposeful with ${recommendedExercises}+ ex
 
         // If still not found and AI provided enough details, create the exercise
         if (!dbExercise && ex.category && ex.muscleGroups) {
-          console.log(`Creating new exercise: ${ex.name}`);
           try {
             const [newExercise] = await db
               .insert(exercises)
@@ -1182,7 +1229,6 @@ The workout should feel cohesive and purposeful with ${recommendedExercises}+ ex
       }
 
       if (createdExercises.length > 0) {
-        console.log(`Created ${createdExercises.length} new exercises: ${createdExercises.join(", ")}`);
       }
 
       return Response.json({

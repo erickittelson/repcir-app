@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { goals, milestones } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getMemberContext, buildSystemPrompt, aiModel, getTaskOptions } from "@/lib/ai";
+import { checkAIPersonalizationConsent, createConsentRequiredResponse } from "@/lib/consent";
+import { applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60; // 1 minute for milestone generation
@@ -25,6 +27,21 @@ export async function POST(request: Request) {
     const session = await auth();
     if (!session) {
       return new Response("Unauthorized", { status: 401 });
+    }
+
+    // Apply rate limiting
+    const rateLimitResult = applyRateLimit(
+      `ai-milestones:${session.user.id}`,
+      RATE_LIMITS.aiGeneration
+    );
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
+    // Check GDPR consent for AI processing of health data
+    const consent = await checkAIPersonalizationConsent(session.user.id);
+    if (!consent.hasConsent) {
+      return createConsentRequiredResponse();
     }
 
     const { goalId } = await request.json();

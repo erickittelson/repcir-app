@@ -11,6 +11,7 @@ import {
   Check,
   X,
   Loader2,
+  AtSign,
 } from "lucide-react";
 import {
   Popover,
@@ -39,15 +40,19 @@ const TYPE_ICONS: Record<string, typeof Bell> = {
   circle_request: Users,
   workout_reminder: Dumbbell,
   streak_milestone: Target,
+  mention: AtSign,
+  circle_mention: Users,
 };
 
 const TYPE_COLORS: Record<string, string> = {
-  message: "text-blue-500 bg-blue-500/10",
+  message: "text-brand bg-brand/10",
   goal_achieved: "text-green-500 bg-green-500/10",
   circle_invite: "text-purple-500 bg-purple-500/10",
   circle_request: "text-purple-500 bg-purple-500/10",
   workout_reminder: "text-orange-500 bg-orange-500/10",
   streak_milestone: "text-yellow-500 bg-yellow-500/10",
+  mention: "text-brand bg-brand/10",
+  circle_mention: "text-purple-500 bg-purple-500/10",
 };
 
 export function NotificationsBell() {
@@ -164,13 +169,14 @@ export function NotificationsBell() {
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
+        <Button variant="ghost" size="icon" className="relative" aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}>
           <Bell className="w-5 h-5" />
           {unreadCount > 0 && (
             <motion.span
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[10px] font-medium flex items-center justify-center"
+              aria-hidden="true"
             >
               {unreadCount > 9 ? "9+" : unreadCount}
             </motion.span>

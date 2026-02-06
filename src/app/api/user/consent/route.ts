@@ -9,6 +9,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { userProfiles } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { logAuditEventFromRequest } from "@/lib/audit-log";
 
 export async function GET() {
   try {
@@ -64,6 +65,14 @@ export async function POST(request: Request) {
     } = body;
 
     // Upsert consent preferences
+    const consentPreferences = {
+      analytics: analytics ?? false,
+      marketing: marketing ?? false,
+      personalization: personalization ?? false,
+      doNotSell: doNotSell ?? false,
+      region: region ?? "other",
+    };
+
     await db
       .insert(userProfiles)
       .values({
@@ -71,13 +80,7 @@ export async function POST(request: Request) {
         consentGiven: true,
         consentDate: new Date(),
         consentVersion: consentVersion || "1.0.0",
-        consentPreferences: {
-          analytics: analytics ?? false,
-          marketing: marketing ?? false,
-          personalization: personalization ?? false,
-          doNotSell: doNotSell ?? false,
-          region: region ?? "other",
-        },
+        consentPreferences,
       })
       .onConflictDoUpdate({
         target: userProfiles.userId,
@@ -85,16 +88,25 @@ export async function POST(request: Request) {
           consentGiven: true,
           consentDate: new Date(),
           consentVersion: consentVersion || "1.0.0",
-          consentPreferences: {
-            analytics: analytics ?? false,
-            marketing: marketing ?? false,
-            personalization: personalization ?? false,
-            doNotSell: doNotSell ?? false,
-            region: region ?? "other",
-          },
+          consentPreferences,
           updatedAt: new Date(),
         },
       });
+
+    // Audit log consent change (GDPR compliance)
+    await logAuditEventFromRequest(
+      {
+        userId: session.user.id,
+        action: "consent_change",
+        resourceType: "user_profile",
+        resourceId: session.user.id,
+        metadata: {
+          consentVersion: consentVersion || "1.0.0",
+          preferences: consentPreferences,
+        },
+      },
+      request
+    );
 
     return NextResponse.json({
       success: true,

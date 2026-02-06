@@ -20,6 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Camera,
   X,
@@ -28,6 +30,13 @@ import {
   Users,
   Lock,
   ImagePlus,
+  MapPin,
+  Building2,
+  TreePine,
+  Home,
+  Dumbbell,
+  CircleHelp,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -56,7 +65,12 @@ interface EditProfileSheetProps {
     birthMonth?: number;
     birthYear?: number;
     city?: string;
+    state?: string;
     country?: string;
+    workoutLocation?: string;
+    workoutLocationAddress?: string;
+    workoutLocationType?: string;
+    locationVisibility?: string;
     visibility?: string;
     galleryPhotos?: GalleryPhoto[];
   } | null;
@@ -78,6 +92,75 @@ const VISIBILITY_OPTIONS = [
 
 const MAX_GALLERY_PHOTOS = 5;
 
+const US_STATES = [
+  { value: "AL", label: "Alabama" },
+  { value: "AK", label: "Alaska" },
+  { value: "AZ", label: "Arizona" },
+  { value: "AR", label: "Arkansas" },
+  { value: "CA", label: "California" },
+  { value: "CO", label: "Colorado" },
+  { value: "CT", label: "Connecticut" },
+  { value: "DE", label: "Delaware" },
+  { value: "FL", label: "Florida" },
+  { value: "GA", label: "Georgia" },
+  { value: "HI", label: "Hawaii" },
+  { value: "ID", label: "Idaho" },
+  { value: "IL", label: "Illinois" },
+  { value: "IN", label: "Indiana" },
+  { value: "IA", label: "Iowa" },
+  { value: "KS", label: "Kansas" },
+  { value: "KY", label: "Kentucky" },
+  { value: "LA", label: "Louisiana" },
+  { value: "ME", label: "Maine" },
+  { value: "MD", label: "Maryland" },
+  { value: "MA", label: "Massachusetts" },
+  { value: "MI", label: "Michigan" },
+  { value: "MN", label: "Minnesota" },
+  { value: "MS", label: "Mississippi" },
+  { value: "MO", label: "Missouri" },
+  { value: "MT", label: "Montana" },
+  { value: "NE", label: "Nebraska" },
+  { value: "NV", label: "Nevada" },
+  { value: "NH", label: "New Hampshire" },
+  { value: "NJ", label: "New Jersey" },
+  { value: "NM", label: "New Mexico" },
+  { value: "NY", label: "New York" },
+  { value: "NC", label: "North Carolina" },
+  { value: "ND", label: "North Dakota" },
+  { value: "OH", label: "Ohio" },
+  { value: "OK", label: "Oklahoma" },
+  { value: "OR", label: "Oregon" },
+  { value: "PA", label: "Pennsylvania" },
+  { value: "RI", label: "Rhode Island" },
+  { value: "SC", label: "South Carolina" },
+  { value: "SD", label: "South Dakota" },
+  { value: "TN", label: "Tennessee" },
+  { value: "TX", label: "Texas" },
+  { value: "UT", label: "Utah" },
+  { value: "VT", label: "Vermont" },
+  { value: "VA", label: "Virginia" },
+  { value: "WA", label: "Washington" },
+  { value: "WV", label: "West Virginia" },
+  { value: "WI", label: "Wisconsin" },
+  { value: "WY", label: "Wyoming" },
+  { value: "DC", label: "Washington, D.C." },
+];
+
+const WORKOUT_LOCATION_TYPES = [
+  { value: "gym", label: "Gym", icon: Dumbbell },
+  { value: "park", label: "Park", icon: TreePine },
+  { value: "studio", label: "Studio", icon: Building2 },
+  { value: "home_gym", label: "Home Gym", icon: Home },
+  { value: "other", label: "Other", icon: CircleHelp },
+];
+
+const LOCATION_VISIBILITY_OPTIONS = [
+  { value: "none", label: "No one", description: "Location hidden from everyone" },
+  { value: "state", label: "State only", description: "Shows \"Texas\"" },
+  { value: "city", label: "City & State", description: "Shows \"Austin, TX\"" },
+  { value: "full", label: "Full details", description: "Shows workout location name too" },
+];
+
 export function EditProfileSheet({
   open,
   onOpenChange,
@@ -95,13 +178,22 @@ export function EditProfileSheet({
   // Form state
   const [displayName, setDisplayName] = useState(profile?.displayName || user.name);
   const [city, setCity] = useState(profile?.city || "");
-  const [country, setCountry] = useState(profile?.country || "");
+  const [state, setState] = useState(profile?.state || "");
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [country, _setCountry] = useState(profile?.country || "US");
   const [birthMonth, setBirthMonth] = useState(profile?.birthMonth?.toString() || "");
   const [birthYear, setBirthYear] = useState(profile?.birthYear?.toString() || "");
   const [profilePicture, setProfilePicture] = useState(profile?.profilePicture || user.image || "");
   const [galleryPhotos, setGalleryPhotos] = useState<GalleryPhoto[]>(
     profile?.galleryPhotos || []
   );
+
+  // Location fields
+  const [showWorkoutSpot, setShowWorkoutSpot] = useState(!!profile?.workoutLocation);
+  const [workoutLocation, setWorkoutLocation] = useState(profile?.workoutLocation || "");
+  const [workoutLocationAddress, setWorkoutLocationAddress] = useState(profile?.workoutLocationAddress || "");
+  const [workoutLocationType, setWorkoutLocationType] = useState(profile?.workoutLocationType || "gym");
+  const [locationVisibility, setLocationVisibility] = useState(profile?.locationVisibility || "city");
   
   const profileInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -252,6 +344,12 @@ export function EditProfileSheet({
   };
 
   const handleSave = async () => {
+    // Validate: if city is entered, state is required
+    if (city && !state) {
+      toast.error("Please select a state");
+      return;
+    }
+
     setSaving(true);
     try {
       const response = await fetch("/api/user/profile", {
@@ -260,11 +358,17 @@ export function EditProfileSheet({
         body: JSON.stringify({
           displayName,
           city,
+          state,
           country,
           birthMonth: birthMonth ? parseInt(birthMonth) : null,
           birthYear: birthYear ? parseInt(birthYear) : null,
           profilePicture,
           galleryPhotos,
+          // Location fields
+          workoutLocation: showWorkoutSpot ? workoutLocation : null,
+          workoutLocationAddress: showWorkoutSpot ? workoutLocationAddress : null,
+          workoutLocationType: showWorkoutSpot ? workoutLocationType : null,
+          locationVisibility,
         }),
       });
 
@@ -522,7 +626,7 @@ export function EditProfileSheet({
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                 Basic Info
               </h3>
-              
+
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="displayName">Display Name</Label>
@@ -532,27 +636,6 @@ export function EditProfileSheet({
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="Your name"
                   />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="city">City</Label>
-                    <Input
-                      id="city"
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      placeholder="City"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="country">Country</Label>
-                    <Input
-                      id="country"
-                      value={country}
-                      onChange={(e) => setCountry(e.target.value)}
-                      placeholder="Country"
-                    />
-                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -589,6 +672,160 @@ export function EditProfileSheet({
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Your Location Section */}
+            <section className="space-y-4">
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                  Your Location
+                </h3>
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="city">City {city && <span className="text-destructive">*</span>}</Label>
+                    <Input
+                      id="city"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      placeholder="Austin, Dallas, Houston..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="state">State {city && <span className="text-destructive">*</span>}</Label>
+                    <Select value={state} onValueChange={setState}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select state" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {US_STATES.map((s) => (
+                          <SelectItem key={s.value} value={s.value}>
+                            {s.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Add Workout Spot Toggle */}
+                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="workout-spot" className="font-medium">Add Workout Spot</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Share where you typically work out
+                    </p>
+                  </div>
+                  <Switch
+                    id="workout-spot"
+                    checked={showWorkoutSpot}
+                    onCheckedChange={setShowWorkoutSpot}
+                  />
+                </div>
+
+                {/* Workout Spot Fields */}
+                {showWorkoutSpot && (
+                  <div className="space-y-4 pl-4 border-l-2 border-brand/30">
+                    <div className="space-y-2">
+                      <Label htmlFor="workoutLocation">Location Name</Label>
+                      <Input
+                        id="workoutLocation"
+                        value={workoutLocation}
+                        onChange={(e) => setWorkoutLocation(e.target.value)}
+                        placeholder="e.g., 24 Hour Fitness - Downtown"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="workoutLocationAddress">Address (optional)</Label>
+                      <Input
+                        id="workoutLocationAddress"
+                        value={workoutLocationAddress}
+                        onChange={(e) => setWorkoutLocationAddress(e.target.value)}
+                        placeholder="Start typing to search..."
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Address autocomplete coming soon
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Location Type</Label>
+                      <div className="grid grid-cols-5 gap-2">
+                        {WORKOUT_LOCATION_TYPES.map((type) => (
+                          <button
+                            key={type.value}
+                            type="button"
+                            onClick={() => setWorkoutLocationType(type.value)}
+                            className={cn(
+                              "flex flex-col items-center gap-1 p-2 rounded-lg border transition-colors",
+                              workoutLocationType === type.value
+                                ? "border-brand bg-brand/10 text-brand"
+                                : "border-muted hover:border-brand/50"
+                            )}
+                          >
+                            <type.icon className="h-4 w-4" />
+                            <span className="text-[10px] font-medium">{type.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* Location Privacy Controls */}
+            <section className="space-y-4">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                Who can see your location?
+              </h3>
+
+              <RadioGroup
+                value={locationVisibility}
+                onValueChange={setLocationVisibility}
+                className="space-y-2"
+              >
+                {LOCATION_VISIBILITY_OPTIONS.map((option) => (
+                  <div
+                    key={option.value}
+                    className={cn(
+                      "flex items-center space-x-3 p-3 rounded-lg border transition-colors cursor-pointer",
+                      locationVisibility === option.value
+                        ? "border-brand bg-brand/5"
+                        : "border-muted hover:border-brand/50"
+                    )}
+                    onClick={() => setLocationVisibility(option.value)}
+                  >
+                    <RadioGroupItem value={option.value} id={`visibility-${option.value}`} />
+                    <div className="flex-1">
+                      <Label
+                        htmlFor={`visibility-${option.value}`}
+                        className="font-medium cursor-pointer"
+                      >
+                        {option.label}
+                      </Label>
+                      <p className="text-xs text-muted-foreground">{option.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </RadioGroup>
+
+              {/* Safety Warning */}
+              <div className="flex gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                    Safety Reminder
+                  </p>
+                  <p className="text-xs text-amber-600 dark:text-amber-500">
+                    Only share public workout locations like gyms or parks. Never share your home address for safety.
+                  </p>
                 </div>
               </div>
             </section>

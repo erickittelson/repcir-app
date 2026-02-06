@@ -13,15 +13,41 @@ interface RateLimitEntry {
 // In-memory store (consider Redis for production)
 const rateLimitStore = new Map<string, RateLimitEntry>();
 
-// Cleanup old entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of rateLimitStore.entries()) {
-    if (entry.resetTime < now) {
-      rateLimitStore.delete(key);
+// Store interval reference for cleanup
+let cleanupIntervalId: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Start the cleanup interval (called on first use)
+ */
+function ensureCleanupInterval() {
+  if (cleanupIntervalId !== null) return;
+
+  cleanupIntervalId = setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of rateLimitStore.entries()) {
+      if (entry.resetTime < now) {
+        rateLimitStore.delete(key);
+      }
     }
+  }, 5 * 60 * 1000);
+
+  // Prevent interval from keeping the process alive
+  if (cleanupIntervalId.unref) {
+    cleanupIntervalId.unref();
   }
-}, 5 * 60 * 1000);
+}
+
+/**
+ * Stop the cleanup interval and clear the store
+ * Call this during graceful shutdown
+ */
+export function stopRateLimitCleanup() {
+  if (cleanupIntervalId !== null) {
+    clearInterval(cleanupIntervalId);
+    cleanupIntervalId = null;
+  }
+  rateLimitStore.clear();
+}
 
 export interface RateLimitConfig {
   // Maximum number of requests allowed
@@ -46,6 +72,9 @@ export function checkRateLimit(
   identifier: string,
   config: RateLimitConfig
 ): RateLimitResult {
+  // Lazily start cleanup interval on first use
+  ensureCleanupInterval();
+
   const key = config.keyGenerator
     ? config.keyGenerator(identifier)
     : identifier;

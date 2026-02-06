@@ -20,7 +20,7 @@ const LEVELS = [
     label: "Intermediate",
     description: "Work out regularly, know the basics",
     emoji: "🌿",
-    color: "text-blue-500",
+    color: "text-brand",
   },
   {
     id: "advanced",

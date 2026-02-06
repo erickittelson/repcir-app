@@ -14,6 +14,7 @@ import {
   exercises,
   contextNotes,
   circleEquipment,
+  userProfiles,
 } from "@/lib/db/schema";
 import { eq, desc, inArray, and, gte, sql } from "drizzle-orm";
 
@@ -77,6 +78,13 @@ export async function getMemberContext(memberId: string) {
   });
 
   if (!member) return null;
+
+  // Fetch userProfile if member has userId
+  const profile = member.userId
+    ? await db.query.userProfiles.findFirst({
+        where: eq(userProfiles.userId, member.userId),
+      })
+    : null;
 
   // Get more detailed recent workouts (last 30 days for recovery analysis)
   const thirtyDaysAgo = new Date();
@@ -210,16 +218,26 @@ export async function getMemberContext(memberId: string) {
     return daysSince > 7 && daysSince <= 14;
   });
 
+  // Calculate age from userProfile (birthMonth/birthYear) or fallback to member.dateOfBirth
+  let age: number | null = null;
+  if (profile?.birthMonth && profile?.birthYear) {
+    const today = new Date();
+    age = today.getFullYear() - profile.birthYear;
+    if (today.getMonth() + 1 < profile.birthMonth) {
+      age--;
+    }
+  } else if (member.dateOfBirth) {
+    age = Math.floor(
+      (Date.now() - new Date(member.dateOfBirth).getTime()) /
+        (365.25 * 24 * 60 * 60 * 1000)
+    );
+  }
+
   return {
     member: {
       name: member.name,
-      age: member.dateOfBirth
-        ? Math.floor(
-            (Date.now() - new Date(member.dateOfBirth).getTime()) /
-              (365.25 * 24 * 60 * 60 * 1000)
-          )
-        : null,
-      gender: member.gender,
+      age,
+      gender: profile?.gender || member.gender,
     },
     currentMetrics: member.metrics[0] || null,
     metricsHistory: member.metrics,

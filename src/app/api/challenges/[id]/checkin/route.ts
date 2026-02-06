@@ -9,40 +9,117 @@ import {
   circleMembers,
   exercises,
 } from "@/lib/db/schema";
-import { eq, and, sql, ilike } from "drizzle-orm";
+import { eq, and, sql, ilike, inArray, desc } from "drizzle-orm";
 import { evaluateAndAwardBadges } from "@/lib/badges";
 
-// Helper to check if a PR-linked task is achieved
-async function checkPRTask(
-  task: { exercise?: string; targetValue?: number; targetUnit?: string },
+interface PRTask {
+  exercise?: string;
+  targetValue?: number;
+  targetUnit?: string;
+  name?: string;
+}
+
+/**
+ * Batch check all PR tasks at once to avoid N+1 queries
+ * Instead of querying per task, we:
+ * 1. Collect all unique exercise names
+ * 2. Batch query exercises
+ * 3. Batch query all PRs for those exercises
+ * 4. Process results in memory
+ */
+async function checkPRTasksBatch(
+  tasks: PRTask[],
   memberId: string
-): Promise<{ achieved: boolean; currentValue?: number }> {
-  if (!task.exercise || !task.targetValue) {
-    return { achieved: false };
+): Promise<Record<string, { achieved: boolean; currentValue?: number }>> {
+  const results: Record<string, { achieved: boolean; currentValue?: number }> = {};
+
+  // Filter to only PR tasks with exercise names
+  const prTasks = tasks.filter(
+    (t): t is PRTask & { exercise: string } =>
+      t.exercise !== undefined && t.targetValue !== undefined
+  );
+
+  if (prTasks.length === 0) {
+    return results;
   }
 
-  // Find the exercise
-  const exercise = await db.query.exercises.findFirst({
-    where: ilike(exercises.name, `%${task.exercise}%`),
-  });
+  // Get unique exercise names
+  const exerciseNames = [...new Set(prTasks.map((t) => t.exercise))];
 
-  if (!exercise) {
-    return { achieved: false };
+  // Batch query all exercises using ilike patterns
+  // For better performance, we use a single query with OR conditions
+  const exerciseResults = await db
+    .select({
+      id: exercises.id,
+      name: exercises.name,
+    })
+    .from(exercises)
+    .where(
+      sql`${exercises.name} ILIKE ANY(ARRAY[${sql.join(
+        exerciseNames.map((name) => sql`${'%' + name + '%'}`),
+        sql`, `
+      )}])`
+    );
+
+  // Create a map of exercise name patterns to exercise IDs
+  const exerciseMap = new Map<string, string>();
+  for (const ex of exerciseResults) {
+    for (const name of exerciseNames) {
+      if (ex.name.toLowerCase().includes(name.toLowerCase())) {
+        exerciseMap.set(name, ex.id);
+      }
+    }
   }
 
-  // Get user's PR for this exercise
-  const pr = await db.query.personalRecords.findFirst({
-    where: and(
-      eq(personalRecords.memberId, memberId),
-      eq(personalRecords.exerciseId, exercise.id)
-    ),
-    orderBy: (pr, { desc }) => [desc(pr.value)],
-  });
+  // Get the exercise IDs that were found
+  const foundExerciseIds = [...new Set(exerciseMap.values())];
 
-  const currentValue = pr?.value || 0;
-  const achieved = currentValue >= task.targetValue;
+  if (foundExerciseIds.length === 0) {
+    // No exercises found, mark all as not achieved
+    for (const task of prTasks) {
+      results[task.exercise] = { achieved: false };
+    }
+    return results;
+  }
 
-  return { achieved, currentValue };
+  // Batch query all PRs for these exercises and this member
+  const prs = await db
+    .select({
+      exerciseId: personalRecords.exerciseId,
+      value: personalRecords.value,
+    })
+    .from(personalRecords)
+    .where(
+      and(
+        eq(personalRecords.memberId, memberId),
+        inArray(personalRecords.exerciseId, foundExerciseIds)
+      )
+    )
+    .orderBy(desc(personalRecords.value));
+
+  // Create a map of exerciseId to best PR value
+  const prMap = new Map<string, number>();
+  for (const pr of prs) {
+    // Only keep the highest value (first one due to ORDER BY DESC)
+    if (!prMap.has(pr.exerciseId)) {
+      prMap.set(pr.exerciseId, pr.value);
+    }
+  }
+
+  // Now process each task
+  for (const task of prTasks) {
+    const exerciseId = exerciseMap.get(task.exercise);
+    if (!exerciseId) {
+      results[task.exercise] = { achieved: false };
+      continue;
+    }
+
+    const currentValue = prMap.get(exerciseId) || 0;
+    const achieved = currentValue >= (task.targetValue || 0);
+    results[task.exercise] = { achieved, currentValue };
+  }
+
+  return results;
 }
 
 // Daily check-in for a challenge
@@ -123,20 +200,20 @@ export async function POST(
       (t: any) => t.isRequired
     ) || [];
     
-    // Build PR status for all PR-linked tasks
-    const prStatus: Record<string, { achieved: boolean; currentValue?: number }> = {};
+    // Build PR status for all PR-linked tasks using batch query
     const allTasks = challenge.dailyTasks || [];
-    
-    for (const task of allTasks) {
-      if (task.type === "pr_check" && task.exercise && member) {
-        const status = await checkPRTask(task, member.id);
-        prStatus[task.exercise] = status;
-        
-        // Auto-complete PR tasks that are achieved
-        if (status.achieved && !completedTasks?.includes(task.name)) {
-          completedTasks = completedTasks || [];
-          completedTasks.push(task.name);
-        }
+    const prTasks = allTasks.filter((t: any) => t.type === "pr_check" && t.exercise);
+
+    const prStatus = member
+      ? await checkPRTasksBatch(prTasks, member.id)
+      : {};
+
+    // Auto-complete PR tasks that are achieved
+    for (const task of prTasks) {
+      const exerciseName = task.exercise as string;
+      if (prStatus[exerciseName]?.achieved && !completedTasks?.includes(task.name)) {
+        completedTasks = completedTasks || [];
+        completedTasks.push(task.name);
       }
     }
     
@@ -286,16 +363,10 @@ export async function GET(
       return NextResponse.json({ prStatus: {} });
     }
 
-    // Build PR status for all PR-linked tasks
-    const prStatus: Record<string, { achieved: boolean; currentValue?: number }> = {};
+    // Build PR status for all PR-linked tasks using batch query
     const allTasks = challenge.dailyTasks || [];
-
-    for (const task of allTasks as any[]) {
-      if (task.type === "pr_check" && task.exercise) {
-        const status = await checkPRTask(task, member.id);
-        prStatus[task.exercise] = status;
-      }
-    }
+    const prTasks = (allTasks as any[]).filter((t) => t.type === "pr_check" && t.exercise);
+    const prStatus = await checkPRTasksBatch(prTasks, member.id);
 
     return NextResponse.json({ prStatus });
   } catch (error) {

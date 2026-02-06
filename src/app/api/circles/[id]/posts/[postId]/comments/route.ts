@@ -8,6 +8,16 @@ import {
   userProfiles,
 } from "@/lib/db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { moderateText } from "@/lib/moderation";
+import { z } from "zod";
+
+// Validation schema for comments
+const createCommentSchema = z.object({
+  content: z.string()
+    .min(1, "Comment is required")
+    .max(2000, "Comment must be less than 2000 characters")
+    .trim(),
+}).strict();
 
 interface RouteParams {
   params: Promise<{ id: string; postId: string }>;
@@ -22,7 +32,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
   const { id: circleId, postId } = await params;
   const { searchParams } = new URL(request.url);
-  const limit = parseInt(searchParams.get("limit") || "50");
+  const limitParam = parseInt(searchParams.get("limit") || "50");
+  const limit = isNaN(limitParam) || limitParam < 1 ? 50 : Math.min(limitParam, 100);
 
   try {
     // Verify user is a member of the circle
@@ -108,12 +119,27 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const body = await request.json();
-    const { content } = body;
+    // Parse and validate request body
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
 
-    if (!content || content.trim().length === 0) {
+    const validation = createCommentSchema.safeParse(body);
+    if (!validation.success) {
+      const errors = validation.error.issues.map((e) => e.message).join(", ");
+      return NextResponse.json({ error: errors }, { status: 400 });
+    }
+
+    const { content } = validation.data;
+
+    // Moderate comment content
+    const moderation = moderateText(content);
+    if (!moderation.isClean && moderation.severity !== "mild") {
       return NextResponse.json(
-        { error: "Comment content is required" },
+        { error: "Comment contains inappropriate language. Please revise." },
         { status: 400 }
       );
     }
@@ -124,7 +150,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .values({
         postId,
         authorId: session.user.id,
-        content: content.trim(),
+        content,
       })
       .returning();
 

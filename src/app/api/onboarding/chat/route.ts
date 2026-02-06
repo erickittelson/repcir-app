@@ -595,9 +595,6 @@ export async function POST(request: Request) {
 
     // Handle skipAIResponse - just save the data without generating AI response
     if (skipAIResponse) {
-      console.log("[Onboarding] skipAIResponse - saving data for user:", session.user.id);
-      console.log("[Onboarding] skipAIResponse - extractedData:", JSON.stringify(extractedData));
-      console.log("[Onboarding] skipAIResponse - conversationHistory length:", conversationHistory.length);
 
       // Save progress to database with proper error handling
       try {
@@ -621,8 +618,6 @@ export async function POST(request: Request) {
             }))
           : existingProgress?.conversationHistory || [];
 
-        console.log("[Onboarding] skipAIResponse - mergedExtractedData:", JSON.stringify(mergedExtractedData));
-        console.log("[Onboarding] skipAIResponse - historyToSave length:", historyToSave.length);
 
         await db
           .insert(onboardingProgress)
@@ -643,7 +638,6 @@ export async function POST(request: Request) {
             },
           });
 
-        console.log("[Onboarding] skipAIResponse - data saved successfully");
 
         return new Response(JSON.stringify({ success: true }), {
           status: 200,
@@ -759,24 +753,8 @@ export async function POST(request: Request) {
       { role: "user" as const, content: message },
     ];
 
-    // Log if history was truncated
-    if (truncatedHistory.length < conversationHistory.length) {
-      console.log(`[Onboarding] Truncated history from ${conversationHistory.length} to ${truncatedHistory.length} messages`);
-    }
-
     // Variables to capture for database save
     const userId = session.user.id;
-
-    // Debug logging for phase transitions
-    if (transitionContext) {
-      console.log("[Onboarding] Phase transition:", {
-        from: transitionContext.fromPhase,
-        to: transitionContext.toPhase,
-        justCollected: transitionContext.justCollected,
-      });
-    }
-    console.log("[Onboarding] Current phase:", shouldAdvance ? nextPhase : currentPhase);
-    console.log("[Onboarding] User message:", message);
 
     // Stream the AI response
     const result = streamText({
@@ -785,11 +763,8 @@ export async function POST(request: Request) {
       messages,
       onFinish: async ({ text }) => {
         // Debug logging for AI response
-        console.log("[Onboarding] AI response length:", text.length);
-        console.log("[Onboarding] onFinish - saving data for user:", userId);
         if (text.length === 0) {
           console.warn("[Onboarding] WARNING: Empty AI response!");
-          console.log("[Onboarding] System prompt:", systemPrompt.substring(0, 500) + "...");
         }
         // Save progress to database after stream completes
         try {
@@ -811,7 +786,6 @@ export async function POST(request: Request) {
             },
           ];
 
-          console.log("[Onboarding] onFinish - extractedData to save:", JSON.stringify(newExtractedData));
 
           // Use upsert to ensure data is saved even if initial record creation failed
           await db
@@ -836,7 +810,6 @@ export async function POST(request: Request) {
               },
             });
 
-          console.log("[Onboarding] onFinish - data saved successfully");
         } catch (err) {
           console.error("[Onboarding] onFinish - Failed to save progress:", err);
         }
@@ -1344,7 +1317,6 @@ async function extractDataFromMessage(
   const regexResult = regexExtractData(message, currentPhase);
 
   if (regexResult && Object.keys(regexResult).length > 0) {
-    console.log("[Onboarding] Regex extraction succeeded:", Object.keys(regexResult));
 
     // Merge regex results with existing data (convert snake_case to camelCase)
     const mergedData: ExtractedData = { ...existingData };
@@ -1375,7 +1347,6 @@ async function extractDataFromMessage(
   }
 
   // FALLBACK: Use AI for complex extractions (limitations, PRs, goals, cities, etc.)
-  console.log("[Onboarding] Falling back to AI extraction for phase:", currentPhase);
 
   try {
     const extractionPrompt = `Extract any relevant fitness profile data from this user message.
@@ -1613,7 +1584,6 @@ export async function GET() {
       return new Response("Unauthorized", { status: 401 });
     }
 
-    console.log("[Onboarding] GET - Loading data for user:", session.user.id);
 
     const schema = getOnboardingSchema();
     const phaseOrder = getOnboardingPhaseOrder();
@@ -1623,10 +1593,7 @@ export async function GET() {
       where: eq(onboardingProgress.userId, session.user.id),
     });
 
-    console.log("[Onboarding] GET - existingProgress found:", !!existingProgress);
     if (existingProgress) {
-      console.log("[Onboarding] GET - extractedData from DB:", JSON.stringify(existingProgress.extractedData));
-      console.log("[Onboarding] GET - seenIntro value:", (existingProgress.extractedData as Record<string, unknown>)?.seenIntro);
     }
 
     if (existingProgress && !existingProgress.completedAt) {

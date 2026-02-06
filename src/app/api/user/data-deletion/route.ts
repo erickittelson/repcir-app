@@ -35,8 +35,13 @@ import {
   userFollows,
   contentRatings,
   contentComments,
+  coachConversations,
+  coachMessages,
+  memberEmbeddings,
 } from "@/lib/db/schema";
 import { eq, or, inArray } from "drizzle-orm";
+import { logAuditEventFromRequest } from "@/lib/audit-log";
+import { cleanupExternalUserData, checkExternalCleanupCapabilities } from "@/lib/external-data-cleanup";
 
 export const runtime = "nodejs";
 export const maxDuration = 120; // Allow more time for comprehensive deletion
@@ -102,6 +107,18 @@ export async function DELETE(request: Request) {
 
     const userId = session.user.id;
 
+    // Audit log this critical operation
+    await logAuditEventFromRequest(
+      {
+        userId,
+        action: "data_deletion",
+        severity: "critical",
+        resourceType: "account",
+        metadata: { confirmed: true },
+      },
+      request
+    );
+
     // Get all member IDs for this user (across all circles)
     const memberRecords = await db
       .select({ id: circleMembers.id })
@@ -111,7 +128,22 @@ export async function DELETE(request: Request) {
     const memberIds = memberRecords.map((m) => m.id);
 
     // Track deletion progress
-    const deletionResults: Record<string, { deleted: number; error?: string }> = {};
+    const deletionResults: Record<string, { deleted: number; error?: string; embeddings?: number; openaiConversationIds?: string[] }> = {};
+
+    // Collect external data for cleanup
+    const externalCleanupData = {
+      openaiThreadIds: [] as string[],
+      blobUrls: [] as string[],
+    };
+
+    // Get profile picture URL for blob cleanup
+    const profile = await db.query.userProfiles.findFirst({
+      where: eq(userProfiles.userId, userId),
+      columns: { profilePicture: true },
+    });
+    if (profile?.profilePicture && profile.profilePicture.includes("blob.vercel-storage.com")) {
+      externalCleanupData.blobUrls.push(profile.profilePicture);
+    }
 
     // Delete in order of dependencies (child tables first)
 
@@ -228,7 +260,43 @@ export async function DELETE(request: Request) {
         // Member context snapshots
         await db.delete(memberContextSnapshot).where(inArray(memberContextSnapshot.memberId, memberIds));
 
+        // Member embeddings (AI-generated)
+        await db.delete(memberEmbeddings).where(inArray(memberEmbeddings.memberId, memberIds));
+
+        // Coach conversations and messages
+        // First, get OpenAI conversation IDs for potential external cleanup
+        const conversations = await db
+          .select({
+            id: coachConversations.id,
+            openaiConversationId: coachConversations.openaiConversationId
+          })
+          .from(coachConversations)
+          .where(inArray(coachConversations.memberId, memberIds));
+
+        // Collect OpenAI conversation IDs for external deletion
+        const openaiConversationIds = conversations
+          .map(c => c.openaiConversationId)
+          .filter((id): id is string => id !== null);
+
+        // Add to external cleanup data
+        externalCleanupData.openaiThreadIds.push(...openaiConversationIds);
+
+        // Delete coach messages (cascade would handle this, but be explicit)
+        if (conversations.length > 0) {
+          const conversationIds = conversations.map(c => c.id);
+          await db.delete(coachMessages).where(inArray(coachMessages.conversationId, conversationIds));
+        }
+
+        // Delete coach conversations
+        await db.delete(coachConversations).where(inArray(coachConversations.memberId, memberIds));
+
         deletionResults.memberData = { deleted: memberIds.length };
+        deletionResults.aiData = {
+          deleted: conversations.length,
+          embeddings: memberIds.length,
+          // Include OpenAI IDs for manual cleanup if needed
+          openaiConversationIds: openaiConversationIds.length > 0 ? openaiConversationIds : undefined,
+        };
       } catch (e) {
         deletionResults.memberData = { deleted: 0, error: "Failed" };
       }
@@ -279,6 +347,25 @@ export async function DELETE(request: Request) {
       deletionResults.profile = { deleted: 0, error: "Failed" };
     }
 
+    // Clean up external services (OpenAI threads, Vercel Blob)
+    let externalCleanupResult = null;
+    if (externalCleanupData.openaiThreadIds.length > 0 || externalCleanupData.blobUrls.length > 0) {
+      try {
+        externalCleanupResult = await cleanupExternalUserData(externalCleanupData);
+        deletionResults.externalServices = {
+          deleted: externalCleanupResult.totalDeleted,
+          error: externalCleanupResult.totalFailed > 0
+            ? `${externalCleanupResult.totalFailed} external items failed to delete`
+            : undefined,
+        };
+      } catch (e) {
+        deletionResults.externalServices = {
+          deleted: 0,
+          error: "External cleanup failed",
+        };
+      }
+    }
+
     // Note: The actual Neon Auth user account deletion would need to be
     // handled separately through the Neon Auth API
 
@@ -286,9 +373,15 @@ export async function DELETE(request: Request) {
       success: true,
       message: "Account data has been permanently deleted",
       deletionResults,
+      externalCleanup: externalCleanupResult ? {
+        openai: externalCleanupResult.openai,
+        blob: externalCleanupResult.blob,
+      } : null,
       nextSteps: [
         "Your session will be invalidated",
         "You may need to clear your browser cookies",
+        "AI coaching history has been deleted from both our database and OpenAI",
+        "Profile pictures have been removed from storage",
         "Contact support if you need assistance",
       ],
     });

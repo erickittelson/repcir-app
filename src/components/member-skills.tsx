@@ -58,7 +58,7 @@ const SKILL_CATEGORIES = [
 ];
 
 const SKILL_STATUSES = [
-  { value: "learning", label: "Learning", icon: BookOpen, color: "bg-blue-500" },
+  { value: "learning", label: "Learning", icon: BookOpen, color: "bg-brand" },
   { value: "achieved", label: "Achieved", icon: CheckCircle, color: "bg-green-500" },
   { value: "mastered", label: "Mastered", icon: Trophy, color: "bg-yellow-500" },
 ];

@@ -228,7 +228,7 @@ export function LiveTranscription({
                   size="sm"
                   onClick={onSend}
                   disabled={!displayText.trim()}
-                  className="h-8 text-xs bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700"
+                  className="h-8 text-xs bg-brand hover:bg-brand/90 text-brand-foreground"
                 >
                   Send
                 </Button>

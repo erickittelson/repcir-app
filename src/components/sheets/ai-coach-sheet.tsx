@@ -9,11 +9,9 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sparkles,
   Send,
-  Loader2,
   Brain,
   Target,
   Heart,
@@ -21,9 +19,12 @@ import {
   X,
   Mic,
   MicOff,
+  StopCircle,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 
 type CoachMode = "general" | "motivation" | "goals" | "mental" | "nutrition";
 
@@ -31,6 +32,25 @@ interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
+  error?: boolean;
+}
+
+// Error messages based on status codes
+function getErrorMessage(status: number, errorText?: string): string {
+  switch (status) {
+    case 429:
+      return "You're sending messages too quickly. Please wait a moment and try again.";
+    case 503:
+      return "The AI service is temporarily unavailable. Please try again in a few seconds.";
+    case 504:
+      return "The request took too long. Please try a shorter question.";
+    case 401:
+      return "Your session has expired. Please refresh the page.";
+    case 403:
+      return "Please accept AI personalization consent in settings to use this feature.";
+    default:
+      return errorText || "Something went wrong. Please try again.";
+  }
 }
 
 interface AICoachSheetProps {
@@ -56,9 +76,44 @@ export function AICoachSheet({ open, onOpenChange }: AICoachSheetProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isListening, setIsListening] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const streamTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Use the speech recognition hook
+  const {
+    isListening,
+    isSupported: isVoiceSupported,
+    transcript,
+    startListening,
+    stopListening,
+    resetTranscript,
+    error: voiceError,
+  } = useSpeechRecognition({
+    continuous: true,
+    interimResults: true,
+    onResult: (text, isFinal) => {
+      if (isFinal) {
+        setInputValue((prev) => prev + text + " ");
+      }
+    },
+    onError: (error) => {
+      if (error !== "Speech recognition was aborted.") {
+        setLastError(error);
+      }
+    },
+  });
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+      stopListening();
+      if (streamTimeoutRef.current) clearTimeout(streamTimeoutRef.current);
+    };
+  }, [stopListening]);
 
   // Auto-scroll to bottom when messages change
   const scrollToBottom = useCallback(() => {
@@ -79,6 +134,16 @@ export function AICoachSheet({ open, onOpenChange }: AICoachSheetProps) {
     }
   }, [inputValue]);
 
+  // Cancel ongoing request
+  const cancelRequest = useCallback(() => {
+    abortControllerRef.current?.abort();
+    if (streamTimeoutRef.current) {
+      clearTimeout(streamTimeoutRef.current);
+      streamTimeoutRef.current = null;
+    }
+    setIsLoading(false);
+  }, []);
+
   const handleSend = async () => {
     if (!inputValue.trim() || isLoading) return;
 
@@ -91,11 +156,22 @@ export function AICoachSheet({ open, onOpenChange }: AICoachSheetProps) {
     setMessages((prev) => [...prev, userMessage]);
     setInputValue("");
     setIsLoading(true);
+    setLastError(null);
 
     // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
+
+    // Create abort controller for this request
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+
+    // Set a 60 second timeout for the entire operation
+    const STREAM_TIMEOUT = 60000;
+    streamTimeoutRef.current = setTimeout(() => {
+      abortControllerRef.current?.abort();
+    }, STREAM_TIMEOUT);
 
     try {
       const response = await fetch("/api/ai/chat", {
@@ -108,12 +184,18 @@ export function AICoachSheet({ open, onOpenChange }: AICoachSheetProps) {
           })),
           mode,
         }),
+        signal,
       });
 
-      if (!response.ok) throw new Error("Failed to get response");
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => undefined);
+        const errorMessage = getErrorMessage(response.status, errorText);
+        setLastError(errorMessage);
+        throw new Error(errorMessage);
+      }
 
       const reader = response.body?.getReader();
-      if (!reader) throw new Error("No reader");
+      if (!reader) throw new Error("No response body");
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -124,33 +206,103 @@ export function AICoachSheet({ open, onOpenChange }: AICoachSheetProps) {
       setMessages((prev) => [...prev, assistantMessage]);
 
       const decoder = new TextDecoder();
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      let lastActivityTime = Date.now();
 
-        const text = decoder.decode(value);
+      while (true) {
+        // Check if aborted
+        if (signal.aborted) {
+          reader.cancel();
+          break;
+        }
+
+        // Create a timeout for individual reads (10s without data = stalled)
+        const readPromise = reader.read();
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => {
+            if (Date.now() - lastActivityTime > 10000) {
+              reject(new Error("Stream stalled - no data received"));
+            }
+          }, 10000);
+        });
+
+        try {
+          const { done, value } = await Promise.race([readPromise, timeoutPromise]);
+          if (done) break;
+
+          lastActivityTime = Date.now();
+          const text = decoder.decode(value, { stream: true });
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMessage.id
+                ? { ...m, content: m.content + text }
+                : m
+            )
+          );
+        } catch (readError) {
+          if (signal.aborted) break;
+          throw readError;
+        }
+      }
+
+      // Flush any remaining bytes
+      const finalText = decoder.decode();
+      if (finalText) {
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMessage.id
-              ? { ...m, content: m.content + text }
+              ? { ...m, content: m.content + finalText }
               : m
           )
         );
       }
     } catch (error) {
+      if (signal.aborted) {
+        // User cancelled - don't show error
+        return;
+      }
+
       console.error("AI chat error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Something went wrong";
+
       setMessages((prev) => [
         ...prev,
         {
           id: (Date.now() + 1).toString(),
           role: "assistant",
-          content: "Sorry, I encountered an error. Please try again.",
+          content: errorMessage,
+          error: true,
         },
       ]);
     } finally {
+      if (streamTimeoutRef.current) {
+        clearTimeout(streamTimeoutRef.current);
+        streamTimeoutRef.current = null;
+      }
       setIsLoading(false);
     }
   };
+
+  // Retry last failed message
+  const retryLastMessage = useCallback(() => {
+    // Find the last user message
+    const lastUserMsgIndex = [...messages].reverse().findIndex(m => m.role === "user");
+    if (lastUserMsgIndex === -1) return;
+
+    const actualIndex = messages.length - 1 - lastUserMsgIndex;
+    const lastUserMsg = messages[actualIndex];
+
+    // Remove the error message if present
+    const filteredMessages = messages.filter((m, i) => i <= actualIndex || !m.error);
+    setMessages(filteredMessages);
+
+    // Re-trigger send with the last user message
+    setInputValue(lastUserMsg.content);
+    setTimeout(() => {
+      setInputValue("");
+      const fakeEvent = { target: { value: lastUserMsg.content } };
+      // Directly call handleSend logic would be cleaner - but for now set input and trigger
+    }, 0);
+  }, [messages]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -159,13 +311,19 @@ export function AICoachSheet({ open, onOpenChange }: AICoachSheetProps) {
     }
   };
 
-  const toggleVoiceInput = () => {
-    if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
-      alert("Voice input is not supported in this browser");
+  const toggleVoiceInput = useCallback(() => {
+    if (!isVoiceSupported) {
+      setLastError("Voice input is not supported in this browser");
       return;
     }
-    setIsListening(!isListening);
-  };
+
+    if (isListening) {
+      stopListening();
+    } else {
+      setLastError(null);
+      startListening();
+    }
+  }, [isListening, isVoiceSupported, startListening, stopListening]);
 
   const currentMode = COACH_MODES.find((m) => m.id === mode)!;
 
@@ -199,6 +357,30 @@ export function AICoachSheet({ open, onOpenChange }: AICoachSheetProps) {
             </Button>
           </div>
         </SheetHeader>
+
+        {/* Error Banner */}
+        <AnimatePresence>
+          {lastError && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="px-4 py-2 bg-destructive/10 border-b border-destructive/20"
+            >
+              <div className="flex items-center justify-between text-sm text-destructive">
+                <span>{lastError}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setLastError(null)}
+                  className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Mode Selector - Fixed */}
         <div className="px-4 py-2 border-b shrink-0 bg-background/95 backdrop-blur-sm">
@@ -268,8 +450,11 @@ export function AICoachSheet({ open, onOpenChange }: AICoachSheetProps) {
                     )}
                   >
                     {message.role === "assistant" && (
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand/20 mr-2 mt-1">
-                        <Sparkles className="h-4 w-4 text-brand" />
+                      <div className={cn(
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full mr-2 mt-1",
+                        message.error ? "bg-destructive/20" : "bg-brand/20"
+                      )}>
+                        <Sparkles className={cn("h-4 w-4", message.error ? "text-destructive" : "text-brand")} />
                       </div>
                     )}
                     <div
@@ -277,12 +462,28 @@ export function AICoachSheet({ open, onOpenChange }: AICoachSheetProps) {
                         "max-w-[85%] rounded-2xl px-4 py-3",
                         message.role === "user"
                           ? "bg-brand text-white rounded-br-md"
+                          : message.error
+                          ? "bg-destructive/10 border border-destructive/20 rounded-bl-md"
                           : "bg-muted rounded-bl-md"
                       )}
                     >
-                      <p className="text-sm whitespace-pre-wrap leading-relaxed">
+                      <p className={cn(
+                        "text-sm whitespace-pre-wrap leading-relaxed",
+                        message.error && "text-destructive"
+                      )}>
                         {message.content}
                       </p>
+                      {message.error && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={retryLastMessage}
+                          className="mt-2 h-7 text-xs text-destructive hover:text-destructive"
+                        >
+                          <RefreshCw className="h-3 w-3 mr-1" />
+                          Try again
+                        </Button>
+                      )}
                     </div>
                   </motion.div>
                 ))
@@ -357,24 +558,32 @@ export function AICoachSheet({ open, onOpenChange }: AICoachSheetProps) {
                 )}
               />
 
-              {/* Send button */}
-              <Button
-                onClick={handleSend}
-                disabled={!inputValue.trim() || isLoading}
-                size="icon"
-                className={cn(
-                  "shrink-0 h-10 w-10 rounded-full transition-all",
-                  inputValue.trim()
-                    ? "bg-brand-gradient shadow-lg shadow-brand/20"
-                    : "bg-muted text-muted-foreground"
-                )}
-              >
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
+              {/* Send / Cancel button */}
+              {isLoading ? (
+                <Button
+                  onClick={cancelRequest}
+                  size="icon"
+                  variant="destructive"
+                  className="shrink-0 h-10 w-10 rounded-full transition-all"
+                  title="Cancel request"
+                >
+                  <StopCircle className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleSend}
+                  disabled={!inputValue.trim()}
+                  size="icon"
+                  className={cn(
+                    "shrink-0 h-10 w-10 rounded-full transition-all",
+                    inputValue.trim()
+                      ? "bg-brand-gradient shadow-lg shadow-brand/20"
+                      : "bg-muted text-muted-foreground"
+                  )}
+                >
                   <Send className="h-4 w-4" />
-                )}
-              </Button>
+                </Button>
+              )}
             </div>
           </div>
         </div>

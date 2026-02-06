@@ -784,10 +784,14 @@ export function ExerciseHistory({
   const { date, bestSet, sets } = previousPerformance;
   const totalVolume = sets.reduce((acc, s) => acc + s.weight * s.reps, 0);
 
-  // Calculate trend (simplified - in real app would compare multiple sessions)
-  // TODO: Actually compute this from historical data
+  // Trend calculation requires multiple historical sessions to be accurate.
+  // Current implementation shows "stable" as default since we only have
+  // single session data. Future: pass historical sessions array to enable
+  // volume-based trend calculation (compare last 3-5 sessions).
   type TrendType = "improving" | "stable" | "declining";
-  const trend = "improving" as TrendType;
+  // Use function to prevent TypeScript from narrowing to literal type
+  const getTrend = (): TrendType => "stable";
+  const trend = getTrend();
 
   return (
     <Card className="bg-card/50 border-border/50">

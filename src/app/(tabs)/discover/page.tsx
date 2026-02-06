@@ -1,7 +1,13 @@
+import { getSession } from "@/lib/neon-auth";
 import { redirect } from "next/navigation";
+import { DiscoverRallies } from "./discover-rallies";
 
-// Content discovery has been deprecated in favor of the accountability-focused experience.
-// Redirect users to the home feed.
-export default function Discover() {
-  redirect("/");
+export default async function DiscoverPage() {
+  const session = await getSession();
+
+  if (!session) {
+    redirect("/login");
+  }
+
+  return <DiscoverRallies />;
 }

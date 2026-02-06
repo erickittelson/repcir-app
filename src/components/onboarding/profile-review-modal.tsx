@@ -458,7 +458,7 @@ export function ProfileReviewModal({
                                 "flex items-center justify-between rounded-lg",
                                 isSkill
                                   ? max.value === "mastered" ? "bg-green-500/10"
-                                    : max.value === "consistent" ? "bg-blue-500/10"
+                                    : max.value === "consistent" ? "bg-brand/10"
                                     : "bg-amber-500/10"
                                   : "bg-background/50"
                               )}
@@ -469,7 +469,7 @@ export function ProfileReviewModal({
                                 <span className={cn(
                                   "text-xs font-medium px-2 py-0.5 rounded-full",
                                   max.value === "mastered" ? "bg-green-500/20 text-green-600"
-                                    : max.value === "consistent" ? "bg-blue-500/20 text-blue-600"
+                                    : max.value === "consistent" ? "bg-brand/20 text-brand"
                                     : "bg-amber-500/20 text-amber-600"
                                 )}>
                                   ✓ {skillLabel}

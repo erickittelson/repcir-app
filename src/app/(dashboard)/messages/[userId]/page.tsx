@@ -197,8 +197,8 @@ export default function MessageThreadPage() {
           </Button>
 
           {/* Partner avatar */}
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
-            <User className="w-5 h-5 text-white" />
+          <div className="w-10 h-10 rounded-full bg-brand-gradient flex items-center justify-center">
+            <User className="w-5 h-5 text-brand-foreground" />
           </div>
 
           <div>

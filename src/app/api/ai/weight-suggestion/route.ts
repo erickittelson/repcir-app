@@ -9,6 +9,15 @@ import {
   exercises,
 } from "@/lib/db/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit";
+import { z } from "zod";
+
+// Input validation schema
+const weightSuggestionSchema = z.object({
+  exerciseId: z.string().min(1, "Exercise ID is required"),
+  targetReps: z.number().int().min(1).max(100).optional().default(5),
+  targetSets: z.number().int().min(1).max(20).optional().default(3),
+});
 
 /**
  * AI-powered weight suggestion based on user's history and PRs
@@ -19,16 +28,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Apply rate limiting
+  const rateLimitResult = applyRateLimit(
+    `ai-weight-suggestion:${session.user.id}`,
+    RATE_LIMITS.aiGeneration
+  );
+  if (!rateLimitResult.success) {
+    return createRateLimitResponse(rateLimitResult);
+  }
+
   try {
     const body = await request.json();
-    const { exerciseId, targetReps, targetSets } = body;
 
-    if (!exerciseId) {
+    // Validate input with Zod
+    const validation = weightSuggestionSchema.safeParse(body);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: "Exercise ID required" },
+        { error: validation.error.issues.map((e) => e.message).join(", ") },
         { status: 400 }
       );
     }
+
+    const { exerciseId, targetReps, targetSets } = validation.data;
 
     const memberId = session.activeCircle?.memberId;
     if (!memberId) {

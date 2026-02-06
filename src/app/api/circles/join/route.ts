@@ -83,24 +83,56 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create member in the circle
-    const [newMember] = await db
-      .insert(circleMembers)
-      .values({
-        circleId: invitation.circleId,
-        userId: session.user.id,
-        name: session.user.name || "New Member",
-        role: invitation.role || "member",
-      })
-      .returning();
-
-    // Increment the uses count
-    await db
+    // Atomically increment uses with a conditional check to prevent race conditions
+    // This UPDATE only succeeds if uses < maxUses (or maxUses is null)
+    const updateResult = await db
       .update(circleInvitations)
       .set({
         uses: sql`${circleInvitations.uses} + 1`,
       })
-      .where(eq(circleInvitations.id, invitation.id));
+      .where(
+        and(
+          eq(circleInvitations.id, invitation.id),
+          // Only update if we haven't exceeded maxUses
+          or(
+            isNull(circleInvitations.maxUses),
+            sql`${circleInvitations.uses} < ${circleInvitations.maxUses}`
+          )
+        )
+      )
+      .returning({ id: circleInvitations.id });
+
+    // If no rows were updated, the invitation is at max capacity (race condition prevented)
+    if (updateResult.length === 0) {
+      return NextResponse.json(
+        { error: "This invite code has reached its maximum uses" },
+        { status: 400 }
+      );
+    }
+
+    // Now create the member (invitation slot is reserved)
+    let newMember;
+    try {
+      const [member] = await db
+        .insert(circleMembers)
+        .values({
+          circleId: invitation.circleId,
+          userId: session.user.id,
+          name: session.user.name || "New Member",
+          role: invitation.role || "member",
+        })
+        .returning();
+      newMember = member;
+    } catch (insertError) {
+      // If member creation fails, decrement the uses count to release the slot
+      await db
+        .update(circleInvitations)
+        .set({
+          uses: sql`GREATEST(0, ${circleInvitations.uses} - 1)`,
+        })
+        .where(eq(circleInvitations.id, invitation.id));
+      throw insertError;
+    }
 
     return NextResponse.json({
       success: true,

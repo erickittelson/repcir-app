@@ -1,8 +1,38 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { db } from "@/lib/db";
 import { userCapabilities } from "@/lib/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { getSession } from "@/lib/neon-auth/session";
+
+// Validation schema for capabilities (values match database text fields)
+const capabilitiesSchema = z.object({
+  // Mobility Tests (text values representing ability levels)
+  canTouchToes: z.string().max(50).nullable().optional(),
+  canDeepSquat: z.string().max(50).nullable().optional(),
+  canChildsPose: z.string().max(50).nullable().optional(),
+  canOverheadReach: z.string().max(50).nullable().optional(),
+  canLungeDeep: z.string().max(50).nullable().optional(),
+  // Stability Tests
+  canSingleLegStand: z.string().max(50).nullable().optional(),
+  canPlankHold: z.string().max(50).nullable().optional(),
+  // Power/Plyometric
+  canBoxJump: z.string().max(50).nullable().optional(),
+  canJumpRope: z.string().max(50).nullable().optional(),
+  canBurpees: z.string().max(50).nullable().optional(),
+  // Strength Baseline
+  canPushup: z.string().max(50).nullable().optional(),
+  canPullup: z.string().max(50).nullable().optional(),
+  canDeadliftHinge: z.string().max(50).nullable().optional(),
+  // Special Considerations
+  balanceIssues: z.boolean().optional(),
+  dizzinessWithMovement: z.boolean().optional(),
+  cardioLimitationsNotes: z.string().max(500).nullable().optional(),
+  // Overall Assessment
+  overallMobilityScore: z.number().int().min(1).max(10).nullable().optional(),
+  overallStrengthScore: z.number().int().min(1).max(10).nullable().optional(),
+  readinessLevel: z.string().max(50).nullable().optional(),
+});
 
 // GET /api/user/capabilities - Get user's latest capability assessment
 export async function GET() {
@@ -41,37 +71,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
+    const rawBody = await request.json();
+    const validation = capabilitiesSchema.safeParse(rawBody);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: validation.error.issues.map((e) => e.message).join(", ") },
+        { status: 400 }
+      );
+    }
+    const body = validation.data;
 
     const [capabilities] = await db
       .insert(userCapabilities)
       .values({
         userId: session.user.id,
-        // Mobility Tests
-        canTouchToes: body.canTouchToes,
-        canDeepSquat: body.canDeepSquat,
-        canChildsPose: body.canChildsPose,
-        canOverheadReach: body.canOverheadReach,
-        canLungeDeep: body.canLungeDeep,
-        // Stability Tests
-        canSingleLegStand: body.canSingleLegStand,
-        canPlankHold: body.canPlankHold,
-        // Power/Plyometric
-        canBoxJump: body.canBoxJump,
-        canJumpRope: body.canJumpRope,
-        canBurpees: body.canBurpees,
-        // Strength Baseline
-        canPushup: body.canPushup,
-        canPullup: body.canPullup,
-        canDeadliftHinge: body.canDeadliftHinge,
-        // Special Considerations
-        balanceIssues: body.balanceIssues || false,
-        dizzinessWithMovement: body.dizzinessWithMovement || false,
-        cardioLimitationsNotes: body.cardioLimitationsNotes,
-        // Overall Assessment
-        overallMobilityScore: body.overallMobilityScore,
-        overallStrengthScore: body.overallStrengthScore,
-        readinessLevel: body.readinessLevel,
+        ...body,
+        // Ensure boolean defaults
+        balanceIssues: body.balanceIssues ?? false,
+        dizzinessWithMovement: body.dizzinessWithMovement ?? false,
       })
       .returning();
 

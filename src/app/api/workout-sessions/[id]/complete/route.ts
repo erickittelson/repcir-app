@@ -9,7 +9,7 @@ import {
   personalRecords,
   exercises,
 } from "@/lib/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { generateText } from "ai";
 import { aiModel, getMemberContext, buildSystemPrompt, getReasoningOptions } from "@/lib/ai";
 import { evaluateAndAwardBadges } from "@/lib/badges";
@@ -151,7 +151,32 @@ async function detectPersonalRecordsAndAnalyze(sessionId: string, memberId: stri
 
     if (!workout) return;
 
-    // Detect personal records for each exercise
+    // Batch fetch all existing PRs for all exercises in ONE query (fixes N+1)
+    const exerciseIds = workout.exercises.map((we) => we.exerciseId);
+    const allExistingPRs = exerciseIds.length > 0
+      ? await db.query.personalRecords.findMany({
+          where: and(
+            eq(personalRecords.memberId, memberId),
+            inArray(personalRecords.exerciseId, exerciseIds)
+          ),
+        })
+      : [];
+
+    // Build a map of exerciseId -> repMax -> best PR value for quick lookups
+    const prMap = new Map<string, Map<number, number>>();
+    for (const pr of allExistingPRs) {
+      if (!prMap.has(pr.exerciseId)) {
+        prMap.set(pr.exerciseId, new Map());
+      }
+      const repMaxMap = prMap.get(pr.exerciseId)!;
+      const repMax = pr.repMax ?? 1; // Default to 1RM if not specified
+      const existing = repMaxMap.get(repMax) || 0;
+      if (pr.value > existing) {
+        repMaxMap.set(repMax, pr.value);
+      }
+    }
+
+    // Detect personal records for each exercise (no DB queries in loop)
     const prDetections: { exerciseId: string; exerciseName: string; value: number; unit: string; repMax: number }[] = [];
 
     for (const we of workout.exercises) {
@@ -166,17 +191,10 @@ async function detectPersonalRecordsAndAnalyze(sessionId: string, memberId: stri
       const maxWeightSet = completedSets.find((s) => (s.actualWeight || 0) === maxWeight);
       const repsAtMax = maxWeightSet?.actualReps || 1;
 
-      // Check if this beats existing PR
-      const existingPR = await db.query.personalRecords.findFirst({
-        where: and(
-          eq(personalRecords.memberId, memberId),
-          eq(personalRecords.exerciseId, we.exerciseId),
-          eq(personalRecords.repMax, repsAtMax)
-        ),
-        orderBy: [desc(personalRecords.value)],
-      });
+      // Check if this beats existing PR using the pre-fetched map
+      const existingPRValue = prMap.get(we.exerciseId)?.get(repsAtMax) || 0;
 
-      if (!existingPR || maxWeight > existingPR.value) {
+      if (maxWeight > existingPRValue) {
         prDetections.push({
           exerciseId: we.exerciseId,
           exerciseName: we.exercise.name,
@@ -187,18 +205,20 @@ async function detectPersonalRecordsAndAnalyze(sessionId: string, memberId: stri
       }
     }
 
-    // Save new personal records
-    for (const pr of prDetections) {
-      await db.insert(personalRecords).values({
-        memberId,
-        exerciseId: pr.exerciseId,
-        value: pr.value,
-        unit: pr.unit,
-        repMax: pr.repMax,
-        date: new Date(),
-        recordType: "current",
-        notes: `Auto-detected from workout on ${new Date().toLocaleDateString()}`,
-      });
+    // Batch insert all new personal records (fixes N+1 inserts)
+    if (prDetections.length > 0) {
+      await db.insert(personalRecords).values(
+        prDetections.map((pr) => ({
+          memberId,
+          exerciseId: pr.exerciseId,
+          value: pr.value,
+          unit: pr.unit,
+          repMax: pr.repMax,
+          date: new Date(),
+          recordType: "current" as const,
+          notes: `Auto-detected from workout on ${new Date().toLocaleDateString()}`,
+        }))
+      );
     }
 
     // Generate AI analysis

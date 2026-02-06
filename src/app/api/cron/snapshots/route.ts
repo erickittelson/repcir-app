@@ -22,8 +22,12 @@ import { eq, sql, desc, and, gte, isNull, or, inArray } from "drizzle-orm";
 export const runtime = "nodejs";
 export const maxDuration = 300; // 5 minutes max
 
-// Verify cron secret for security
-function verifyCronSecret(request: Request): boolean {
+// Rate limiting for cron endpoints (per-endpoint, 1 request per 2 minutes)
+const cronRateLimitStore = new Map<string, number>();
+const CRON_RATE_LIMIT_MS = 2 * 60 * 1000; // 2 minutes
+
+// Verify cron secret and apply additional security checks
+function verifyCronRequest(request: Request): { valid: boolean; error?: string } {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
@@ -31,18 +35,42 @@ function verifyCronSecret(request: Request): boolean {
   if (!cronSecret) {
     if (process.env.NODE_ENV === "production") {
       console.error("CRON_SECRET not configured in production");
-      return false;
+      return { valid: false, error: "CRON_SECRET not configured" };
     }
     // Allow in development for testing, but log warning
     console.warn("CRON_SECRET not set - cron endpoint accessible without auth in dev");
-    return true;
+  } else if (authHeader !== `Bearer ${cronSecret}`) {
+    return { valid: false, error: "Invalid authorization" };
   }
-  return authHeader === `Bearer ${cronSecret}`;
+
+  // Rate limiting: Prevent rapid repeated calls
+  const endpoint = "snapshots";
+  const lastCall = cronRateLimitStore.get(endpoint);
+  const now = Date.now();
+
+  if (lastCall && now - lastCall < CRON_RATE_LIMIT_MS) {
+    const waitSeconds = Math.ceil((CRON_RATE_LIMIT_MS - (now - lastCall)) / 1000);
+    return { valid: false, error: `Rate limited. Retry in ${waitSeconds}s` };
+  }
+  cronRateLimitStore.set(endpoint, now);
+
+  // Verify request is fresh (within 5 minutes) to prevent replay attacks
+  const requestTime = request.headers.get("x-vercel-cron-time");
+  if (requestTime) {
+    const timeDiff = Math.abs(now - parseInt(requestTime, 10));
+    if (timeDiff > 5 * 60 * 1000) {
+      return { valid: false, error: "Request timestamp too old" };
+    }
+  }
+
+  return { valid: true };
 }
 
 export async function GET(request: Request) {
-  if (!verifyCronSecret(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const cronAuth = verifyCronRequest(request);
+  if (!cronAuth.valid) {
+    const status = cronAuth.error?.includes("Rate limited") ? 429 : 401;
+    return NextResponse.json({ error: cronAuth.error || "Unauthorized" }, { status });
   }
 
   const start = performance.now();

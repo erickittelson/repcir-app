@@ -106,10 +106,10 @@ export const ChatBubble = forwardRef<HTMLDivElement, ChatBubbleProps>(
                 "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center overflow-hidden",
                 "transition-all duration-200",
                 isUser && !userProfilePicture
-                  ? "bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/20"
+                  ? "bg-brand-gradient shadow-lg shadow-brand/20"
                   : !isUser
                   ? "bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500 shadow-lg shadow-purple-500/20"
-                  : "ring-2 ring-blue-500/20 shadow-lg"
+                  : "ring-2 ring-brand/20 shadow-lg"
               )}
             >
               {isUser ? (
@@ -149,10 +149,10 @@ export const ChatBubble = forwardRef<HTMLDivElement, ChatBubbleProps>(
                 "transition-all duration-200",
                 isUser
                   ? [
-                      "bg-gradient-to-br from-blue-500 to-blue-600",
-                      "text-white",
+                      "bg-brand-gradient",
+                      "text-brand-foreground",
                       "rounded-br-md",
-                      "shadow-lg shadow-blue-500/10",
+                      "shadow-lg shadow-brand/10",
                     ]
                   : [
                       "bg-card",
@@ -261,10 +261,10 @@ export function StreamingChatBubble({
         <div className={cn(
           "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center overflow-hidden",
           isUser && !userProfilePicture
-            ? "bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/20"
+            ? "bg-brand-gradient shadow-lg shadow-brand/20"
             : !isUser
             ? "bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500 shadow-lg shadow-purple-500/20"
-            : "ring-2 ring-blue-500/20 shadow-lg"
+            : "ring-2 ring-brand/20 shadow-lg"
         )}>
           {isUser ? (
             userProfilePicture ? (
@@ -295,7 +295,7 @@ export function StreamingChatBubble({
           <div className={cn(
             "relative px-4 py-3 rounded-2xl shadow-sm",
             isUser
-              ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-br-md shadow-lg shadow-blue-500/10"
+              ? "bg-brand-gradient text-brand-foreground rounded-br-md shadow-lg shadow-brand/10"
               : "bg-card border border-border/50 rounded-bl-md"
           )}>
             <p className="text-[15px] leading-relaxed whitespace-pre-wrap">

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/neon-auth";
 import { db } from "@/lib/db";
-import { circleMembers, memberMetrics, memberLimitations } from "@/lib/db/schema";
+import { circleMembers, memberMetrics, memberLimitations, userProfiles } from "@/lib/db/schema";
 import { eq, desc, and, inArray } from "drizzle-orm";
 
 export async function GET(request: Request) {
@@ -27,6 +27,7 @@ export async function GET(request: Request) {
 
     const members = await db.query.circleMembers.findMany({
       where: whereClause,
+      limit: 100, // Prevent unbounded queries
       with: {
         metrics: {
           orderBy: (metrics, { desc }) => [desc(metrics.date)],
@@ -34,41 +35,77 @@ export async function GET(request: Request) {
         },
         limitations: {
           where: eq(memberLimitations.active, true),
+          limit: 20, // Typical limitation count
         },
-        goals: true,
+        goals: {
+          limit: 50, // Reasonable goals per member
+        },
       },
     });
 
-    const formattedMembers = members.map((member) => ({
-      id: member.id,
-      name: member.name,
-      profilePicture: member.profilePicture,
-      dateOfBirth: member.dateOfBirth?.toISOString().split("T")[0],
-      gender: member.gender,
-      role: member.role,
-      latestMetrics: member.metrics[0]
-        ? {
-            weight: member.metrics[0].weight,
-            height: member.metrics[0].height,
-            bodyFatPercentage: member.metrics[0].bodyFatPercentage,
-            fitnessLevel: member.metrics[0].fitnessLevel,
-          }
-        : null,
-      limitations: member.limitations.map((l) => ({
-        id: l.id,
-        type: l.type,
-        description: l.description,
-        affectedAreas: l.affectedAreas,
-        severity: l.severity,
-        active: l.active,
-      })),
-      goals: member.goals.map((g) => ({
-        id: g.id,
-        title: g.title,
-        category: g.category,
-        status: g.status,
-      })),
-    }));
+    // Fetch user profiles for members with userId
+    const userIds = members
+      .filter((m) => m.userId)
+      .map((m) => m.userId as string);
+
+    const profiles = userIds.length > 0
+      ? await db.query.userProfiles.findMany({
+          where: inArray(userProfiles.userId, userIds),
+        })
+      : [];
+
+    const profileMap = new Map(profiles.map((p) => [p.userId, p]));
+
+    const formattedMembers = members.map((member) => {
+      // Get user profile if member has userId
+      const profile = member.userId ? profileMap.get(member.userId) : null;
+
+      // Calculate age from userProfile (birthMonth/birthYear) or fallback to member.dateOfBirth
+      let dateOfBirth: string | null = null;
+      if (profile?.birthMonth && profile?.birthYear) {
+        // Construct date from month/year (use 15th as middle of month)
+        dateOfBirth = `${profile.birthYear}-${String(profile.birthMonth).padStart(2, "0")}-15`;
+      } else if (member.dateOfBirth) {
+        // Fallback to legacy circleMembers.dateOfBirth
+        // Handle both Date objects and ISO strings from database
+        const dob = member.dateOfBirth as unknown;
+        dateOfBirth = dob instanceof Date
+          ? dob.toISOString().split("T")[0]
+          : String(dob).split("T")[0];
+      }
+
+      return {
+        id: member.id,
+        name: member.name,
+        // Prefer userProfile data, fallback to circleMembers for legacy/standalone members
+        profilePicture: profile?.profilePicture || member.profilePicture,
+        dateOfBirth,
+        gender: profile?.gender || member.gender,
+        role: member.role,
+        latestMetrics: member.metrics[0]
+          ? {
+              weight: member.metrics[0].weight,
+              height: member.metrics[0].height,
+              bodyFatPercentage: member.metrics[0].bodyFatPercentage,
+              fitnessLevel: member.metrics[0].fitnessLevel,
+            }
+          : null,
+        limitations: member.limitations.map((l) => ({
+          id: l.id,
+          type: l.type,
+          description: l.description,
+          affectedAreas: l.affectedAreas,
+          severity: l.severity,
+          active: l.active,
+        })),
+        goals: member.goals.map((g) => ({
+          id: g.id,
+          title: g.title,
+          category: g.category,
+          status: g.status,
+        })),
+      };
+    });
 
     return NextResponse.json(formattedMembers);
   } catch (error) {

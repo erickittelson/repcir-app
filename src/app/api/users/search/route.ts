@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/neon-auth";
 import { db } from "@/lib/db";
-import { userProfiles, connections } from "@/lib/db/schema";
-import { ilike, or, ne, and, sql, eq, inArray } from "drizzle-orm";
+import { userProfiles, connections, userSports } from "@/lib/db/schema";
+import { ilike, or, ne, and, sql, eq, inArray, isNotNull, desc, asc } from "drizzle-orm";
 
 export const runtime = "nodejs";
 
@@ -13,9 +13,21 @@ interface ConnectionInfo {
   connectionId: string | null;
 }
 
+type FieldVisibility = {
+  bio?: "public" | "circles" | "private";
+  city?: "public" | "circles" | "private";
+  metrics?: "public" | "circles" | "private";
+  sports?: "public" | "circles" | "private";
+  skills?: "public" | "circles" | "private";
+  prs?: "public" | "circles" | "private";
+  badges?: "public" | "circles" | "private";
+  socialLinks?: "public" | "circles" | "private";
+};
+
 /**
  * GET /api/users/search?q=searchterm
- * Search users by name or handle (works with or without @ symbol)
+ * Search users by name, handle, location, or bio
+ * Only returns users with public profiles and respects field-level visibility
  *
  * Query params:
  *   - q: Search term (optional, returns recommended users if empty)
@@ -152,7 +164,48 @@ export async function GET(request: Request) {
       });
     }
 
-    // If no query, return recommended users (users with public profiles)
+    // Helper to filter fields based on visibility
+    const filterByVisibility = (
+      profile: {
+        userId: string;
+        name: string | null;
+        handle: string | null;
+        profilePicture: string | null;
+        city: string | null;
+        state: string | null;
+        bio: string | null;
+        visibility: string | null;
+        fieldVisibility: FieldVisibility | null;
+      }
+    ) => {
+      const fv = profile.fieldVisibility || {};
+      const connInfo = getConnectionStatus(profile.userId);
+      const isConnected = connInfo.status === "connected";
+
+      // For public profiles, check field-level visibility
+      // For connected users, show "circles" level fields too
+      const canSeeField = (fieldVis?: "public" | "circles" | "private") => {
+        if (!fieldVis || fieldVis === "public") return true;
+        if (fieldVis === "circles" && isConnected) return true;
+        return false;
+      };
+
+      return {
+        id: profile.userId, // Use as the main ID for client
+        memberId: profile.userId,
+        userId: profile.userId,
+        name: profile.name || "User",
+        handle: profile.handle,
+        profilePicture: profile.profilePicture,
+        city: canSeeField(fv.city) ? profile.city : null,
+        state: canSeeField(fv.city) ? profile.state : null,
+        bio: canSeeField(fv.bio) ? profile.bio : null,
+        connectionStatus: connInfo.status,
+        connectionId: connInfo.connectionId,
+      };
+    };
+
+    // If no query, return recommended users (users with public profiles, sorted by completeness)
     if (!query) {
       const recommended = await db
         .select({
@@ -162,36 +215,42 @@ export async function GET(request: Request) {
           handle: userProfiles.handle,
           profilePicture: userProfiles.profilePicture,
           city: userProfiles.city,
+          state: userProfiles.state,
           bio: userProfiles.bio,
+          visibility: userProfiles.visibility,
+          fieldVisibility: userProfiles.fieldVisibility,
         })
         .from(userProfiles)
         .where(
           and(
             ne(userProfiles.userId, userId),
+            // Must be public profile OR have a handle (discoverable)
             or(
               sql`${userProfiles.visibility} = 'public'`,
-              sql`${userProfiles.handle} IS NOT NULL`
+              isNotNull(userProfiles.handle)
             )
           )
+        )
+        // Sort by profile completeness (has picture, has bio, has handle)
+        .orderBy(
+          desc(sql`CASE WHEN ${userProfiles.profilePicture} IS NOT NULL THEN 1 ELSE 0 END`),
+          desc(sql`CASE WHEN ${userProfiles.bio} IS NOT NULL THEN 1 ELSE 0 END`),
+          desc(sql`CASE WHEN ${userProfiles.handle} IS NOT NULL THEN 1 ELSE 0 END`)
         )
         .limit(limit);
 
       return NextResponse.json({
-        users: recommended.map((u) => {
-          const connInfo = getConnectionStatus(u.userId);
-          return {
-            id: u.id,
-            memberId: u.id,
-            userId: u.userId,
-            name: u.name || "User",
-            handle: u.handle,
-            profilePicture: u.profilePicture,
-            city: u.city,
-            bio: u.bio,
-            connectionStatus: connInfo.status,
-            connectionId: connInfo.connectionId,
-          };
-        }),
+        users: recommended.map((u) => filterByVisibility({
+          userId: u.userId,
+          name: u.name,
+          handle: u.handle,
+          profilePicture: u.profilePicture,
+          city: u.city,
+          state: u.state,
+          bio: u.bio,
+          visibility: u.visibility,
+          fieldVisibility: u.fieldVisibility as FieldVisibility | null,
+        })),
       });
     }
 
@@ -199,7 +258,8 @@ export async function GET(request: Request) {
     const searchTerm = query.replace(/^@/, "");
     const searchPattern = `%${searchTerm}%`;
 
-    // Search by display name or handle
+    // Search by display name, handle, city, state, or bio
+    // Only search users with public profiles or handles
     const results = await db
       .select({
         id: userProfiles.id,
@@ -208,36 +268,62 @@ export async function GET(request: Request) {
         handle: userProfiles.handle,
         profilePicture: userProfiles.profilePicture,
         city: userProfiles.city,
+        state: userProfiles.state,
         bio: userProfiles.bio,
+        visibility: userProfiles.visibility,
+        fieldVisibility: userProfiles.fieldVisibility,
       })
       .from(userProfiles)
       .where(
         and(
           ne(userProfiles.userId, userId),
+          // Must be discoverable (public or has handle)
+          or(
+            sql`${userProfiles.visibility} = 'public'`,
+            isNotNull(userProfiles.handle)
+          ),
+          // Match search term against multiple fields
           or(
             ilike(userProfiles.displayName, searchPattern),
-            ilike(userProfiles.handle, searchPattern)
+            ilike(userProfiles.handle, searchPattern),
+            // Only search city/state/bio if they're publicly visible
+            sql`(${userProfiles.city} ILIKE ${searchPattern} AND (
+              ${userProfiles.fieldVisibility}->>'city' IS NULL OR
+              ${userProfiles.fieldVisibility}->>'city' = 'public'
+            ))`,
+            sql`(${userProfiles.state} ILIKE ${searchPattern} AND (
+              ${userProfiles.fieldVisibility}->>'city' IS NULL OR
+              ${userProfiles.fieldVisibility}->>'city' = 'public'
+            ))`,
+            sql`(${userProfiles.bio} ILIKE ${searchPattern} AND (
+              ${userProfiles.fieldVisibility}->>'bio' IS NULL OR
+              ${userProfiles.fieldVisibility}->>'bio' = 'public'
+            ))`
           )
         )
+      )
+      // Prioritize exact handle matches, then name matches
+      .orderBy(
+        desc(sql`CASE WHEN LOWER(${userProfiles.handle}) = LOWER(${searchTerm}) THEN 2
+                      WHEN ${userProfiles.handle} ILIKE ${searchPattern} THEN 1
+                      ELSE 0 END`),
+        desc(sql`CASE WHEN ${userProfiles.displayName} ILIKE ${searchPattern} THEN 1 ELSE 0 END`),
+        asc(userProfiles.displayName)
       )
       .limit(limit);
 
     return NextResponse.json({
-      users: results.map((u) => {
-        const connInfo = getConnectionStatus(u.userId);
-        return {
-          id: u.id,
-          memberId: u.id,
-          userId: u.userId,
-          name: u.name || "User",
-          handle: u.handle,
-          profilePicture: u.profilePicture,
-          city: u.city,
-          bio: u.bio,
-          connectionStatus: connInfo.status,
-          connectionId: connInfo.connectionId,
-        };
-      }),
+      users: results.map((u) => filterByVisibility({
+        userId: u.userId,
+        name: u.name,
+        handle: u.handle,
+        profilePicture: u.profilePicture,
+        city: u.city,
+        state: u.state,
+        bio: u.bio,
+        visibility: u.visibility,
+        fieldVisibility: u.fieldVisibility as FieldVisibility | null,
+      })),
     });
   } catch (error) {
     console.error("Error searching users:", error);

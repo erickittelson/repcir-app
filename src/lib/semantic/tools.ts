@@ -226,19 +226,52 @@ export const getQueryPatternsTool = tool({
  * Only SELECT queries are allowed. Use this after getting query patterns
  * or entity examples to fetch actual data.
  */
+// Whitelist of tables that can be queried through the AI tool
+const ALLOWED_QUERY_TABLES = new Set([
+  "circle_members",
+  "member_metrics",
+  "member_limitations",
+  "member_goals",
+  "workout_sessions",
+  "workout_session_exercises",
+  "exercise_sets",
+  "workout_plans",
+  "workout_plan_exercises",
+  "exercises",
+  "exercise_muscles",
+  "personal_records",
+  "member_skills",
+  "member_context_snapshot",
+  "challenges",
+  "challenge_participants",
+  "scheduled_workouts",
+]);
+
+// Tables that must NEVER be accessed through AI queries
+const FORBIDDEN_TABLES = new Set([
+  "users",
+  "user_profiles",
+  "sessions",
+  "accounts",
+  "circles",
+  "circle_invites",
+  "notifications",
+  "user_consents",
+  "verification_tokens",
+  "coach_conversations",
+  "coach_messages",
+]);
+
 export const readonlyQueryTool = tool({
-  description: `Execute a read-only SQL query against the database. Only SELECT queries are allowed. Use $1, $2, etc. for parameters. Always include appropriate WHERE clauses for member_id or circle_id to scope results.`,
+  description: `Execute a read-only SQL query against the database. Only SELECT queries on workout/member data are allowed. Always include appropriate WHERE clauses for member_id or circle_id to scope results.`,
   inputSchema: z.object({
     query: z.string().describe("SQL SELECT query"),
-    params: z.array(z.union([z.string(), z.number(), z.boolean(), z.null()]))
-      .optional()
-      .describe("Query parameters to substitute for $1, $2, etc."),
     limit: z.number().optional().default(50).describe("Maximum rows to return"),
   }),
   execute: async ({ query, limit }) => {
     // Validate query is read-only
     const normalizedQuery = query.trim().toLowerCase();
-    const maxRows = limit ?? 50;
+    const maxRows = Math.min(limit ?? 50, 100); // Cap at 100 rows max
 
     if (!normalizedQuery.startsWith("select")) {
       return {
@@ -247,20 +280,70 @@ export const readonlyQueryTool = tool({
       };
     }
 
-    // Check for dangerous patterns
+    // Check for dangerous SQL injection patterns
     const dangerousPatterns = [
-      /;\s*(insert|update|delete|drop|truncate|alter|create)/i,
-      /--/,
-      /\/\*/,
+      /;\s*(insert|update|delete|drop|truncate|alter|create|grant|revoke)/i,
+      /--/, // SQL comment
+      /\/\*/, // Block comment start
+      /\*\//, // Block comment end
+      /'\s*or\s+'?1'?\s*=\s*'?1/i, // Classic OR 1=1
+      /'\s*;\s*--/i, // Quote semicolon comment
+      /union\s+(all\s+)?select/i, // UNION injection
+      /into\s+(outfile|dumpfile)/i, // File access
+      /load_file|benchmark|sleep/i, // MySQL functions
+      /pg_sleep|pg_read_file/i, // PostgreSQL functions
+      /xp_cmdshell|exec\s*\(/i, // SQL Server
+      /\bchar\s*\(\s*\d+/i, // CHAR() encoding bypass
+      /0x[0-9a-f]+/i, // Hex encoding
+      /\\\'/i, // Escaped quotes for bypass
     ];
 
     for (const pattern of dangerousPatterns) {
       if (pattern.test(query)) {
         return {
           success: false,
-          error: "Query contains potentially dangerous patterns",
+          error: "Query contains disallowed patterns",
         };
       }
+    }
+
+    // Extract table names from query and validate against whitelist
+    // Match FROM/JOIN followed by table name (with optional schema)
+    const tablePattern = /(?:from|join)\s+(?:(?:"[^"]+"|[a-z_][a-z0-9_]*)\s*\.\s*)?(?:"([^"]+)"|([a-z_][a-z0-9_]*))/gi;
+    const foundTables: string[] = [];
+    let match;
+
+    while ((match = tablePattern.exec(normalizedQuery)) !== null) {
+      const tableName = (match[1] || match[2]).toLowerCase();
+      foundTables.push(tableName);
+    }
+
+    // Check for forbidden tables
+    for (const table of foundTables) {
+      if (FORBIDDEN_TABLES.has(table)) {
+        return {
+          success: false,
+          error: `Access to table '${table}' is not allowed`,
+        };
+      }
+    }
+
+    // Check that all tables are in the allowed list
+    for (const table of foundTables) {
+      if (!ALLOWED_QUERY_TABLES.has(table)) {
+        return {
+          success: false,
+          error: `Table '${table}' is not in the allowed list. Allowed tables: ${Array.from(ALLOWED_QUERY_TABLES).slice(0, 5).join(", ")}...`,
+        };
+      }
+    }
+
+    // Require at least one table to be specified
+    if (foundTables.length === 0) {
+      return {
+        success: false,
+        error: "Query must reference at least one valid table",
+      };
     }
 
     // Add LIMIT if not present
@@ -270,7 +353,7 @@ export const readonlyQueryTool = tool({
     }
 
     try {
-      // Execute query using raw SQL
+      // Execute query using raw SQL (validated above)
       const result = await db.execute(sqlTemplate.raw(finalQuery));
 
       return {
@@ -279,9 +362,16 @@ export const readonlyQueryTool = tool({
         rows: Array.isArray(result) ? result.slice(0, maxRows) : [],
       };
     } catch (error) {
+      // Don't expose internal error details
+      const errorMsg = error instanceof Error ? error.message : "";
+      const safeError = errorMsg.includes("does not exist")
+        ? "Table or column not found"
+        : errorMsg.includes("syntax")
+        ? "SQL syntax error"
+        : "Query execution failed";
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Query execution failed",
+        error: safeError,
       };
     }
   },
@@ -300,9 +390,19 @@ export const getMemberContextTool = tool({
     memberId: z.string().describe("Member UUID"),
   }),
   execute: async ({ memberId }) => {
+    // Validate memberId is a valid UUID format to prevent injection
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(memberId)) {
+      return {
+        found: false,
+        error: "Invalid member ID format",
+      };
+    }
+
     try {
+      // Use parameterized query to prevent SQL injection
       const result = await db.execute(
-        sqlTemplate.raw(`
+        sqlTemplate`
           SELECT
             current_weight,
             current_body_fat,
@@ -321,8 +421,8 @@ export const getMemberContextTool = tool({
             last_workout_date,
             last_updated
           FROM member_context_snapshot
-          WHERE member_id = '${memberId}'
-        `)
+          WHERE member_id = ${memberId}
+        `
       );
 
       if (!Array.isArray(result) || result.length === 0) {

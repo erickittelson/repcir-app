@@ -18,14 +18,14 @@ export async function GET() {
       },
     });
 
-    const formattedPlans = plans.map((plan) => ({
+    const formattedPlans = (plans || []).map((plan) => ({
       id: plan.id,
       name: plan.name,
       description: plan.description,
       category: plan.category,
       difficulty: plan.difficulty,
       estimatedDuration: plan.estimatedDuration,
-      exerciseCount: plan.exercises.length,
+      exerciseCount: plan.exercises?.length || 0,
     }));
 
     return NextResponse.json(formattedPlans);

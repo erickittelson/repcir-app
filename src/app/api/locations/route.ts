@@ -14,6 +14,7 @@ export async function GET() {
     const locations = await db.query.userLocations.findMany({
       where: eq(userLocations.userId, session.user.id),
       orderBy: (locations, { desc }) => [desc(locations.isActive), desc(locations.createdAt)],
+      limit: 50, // Prevent unbounded queries
     });
 
     return NextResponse.json(locations);

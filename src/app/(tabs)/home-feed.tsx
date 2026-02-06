@@ -21,7 +21,6 @@ import {
   Zap,
   X,
   Lightbulb,
-  Award,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BadgeProgressCard } from "@/components/badges/badge-progress-card";

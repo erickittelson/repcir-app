@@ -42,6 +42,15 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Check that user has admin or owner role for this circle
+    const userRole = session.activeCircle?.role;
+    if (userRole !== "owner" && userRole !== "admin") {
+      return NextResponse.json(
+        { error: "Only circle owners and admins can modify circle settings" },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { name, description, passkey } = body;
 

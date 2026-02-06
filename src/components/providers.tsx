@@ -6,20 +6,34 @@ import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
 import { CookieBanner } from "@/components/consent/cookie-banner";
 import { authClient } from "@/lib/neon-auth/client";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { registerServiceWorker } from "@/lib/pwa";
+import { PostHogProvider, trackPageView } from "@/lib/posthog/client";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   // Register service worker for PWA support
   useEffect(() => {
     registerServiceWorker();
   }, []);
 
+  // Track page views on route change
+  useEffect(() => {
+    if (pathname) {
+      const url = searchParams?.toString()
+        ? `${pathname}?${searchParams.toString()}`
+        : pathname;
+      trackPageView(url);
+    }
+  }, [pathname, searchParams]);
+
   return (
-    <ThemeProvider
+    <PostHogProvider>
+      <ThemeProvider
       attribute="class"
       defaultTheme="dark"
       forcedTheme="dark"
@@ -52,5 +66,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <Toaster />
       </NeonAuthUIProvider>
     </ThemeProvider>
+    </PostHogProvider>
   );
 }

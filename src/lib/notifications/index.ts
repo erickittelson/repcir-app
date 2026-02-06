@@ -28,6 +28,8 @@ export type NotificationType =
   | "circle_invite"
   | "circle_request"
   | "streak_milestone"
+  | "mention"
+  | "circle_mention"
   | "system";
 
 // Notification category mapping (for user preferences)
@@ -38,6 +40,8 @@ const TYPE_TO_CATEGORY: Record<NotificationType, string> = {
   circle_invite: "circles",
   circle_request: "circles",
   streak_milestone: "goals",
+  mention: "messages",
+  circle_mention: "circles",
   system: "messages", // System notifications always go through
 };
 
@@ -279,6 +283,55 @@ export async function notifyWorkoutReminder(
     body: workoutName ? `Your scheduled workout: ${workoutName}` : "Don't forget to get your workout in today!",
     actionUrl: "/workouts",
   });
+}
+
+/**
+ * Send notification when a user is mentioned in a post
+ */
+export async function notifyMention(
+  mentionedUserId: string,
+  mentionerName: string,
+  postId: string,
+  circleId: string,
+  contentPreview: string
+): Promise<void> {
+  await createNotification({
+    userId: mentionedUserId,
+    type: "mention",
+    title: `${mentionerName} mentioned you`,
+    body: contentPreview.length > 100 ? contentPreview.slice(0, 97) + "..." : contentPreview,
+    data: { postId, circleId },
+    actionUrl: `/circle/${circleId}?post=${postId}`,
+  });
+}
+
+/**
+ * Send notification to all members of a circle when the circle is mentioned
+ */
+export async function notifyCircleMention(
+  memberUserIds: string[],
+  mentionerUserId: string,
+  mentionerName: string,
+  circleName: string,
+  postId: string,
+  sourceCircleId: string,
+  contentPreview: string
+): Promise<void> {
+  // Don't notify the person who made the post
+  const recipientIds = memberUserIds.filter(id => id !== mentionerUserId);
+
+  await Promise.all(
+    recipientIds.map(userId =>
+      createNotification({
+        userId,
+        type: "circle_mention",
+        title: `${circleName} was mentioned by ${mentionerName}`,
+        body: contentPreview.length > 100 ? contentPreview.slice(0, 97) + "..." : contentPreview,
+        data: { postId, circleId: sourceCircleId, mentionedCircle: circleName },
+        actionUrl: `/circle/${sourceCircleId}?post=${postId}`,
+      })
+    )
+  );
 }
 
 // Export VAPID public key for client-side subscription

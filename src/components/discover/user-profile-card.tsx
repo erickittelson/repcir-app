@@ -81,7 +81,7 @@ export function UserProfileCard({
   };
 
   const handleCardClick = () => {
-    router.push(`/profile/${user.id}`);
+    router.push(`/u/${user.id}`);
   };
 
   if (variant === "compact") {

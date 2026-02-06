@@ -942,7 +942,7 @@ export function GroupCreator({
               Choose a group type to create
             </p>
           </div>
-          <Button variant="ghost" size="icon" onClick={onCancel}>
+          <Button variant="ghost" size="icon" onClick={onCancel} aria-label="Cancel selection">
             <X className="h-4 w-4" />
           </Button>
         </div>

@@ -70,8 +70,8 @@ const COACHING_MODES = [
     id: "general",
     name: "General Coach",
     icon: MessageCircle,
-    color: "text-blue-500",
-    bgColor: "bg-blue-500/10",
+    color: "text-brand",
+    bgColor: "bg-brand/10",
     description: "General fitness advice and recommendations",
   },
   {
@@ -102,8 +102,8 @@ const COACHING_MODES = [
     id: "goal_setting",
     name: "Goal Setting",
     icon: Target,
-    color: "text-blue-500",
-    bgColor: "bg-blue-500/10",
+    color: "text-brand",
+    bgColor: "bg-brand/10",
     description: "Set meaningful, achievable goals",
   },
   {
@@ -249,22 +249,22 @@ function generatePersonalizedPrompts(
     ],
     motivation: [
       { icon: Flame, text: "I don't feel like working out lately", color: "text-orange-500" },
-      { icon: Target, text: "Help me remember why I started", color: "text-blue-500" },
+      { icon: Target, text: "Help me remember why I started", color: "text-brand" },
       { icon: TrendingUp, text: "How do I stay consistent?", color: "text-green-500" },
     ],
     life_balance: [
       { icon: Scale, text: "How do I fit training into my busy schedule?", color: "text-green-500" },
       { icon: Heart, text: "I feel guilty when I miss workouts", color: "text-pink-500" },
-      { icon: Calendar, text: "Help me create a realistic schedule", color: "text-blue-500" },
+      { icon: Calendar, text: "Help me create a realistic schedule", color: "text-brand" },
     ],
     goal_setting: [
-      { icon: Target, text: "Help me set better goals", color: "text-blue-500" },
+      { icon: Target, text: "Help me set better goals", color: "text-brand" },
       { icon: TrendingUp, text: "Break down my big goal into steps", color: "text-green-500" },
       { icon: Star, text: "Am I being realistic about my goals?", color: "text-yellow-500" },
     ],
     accountability: [
       { icon: ClipboardCheck, text: "Check in on my progress", color: "text-amber-500" },
-      { icon: Calendar, text: "Why do I keep skipping workouts?", color: "text-blue-500" },
+      { icon: Calendar, text: "Why do I keep skipping workouts?", color: "text-brand" },
       { icon: TrendingUp, text: "Help me track my consistency", color: "text-green-500" },
     ],
     confidence: [
@@ -281,7 +281,7 @@ function generatePersonalizedPrompts(
   // General mode - personalized based on member data
   if (!member) {
     return [
-      { icon: Target, text: "How can I hit my goals?", color: "text-blue-500" },
+      { icon: Target, text: "How can I hit my goals?", color: "text-brand" },
       { icon: Calendar, text: "Create a weekly plan", color: "text-green-500" },
       { icon: TrendingUp, text: "What should I work on?", color: "text-purple-500" },
     ];
@@ -296,7 +296,7 @@ function generatePersonalizedPrompts(
     prompts.push({
       icon: Target,
       text: `How do I achieve my ${goal.title.toLowerCase()} goal?`,
-      color: "text-blue-500",
+      color: "text-brand",
     });
   }
 
@@ -337,7 +337,7 @@ function generatePersonalizedPrompts(
   const defaults = [
     { icon: Calendar, text: "Create a weekly training plan", color: "text-green-500" },
     { icon: TrendingUp, text: "How am I progressing?", color: "text-indigo-500" },
-    { icon: Dumbbell, text: "What should my next workout be?", color: "text-blue-500" },
+    { icon: Dumbbell, text: "What should my next workout be?", color: "text-brand" },
   ];
 
   while (prompts.length < 3 && defaults.length > 0) {

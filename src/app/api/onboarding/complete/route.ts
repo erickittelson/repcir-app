@@ -99,7 +99,26 @@ const onboardingDataSchema = z.object({
     isEstimate: z.boolean().optional(),
   })).optional(),
   workoutDuration: z.number().optional(),
+  gymLocations: z.array(z.string()).optional(),
   equipmentAccess: z.array(z.string()).optional(),
+  equipmentDetails: z.object({
+    dumbbells: z.object({
+      available: z.boolean(),
+      type: z.enum(["fixed", "adjustable", "both"]).optional(),
+      maxWeight: z.number().optional(),
+      weights: z.array(z.number()).optional(),
+    }).optional(),
+    barbell: z.object({
+      available: z.boolean(),
+      type: z.enum(["standard", "olympic"]).optional(),
+      barWeight: z.number().optional(),
+      plates: z.array(z.number()).optional(),
+      totalPlateWeight: z.number().optional(),
+    }).optional(),
+    machines: z.array(z.string()).optional(),
+    cardio: z.array(z.string()).optional(),
+    notes: z.string().optional(),
+  }).optional(),
   workoutDays: z.array(z.string()).optional(),
   currentActivity: z.string().optional(),
   profileVisibility: z.enum(["public", "private"]).optional(),
@@ -269,14 +288,66 @@ export async function POST(request: Request) {
       });
     }
 
-    // Save equipment/gym as a location
-    if (data.equipmentAccess && data.equipmentAccess.length > 0) {
+    // Save gym locations with equipment
+    const gymLocations = data.gymLocations || [];
+    const locationEntries = [];
+
+    // Check for home gym
+    if (gymLocations.includes("home")) {
+      locationEntries.push({
+        userId: session.user.id,
+        name: "Home Gym",
+        type: "home",
+        isActive: true,
+        equipment: data.equipmentAccess || [],
+        equipmentDetails: data.equipmentDetails || {},
+      });
+    }
+
+    // Check for commercial gym types
+    const commercialTypes = ["commercial", "crossfit", "school"];
+    for (const locationType of commercialTypes) {
+      if (gymLocations.includes(locationType)) {
+        const locationNames: Record<string, string> = {
+          commercial: "Commercial Gym",
+          crossfit: "CrossFit Box",
+          school: "School/University Gym",
+        };
+        locationEntries.push({
+          userId: session.user.id,
+          name: locationNames[locationType],
+          type: locationType,
+          isActive: !gymLocations.includes("home"), // Active if no home gym
+          equipment: ["full_gym"], // Commercial gyms have everything
+          equipmentDetails: {},
+        });
+      }
+    }
+
+    // Check for outdoor
+    if (gymLocations.includes("outdoor")) {
+      locationEntries.push({
+        userId: session.user.id,
+        name: "Outdoor/Park",
+        type: "outdoor",
+        isActive: locationEntries.length === 0, // Active if only option
+        equipment: ["bodyweight", "resistance_bands"],
+        equipmentDetails: {},
+      });
+    }
+
+    // Insert all locations
+    if (locationEntries.length > 0) {
+      await db.insert(userLocations).values(locationEntries);
+    } else if (data.equipmentAccess && data.equipmentAccess.length > 0) {
+      // Fallback for legacy data without gymLocations
       await db.insert(userLocations).values({
         userId: session.user.id,
         name: "My Gym",
-        type: "home", // Default type
+        type: "home",
         isActive: true,
         equipment: data.equipmentAccess,
+        equipmentDetails: data.equipmentDetails || {},
       });
     }
 

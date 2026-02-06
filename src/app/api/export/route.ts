@@ -10,6 +10,7 @@ import {
   goals,
   milestones,
   exercises,
+  userProfiles,
 } from "@/lib/db/schema";
 import { getSession } from "@/lib/neon-auth";
 import { eq, and, desc, inArray } from "drizzle-orm";
@@ -90,11 +91,27 @@ export async function GET(request: Request) {
 
     // Export member profile
     if (type === "member" || type === "all") {
+      // Fetch user profile for merged data
+      const profile = member.userId
+        ? await db.query.userProfiles.findFirst({
+            where: eq(userProfiles.userId, member.userId),
+          })
+        : null;
+
+      // Calculate dateOfBirth from userProfile or fallback to member
+      let dateOfBirth: string | null = null;
+      if (profile?.birthMonth && profile?.birthYear) {
+        dateOfBirth = `${profile.birthYear}-${String(profile.birthMonth).padStart(2, "0")}-15`;
+      } else if (member.dateOfBirth) {
+        dateOfBirth = member.dateOfBirth.toISOString().split("T")[0];
+      }
+
       exportData.member = {
         id: member.id,
         name: member.name,
-        dateOfBirth: member.dateOfBirth,
-        gender: member.gender,
+        dateOfBirth,
+        gender: profile?.gender || member.gender,
+        profilePicture: profile?.profilePicture || member.profilePicture,
         role: member.role,
         createdAt: member.createdAt,
       };

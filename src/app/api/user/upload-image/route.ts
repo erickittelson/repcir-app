@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { put } from "@vercel/blob";
+import { validateImageFile } from "@/lib/file-validation";
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,6 +30,15 @@ export async function POST(request: NextRequest) {
     if (file.size > 5 * 1024 * 1024) {
       return NextResponse.json(
         { error: "File size must be less than 5MB" },
+        { status: 400 }
+      );
+    }
+
+    // Validate file content (magic number check to prevent spoofing)
+    const validation = await validateImageFile(file);
+    if (!validation.isValid) {
+      return NextResponse.json(
+        { error: validation.error || "Invalid image file" },
         { status: 400 }
       );
     }

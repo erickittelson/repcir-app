@@ -1,8 +1,20 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { exercises } from "@/lib/db/schema";
 import { eq, ilike, or, sql, asc, desc, and } from "drizzle-orm";
+
+// Query parameter validation
+const querySchema = z.object({
+  search: z.string().max(100).optional(),
+  category: z.string().max(50).optional(),
+  muscleGroup: z.string().max(50).optional(),
+  difficulty: z.enum(["beginner", "intermediate", "advanced"]).optional(),
+  limit: z.coerce.number().int().min(1).max(1000).optional().default(1000),
+  offset: z.coerce.number().int().min(0).optional().default(0),
+  sortBy: z.enum(["name", "category", "mechanic", "priority"]).optional(),
+});
 
 // Top compound exercises to prioritize
 const PRIORITY_EXERCISES = [
@@ -20,13 +32,26 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const search = searchParams.get("search");
-    const category = searchParams.get("category");
-    const muscleGroup = searchParams.get("muscleGroup");
-    const difficulty = searchParams.get("difficulty");
-    const limit = searchParams.get("limit");
-    const offset = searchParams.get("offset");
-    const sortBy = searchParams.get("sortBy"); // name, category, mechanic, priority
+
+    // Validate query parameters
+    const queryValidation = querySchema.safeParse({
+      search: searchParams.get("search") || undefined,
+      category: searchParams.get("category") || undefined,
+      muscleGroup: searchParams.get("muscleGroup") || undefined,
+      difficulty: searchParams.get("difficulty") || undefined,
+      limit: searchParams.get("limit") || undefined,
+      offset: searchParams.get("offset") || undefined,
+      sortBy: searchParams.get("sortBy") || undefined,
+    });
+
+    if (!queryValidation.success) {
+      return NextResponse.json(
+        { error: queryValidation.error.issues.map((e) => e.message).join(", ") },
+        { status: 400 }
+      );
+    }
+
+    const { search, category, muscleGroup, difficulty, limit, offset, sortBy } = queryValidation.data;
 
     const conditions = [];
 
@@ -67,8 +92,8 @@ export async function GET(request: Request) {
     const query = db.select().from(exercises);
 
     const results = await (whereClause
-      ? query.where(whereClause).orderBy(...orderClause).limit(limit ? parseInt(limit) : 1000).offset(offset ? parseInt(offset) : 0)
-      : query.orderBy(...orderClause).limit(limit ? parseInt(limit) : 1000).offset(offset ? parseInt(offset) : 0));
+      ? query.where(whereClause).orderBy(...orderClause).limit(limit).offset(offset)
+      : query.orderBy(...orderClause).limit(limit).offset(offset));
 
     // Sort priority exercises to top if no specific sort requested
     if (!sortBy) {

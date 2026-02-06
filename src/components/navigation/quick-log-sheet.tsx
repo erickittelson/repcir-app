@@ -36,7 +36,6 @@ import {
   Facebook,
   Send,
   CheckCircle2,
-  Mic,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -44,8 +43,8 @@ import {
   RallyMemberSelector,
   type RallyMember,
 } from "@/components/social/rally-member-selector";
-import { VoiceLogger, type ParsedWorkoutData } from "@/components/voice/voice-logger";
 import { PhotoEditor } from "@/components/media/photo-editor";
+import { InlineVoiceInput } from "@/components/voice/inline-voice-input";
 import { haptics } from "@/lib/haptics";
 
 interface QuickLogSheetProps {
@@ -104,8 +103,7 @@ export function QuickLogSheet({ open, onOpenChange, preSelectedMembers }: QuickL
   const [copiedCaption, setCopiedCaption] = useState(false);
   const [successTaggedCount, setSuccessTaggedCount] = useState(0);
 
-  // Voice and photo editor states
-  const [isVoiceLoggerOpen, setIsVoiceLoggerOpen] = useState(false);
+  // Photo editor states
   const [isPhotoEditorOpen, setIsPhotoEditorOpen] = useState(false);
   const [pendingPhotoFile, setPendingPhotoFile] = useState<File | null>(null);
 
@@ -126,20 +124,6 @@ export function QuickLogSheet({ open, onOpenChange, preSelectedMembers }: QuickL
     setCopiedCaption(false);
     setTaggedMembers([]);
     setPendingPhotoFile(null);
-  };
-
-  // Handle voice logger completion
-  const handleVoiceComplete = (data: ParsedWorkoutData, rawTranscript: string) => {
-    if (data.workoutType) {
-      setWorkoutType(data.workoutType);
-    }
-    if (data.duration) {
-      setDuration(data.duration);
-    }
-    if (rawTranscript) {
-      setCaption(rawTranscript);
-    }
-    haptics.success();
   };
 
   // Handle photo editor save
@@ -226,55 +210,55 @@ export function QuickLogSheet({ open, onOpenChange, preSelectedMembers }: QuickL
       toast.success("Caption generated!");
     } catch (error) {
       console.error("Caption generation error:", error);
-      // Fallback caption if API fails
+      // Fallback captions - influencer style inspired by Few Will Hunt, Goggins, etc.
       const fallbackCaptions: Record<string, Record<string, string>> = {
         motivational: {
-          strength: `Another day, another opportunity to get stronger. ${duration} minutes of lifting - building the best version of myself. 💪 #NeverSettle`,
-          cardio: `${duration} min of cardio in the books. Pushing limits, breaking barriers. Every step counts. 🏃‍♂️ #KeepMoving`,
-          hiit: `${duration} minutes of pure intensity. When your mind says stop, your body finds another gear. ⚡ #NoExcuses`,
-          flexibility: `${duration} min stretch session. Taking care of the body that takes care of me. 🧘 #Recovery`,
-          sports: `Game time! ${duration} minutes of doing what I love. Sports are the ultimate workout. 🔥 #PlayHard`,
-          other: `${duration} minutes invested in myself. Small steps lead to big changes. 💫 #Consistency`,
+          strength: `${duration} min of iron. Most won't. That's why most don't look the way they want. #EarnIt`,
+          cardio: `${duration} minutes. Lungs on fire. Mind quiet. This is the work. 🔥`,
+          hiit: `${duration} min HIIT. When your body begs to stop, that's when you start. #40Percent`,
+          flexibility: `${duration} min mobility. Longevity is the real flex. Taking care of the machine.`,
+          sports: `${duration} min competition prep. Play to win or don't play at all. 🏆`,
+          other: `${duration} minutes. No one's coming to save you. Save yourself. #TheWork`,
         },
         humble: {
-          strength: `Got in a ${duration} min lift today. Nothing fancy, just showing up. 🏋️`,
-          cardio: `${duration} minutes of cardio. Still learning, still growing. 🙏`,
-          hiit: `Survived a ${duration} min HIIT session. It wasn't pretty but I finished. 😅`,
-          flexibility: `${duration} minutes of stretching. My body needed this. 🧘`,
-          sports: `Had fun playing for ${duration} min. Not about winning, just moving. 🎯`,
-          other: `${duration} minutes of movement. Every bit counts. ✨`,
+          strength: `${duration} min lifting. Not where I want to be. Better than where I was.`,
+          cardio: `Put in ${duration} minutes today. Grateful for legs that move.`,
+          hiit: `${duration} min HIIT. Humbled. The work continues tomorrow.`,
+          flexibility: `${duration} min stretch. The body keeps score. Paying my dues.`,
+          sports: `${duration} min on the court. Learning something new every session.`,
+          other: `${duration} minutes done. Progress over perfection.`,
         },
         funny: {
-          strength: `${duration} minutes at the gym. My muscles are filing a formal complaint. 😂💪`,
-          cardio: `Did ${duration} min of cardio. My lungs and I are no longer on speaking terms. 🫁😅`,
-          hiit: `Survived ${duration} min of HIIT. Pretty sure I saw my ancestors at minute 10. ⚡😵`,
-          flexibility: `${duration} min stretch. Turns out I'm about as flexible as a steel beam. 🤣`,
-          sports: `${duration} min of sports. I'm basically a pro athlete now (in my dreams). 🏆😂`,
-          other: `${duration} minutes of exercise. Do I deserve ice cream now? The answer is yes. 🍦`,
+          strength: `${duration} min at the gym. My arms are already writing their resignation letter 😭`,
+          cardio: `Did ${duration} min cardio. Plot twist: the cardio did me 💀`,
+          hiit: `${duration} min HIIT. Pretty sure I met God around minute 8. He said "no excuses" 😂`,
+          flexibility: `${duration} min stretching. I have the flexibility of a parking cone 🤷‍♂️`,
+          sports: `${duration} min of sports. Still gasping 20 minutes later. Elite athlete status 📈😅`,
+          other: `${duration} min workout. My couch is crying. I'm also crying. We're all crying.`,
         },
         raw: {
-          strength: `${duration} min in the trenches. Heavy weight, heavy mind, heavier results. 🔥`,
-          cardio: `${duration} minutes of pure suffering. This is where champions are made. 💀`,
-          hiit: `${duration} min HIIT. Gasping, sweating, living. No filter. ⚡`,
-          flexibility: `${duration} min stretch. Confronting every tight muscle and mental block. 🔥`,
-          sports: `${duration} min all out. Left everything on the field. 💯`,
-          other: `${duration} minutes of honest work. No shortcuts, no excuses. 🔥`,
+          strength: `${duration} min under the bar. Nobody's watching. Just me and the weight. That's where growth happens.`,
+          cardio: `${duration} minutes. Suffering is the price. Pay it or stay average.`,
+          hiit: `${duration} min HIIT. Collapsed on the floor. Got back up. That's the whole game.`,
+          flexibility: `${duration} min mobility. Breaking down to rebuild. The unsexy work.`,
+          sports: `${duration} min going hard. Left it all out there. No regrets.`,
+          other: `${duration} min of real work. Quiet hours while the world sleeps.`,
         },
         professional: {
-          strength: `Completed a ${duration}-minute strength training session focusing on progressive overload. Tracking gains. 📊`,
-          cardio: `${duration}-minute cardiovascular training completed. Heart rate zones optimized. 📈`,
-          hiit: `${duration}-minute HIIT protocol executed. Maximum effort intervals with controlled recovery. ⚡`,
-          flexibility: `${duration}-minute mobility and flexibility work. Essential for recovery and performance. 🎯`,
-          sports: `${duration} minutes of sport-specific training. Building functional fitness. 🏆`,
-          other: `${duration}-minute training session logged. Consistency breeds results. ✅`,
+          strength: `${duration} min strength block. Progressive overload tracked. Building. 📊`,
+          cardio: `${duration} min zone 2 complete. Aerobic base is the foundation.`,
+          hiit: `${duration} min metabolic session. Work-to-rest ratios optimized. ⚡`,
+          flexibility: `${duration} min mobility protocol. Range of motion is performance.`,
+          sports: `${duration} min sport-specific training. Skill acquisition in progress.`,
+          other: `${duration} min session logged. Data tracked. Forward motion.`,
         },
         casual: {
-          strength: `Quick ${duration} min lift sesh ✌️`,
-          cardio: `${duration} min cardio done. Feeling good 🙌`,
-          hiit: `${duration} min HIIT - sweaty but worth it 💦`,
-          flexibility: `${duration} min stretch. Much needed 🧘`,
-          sports: `${duration} min playing around. Good times 🎮`,
-          other: `Got my ${duration} min in today 👍`,
+          strength: `${duration} min lifting 🏋️ the usual`,
+          cardio: `got my ${duration} min in ✓`,
+          hiit: `${duration} min hiit. survived barely lol`,
+          flexibility: `${duration} min stretch sesh 🧘`,
+          sports: `${duration} min playing. good vibes only`,
+          other: `${duration} min ✓ staying consistent`,
         },
       };
 
@@ -442,20 +426,7 @@ export function QuickLogSheet({ open, onOpenChange, preSelectedMembers }: QuickL
       <SheetContent side="bottom" className="rounded-t-3xl px-4 pb-8 max-h-[90vh] overflow-y-auto">
         <SheetHeader className="pb-4">
           <div className="mx-auto h-1 w-10 rounded-full bg-muted" />
-          <div className="flex items-center justify-between">
-            <div className="w-11" /> {/* Spacer for centering */}
-            <SheetTitle className="text-center">Log & Share</SheetTitle>
-            <button
-              onClick={() => {
-                setIsVoiceLoggerOpen(true);
-                haptics.medium();
-              }}
-              className="h-11 w-11 rounded-full bg-brand/10 flex items-center justify-center text-brand hover:bg-brand/20 transition-colors"
-              title="Voice input"
-            >
-              <Mic className="h-5 w-5" />
-            </button>
-          </div>
+          <SheetTitle className="text-center">Log & Share</SheetTitle>
         </SheetHeader>
 
         {/* Workout Type */}
@@ -507,6 +478,17 @@ export function QuickLogSheet({ open, onOpenChange, preSelectedMembers }: QuickL
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Voice Input for Caption */}
+        <div className="mb-5">
+          <InlineVoiceInput
+            onComplete={(text) => {
+              setCaption(text);
+              haptics.success();
+            }}
+            placeholder="Describe your workout - it'll become your caption"
+          />
         </div>
 
         {/* Photo Upload */}
@@ -685,15 +667,6 @@ export function QuickLogSheet({ open, onOpenChange, preSelectedMembers }: QuickL
           </p>
         </div>
       </SheetContent>
-
-      {/* Voice Logger Overlay */}
-      <VoiceLogger
-        open={isVoiceLoggerOpen}
-        onOpenChange={setIsVoiceLoggerOpen}
-        onComplete={handleVoiceComplete}
-        promptText="Tell me about your workout. For example: 'I did 45 minutes of strength training' or 'Just finished a 30 minute run, feeling great!'"
-        parseMode="workout"
-      />
 
       {/* Photo Editor */}
       {pendingPhotoFile && (

@@ -504,3 +504,91 @@
 .animate-trophy-shine {
   animation: trophy-shine 1.5s ease-in-out infinite;
 }
+
+/* ============================================================================
+ * LEAFLET MAP STYLES
+ * ============================================================================ */
+
+/* Import Leaflet CSS */
+@import "leaflet/dist/leaflet.css";
+
+/* Dark theme overrides for Leaflet */
+.leaflet-container {
+  background: oklch(0.15 0.025 275);
+  font-family: inherit;
+}
+
+/* Style the tile layer for dark mode (inverts/adjusts tiles) */
+.leaflet-tile-pane {
+  filter: brightness(0.85) saturate(0.9);
+}
+
+/* Custom marker styles (reset defaults) */
+.custom-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Popup styling for dark theme */
+.leaflet-popup-content-wrapper {
+  background: oklch(0.18 0.02 275);
+  color: oklch(0.97 0.008 90);
+  border-radius: 0.5rem;
+  border: 1px solid oklch(0.30 0.02 275);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+}
+
+.leaflet-popup-tip {
+  background: oklch(0.18 0.02 275);
+  border-left: 1px solid oklch(0.30 0.02 275);
+  border-bottom: 1px solid oklch(0.30 0.02 275);
+}
+
+.leaflet-popup-close-button {
+  color: oklch(0.60 0.02 90) !important;
+}
+
+.leaflet-popup-close-button:hover {
+  color: oklch(0.97 0.008 90) !important;
+}
+
+/* Zoom controls styling */
+.leaflet-control-zoom {
+  border: 1px solid oklch(0.30 0.02 275) !important;
+  border-radius: 0.5rem !important;
+  overflow: hidden;
+}
+
+.leaflet-control-zoom a {
+  background: oklch(0.18 0.02 275) !important;
+  color: oklch(0.97 0.008 90) !important;
+  border-bottom: 1px solid oklch(0.30 0.02 275) !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background: oklch(0.23 0.015 275) !important;
+}
+
+.leaflet-control-zoom a:last-child {
+  border-bottom: none !important;
+}
+
+/* Touch-friendly zoom controls on mobile */
+@media (max-width: 768px) {
+  .leaflet-control-zoom {
+    margin-right: 8px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .leaflet-control-zoom a {
+    width: 36px !important;
+    height: 36px !important;
+    line-height: 36px !important;
+    font-size: 18px !important;
+  }
+}
+
+/* Hide default attribution - we add our own */
+.leaflet-control-attribution {
+  display: none !important;
+}

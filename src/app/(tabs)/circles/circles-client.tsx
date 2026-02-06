@@ -222,10 +222,8 @@ export function CirclesClient({ circles, userId }: CirclesClientProps) {
       <CreateRallyExperience
         open={showCreateCircle}
         onOpenChange={setShowCreateCircle}
-        onComplete={(rallyId) => {
+        onComplete={() => {
           // The experience handles navigation internally
-          // This callback is optional for additional handling
-          console.log("Rally created:", rallyId);
         }}
       />
     </div>

@@ -16,6 +16,7 @@ import {
   Heart,
   Award,
   Activity,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -79,51 +80,48 @@ export function CompletenessCard({
       )}
 
       <CardContent className="pt-4 pb-3">
-        {/* Progress header */}
-        <div className="flex items-center gap-4 mb-3">
-          <div className="relative">
-            <svg className="w-16 h-16 -rotate-90">
+        {/* Compact header - everything in one row */}
+        <div className="flex items-center gap-3">
+          {/* Progress ring - smaller */}
+          <div className="relative flex-shrink-0">
+            <svg className="w-12 h-12 -rotate-90">
               <circle
-                cx="32"
-                cy="32"
-                r="28"
+                cx="24"
+                cy="24"
+                r="20"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="6"
+                strokeWidth="4"
                 className="text-muted"
               />
               <circle
-                cx="32"
-                cy="32"
-                r="28"
+                cx="24"
+                cy="24"
+                r="20"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="6"
-                strokeDasharray={`${(overallPercent / 100) * 176} 176`}
+                strokeWidth="4"
+                strokeDasharray={`${(overallPercent / 100) * 126} 126`}
                 strokeLinecap="round"
                 className="text-brand"
               />
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-sm font-bold">{overallPercent}%</span>
+              <span className="text-xs font-bold">{overallPercent}%</span>
             </div>
           </div>
-          <div className="flex-1">
-            <h3 className="font-semibold">Complete Your Profile</h3>
-            <p className="text-sm text-muted-foreground">
-              {overallPercent < 50
-                ? "Help us personalize your experience"
-                : overallPercent < 80
-                ? "Almost there! A few more details"
-                : "Just a couple more things"}
+
+          {/* Text - minimal */}
+          <div className="min-w-0">
+            <h3 className="font-semibold text-sm">Complete Your Profile</h3>
+            <p className="text-xs text-muted-foreground truncate">
+              {incompleteSections.length} {incompleteSections.length === 1 ? "section" : "sections"} remaining
             </p>
           </div>
-        </div>
 
-        {/* Quick actions for top incomplete sections */}
-        {!isExpanded && incompleteSections.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3">
-            {incompleteSections.slice(0, 2).map((section) => {
+          {/* Quick action pills - right side */}
+          <div className="flex-1 flex items-center justify-end gap-1.5 flex-wrap">
+            {incompleteSections.slice(0, 3).map((section) => {
               const config = SECTION_CONFIG[section.section];
               if (!config) return null;
               const Icon = config.icon;
@@ -132,94 +130,89 @@ export function CompletenessCard({
                 <Link
                   key={section.section}
                   href={config.href}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-brand/10 text-brand rounded-full text-sm hover:bg-brand/20 transition-colors"
+                  className="flex items-center gap-1 px-2 py-1 bg-brand/10 text-brand rounded-full text-xs hover:bg-brand/20 transition-colors"
                 >
-                  <Icon className="h-3.5 w-3.5" />
-                  {config.label}
+                  <Icon className="h-3 w-3" />
+                  <span className="hidden sm:inline">{config.label}</span>
                 </Link>
               );
             })}
           </div>
-        )}
+        </div>
 
-        {/* Expand/Collapse button */}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full"
+        {/* Expand toggle - inline */}
+        <button
           onClick={() => setIsExpanded(!isExpanded)}
+          className="flex items-center justify-center gap-1 w-full mt-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           {isExpanded ? (
             <>
-              <ChevronUp className="h-4 w-4 mr-1" />
-              Show Less
+              <ChevronUp className="h-3 w-3" />
+              Less
             </>
           ) : (
             <>
-              <ChevronDown className="h-4 w-4 mr-1" />
-              Show Details
+              <ChevronDown className="h-3 w-3" />
+              Details
             </>
           )}
-        </Button>
+        </button>
 
-        {/* Expanded section list */}
+        {/* Expanded section list - grid layout */}
         {isExpanded && (
-          <div className="mt-3 space-y-2 pt-3 border-t">
+          <div className="mt-2 pt-2 border-t grid grid-cols-2 sm:grid-cols-3 gap-1.5">
             {Object.entries(SECTION_CONFIG).map(([key, config]) => {
-              const status = sectionStatuses.find((s) => s.section === key);
               const percent = sections[key] || 0;
               const Icon = config.icon;
+              const isComplete = percent >= 100;
 
               return (
                 <Link
                   key={key}
                   href={config.href}
-                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted transition-colors"
+                  className={cn(
+                    "flex items-center gap-2 p-2 rounded-lg transition-colors text-sm",
+                    isComplete
+                      ? "bg-success/10 text-success"
+                      : "bg-muted/50 hover:bg-muted"
+                  )}
                 >
-                  <div
-                    className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center",
-                      percent >= 100
-                        ? "bg-success/20 text-success"
-                        : "bg-muted text-muted-foreground"
-                    )}
-                  >
-                    {percent >= 100 ? (
-                      <CheckCircle2 className="h-4 w-4" />
-                    ) : (
-                      <Icon className="h-4 w-4" />
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{config.label}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {percent}%
-                      </span>
-                    </div>
-                    <Progress value={percent} className="h-1.5 mt-1" />
-                  </div>
+                  {isComplete ? (
+                    <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+                  ) : (
+                    <Icon className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                  )}
+                  <span className="truncate text-xs font-medium">
+                    {config.label}
+                  </span>
+                  {!isComplete && (
+                    <span className="ml-auto text-[10px] text-muted-foreground">
+                      {percent}%
+                    </span>
+                  )}
                 </Link>
               );
             })}
           </div>
         )}
 
-        {/* Recommendations */}
+        {/* Recommendations - compact */}
         {isExpanded && recommendations.length > 0 && (
-          <div className="mt-4 pt-3 border-t">
-            <h4 className="text-sm font-medium mb-2">Recommendations</h4>
-            <ul className="space-y-2">
-              {recommendations.map((rec, i) => (
-                <li
+          <div className="mt-3 pt-2 border-t">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">
+              Suggestions
+            </p>
+            <div className="space-y-1">
+              {recommendations.slice(0, 2).map((rec, i) => (
+                <p
                   key={i}
-                  className="flex items-start gap-2 text-sm text-muted-foreground"
+                  className="text-xs text-muted-foreground flex items-start gap-1.5"
                 >
-                  <Circle className="h-2 w-2 mt-1.5 flex-shrink-0" />
+                  <ChevronRight className="h-3 w-3 mt-0.5 flex-shrink-0 text-brand" />
                   {rec}
-                </li>
+                </p>
               ))}
-            </ul>
+            </div>
           </div>
         )}
       </CardContent>

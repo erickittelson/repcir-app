@@ -1,8 +1,17 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { db } from "@/lib/db";
 import { contentRatings, sharedWorkouts, challenges, communityPrograms } from "@/lib/db/schema";
 import { eq, and, avg, count, sql } from "drizzle-orm";
 import { getSession } from "@/lib/neon-auth/session";
+
+// Validation schemas
+const contentTypeSchema = z.enum(["workout", "challenge", "program"]);
+const ratingSchema = z.object({
+  contentType: contentTypeSchema,
+  contentId: z.string().uuid(),
+  rating: z.number().int().min(1).max(5),
+});
 
 // GET /api/content/ratings - Get rating for content
 export async function GET(request: Request) {
@@ -10,12 +19,24 @@ export async function GET(request: Request) {
   const contentType = searchParams.get("contentType");
   const contentId = searchParams.get("contentId");
 
-  if (!contentType || !contentId) {
+  // Validate query parameters
+  const typeValidation = contentTypeSchema.safeParse(contentType);
+  if (!typeValidation.success) {
     return NextResponse.json(
-      { error: "Missing contentType or contentId" },
+      { error: "Invalid contentType. Must be: workout, challenge, or program" },
       { status: 400 }
     );
   }
+  if (!contentId || !z.string().uuid().safeParse(contentId).success) {
+    return NextResponse.json(
+      { error: "Invalid or missing contentId (must be UUID)" },
+      { status: 400 }
+    );
+  }
+
+  // Use validated values
+  const validatedType = typeValidation.data;
+  const validatedId = contentId;
 
   try {
     const session = await getSession();
@@ -30,8 +51,8 @@ export async function GET(request: Request) {
       .from(contentRatings)
       .where(
         and(
-          eq(contentRatings.contentType, contentType),
-          eq(contentRatings.contentId, contentId)
+          eq(contentRatings.contentType, validatedType),
+          eq(contentRatings.contentId, validatedId)
         )
       );
 
@@ -44,8 +65,8 @@ export async function GET(request: Request) {
       .from(contentRatings)
       .where(
         and(
-          eq(contentRatings.contentType, contentType),
-          eq(contentRatings.contentId, contentId)
+          eq(contentRatings.contentType, validatedType),
+          eq(contentRatings.contentId, validatedId)
         )
       )
       .groupBy(contentRatings.rating);
@@ -58,8 +79,8 @@ export async function GET(request: Request) {
         .from(contentRatings)
         .where(
           and(
-            eq(contentRatings.contentType, contentType),
-            eq(contentRatings.contentId, contentId),
+            eq(contentRatings.contentType, validatedType),
+            eq(contentRatings.contentId, validatedId),
             eq(contentRatings.userId, userId)
           )
         );
@@ -95,21 +116,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { contentType, contentId, rating } = await request.json();
-
-    if (!contentType || !contentId || !rating) {
+    const body = await request.json();
+    const validation = ratingSchema.safeParse(body);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: validation.error.issues.map((e) => e.message).join(", ") },
         { status: 400 }
       );
     }
 
-    if (rating < 1 || rating > 5) {
-      return NextResponse.json(
-        { error: "Rating must be between 1 and 5" },
-        { status: 400 }
-      );
-    }
+    const { contentType, contentId, rating } = validation.data;
 
     // Upsert the rating
     await db

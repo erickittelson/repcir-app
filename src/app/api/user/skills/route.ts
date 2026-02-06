@@ -13,6 +13,7 @@ export async function GET() {
 
     const skills = await db.query.userSkills.findMany({
       where: eq(userSkills.userId, session.user.id),
+      limit: 100, // Prevent unbounded queries
     });
 
     return NextResponse.json({ skills });

@@ -1,0 +1,313 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import {
+  Play,
+  Save,
+  Pencil,
+  Dumbbell,
+  Clock,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  Check,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import type { GeneratedWorkout, ActionData } from "@/lib/ai/structured-chat";
+
+interface WorkoutCardProps {
+  workout: GeneratedWorkout;
+  planId?: string;
+  actions: ActionData[];
+  onAction?: (action: string, planId?: string) => void;
+  memberId: string;
+}
+
+export function WorkoutCard({
+  workout,
+  planId,
+  actions,
+  onAction,
+  memberId,
+}: WorkoutCardProps) {
+  const router = useRouter();
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedPlanId, setSavedPlanId] = useState<string | null>(planId || null);
+
+  // Save workout to database
+  const saveWorkout = async (): Promise<string> => {
+    if (savedPlanId) return savedPlanId;
+
+    const response = await fetch("/api/workouts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: workout.name,
+        description: workout.description,
+        estimatedDuration: workout.estimatedDuration,
+        difficulty: workout.difficulty,
+        exercises: workout.exercises.map((ex, idx) => ({
+          name: ex.name,
+          sets: ex.sets,
+          reps: ex.reps,
+          restSeconds: ex.restSeconds,
+          notes: ex.notes,
+          order: idx,
+        })),
+        aiGenerated: true,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to save workout");
+    }
+
+    const data = await response.json();
+    setSavedPlanId(data.plan.id);
+    return data.plan.id;
+  };
+
+  // Start a workout session
+  const startWorkoutSession = async (workoutPlanId: string): Promise<string> => {
+    const response = await fetch(`/api/workouts/${workoutPlanId}/start`, {
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to start workout session");
+    }
+
+    const data = await response.json();
+    return data.sessionId;
+  };
+
+  const handleAction = async (action: string) => {
+    try {
+      switch (action) {
+        case "start_workout": {
+          setIsStarting(true);
+
+          // Save if not already saved
+          const workoutPlanId = await saveWorkout();
+
+          // Start session
+          const sessionId = await startWorkoutSession(workoutPlanId);
+
+          // Navigate to workout timer
+          router.push(`/workout/${workoutPlanId}/session/${sessionId}`);
+
+          onAction?.(action, workoutPlanId);
+          break;
+        }
+
+        case "save_plan": {
+          setIsSaving(true);
+
+          const workoutPlanId = await saveWorkout();
+
+          toast.success("Workout saved to your profile!");
+          onAction?.(action, workoutPlanId);
+          setIsSaving(false);
+          break;
+        }
+
+        case "modify": {
+          // For now, just notify parent - could open a modal or navigate to builder
+          onAction?.(action, savedPlanId || undefined);
+          toast.info("Modification coming soon!");
+          break;
+        }
+
+        case "regenerate": {
+          onAction?.(action);
+          break;
+        }
+      }
+    } catch (error) {
+      console.error("Workout action error:", error);
+      toast.error("Something went wrong. Please try again.");
+      setIsStarting(false);
+      setIsSaving(false);
+    }
+  };
+
+  const getActionIcon = (action: string) => {
+    switch (action) {
+      case "start_workout":
+        return isStarting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />;
+      case "save_plan":
+        if (savedPlanId && !isSaving) return <Check className="h-4 w-4" />;
+        return isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />;
+      case "modify":
+        return <Pencil className="h-4 w-4" />;
+      default:
+        return null;
+    }
+  };
+
+  const getButtonVariant = (variant: string) => {
+    switch (variant) {
+      case "primary":
+        return "default";
+      case "secondary":
+        return "secondary";
+      case "outline":
+        return "outline";
+      default:
+        return "default";
+    }
+  };
+
+  // Visible exercises (4 or all if expanded)
+  const visibleExercises = isExpanded ? workout.exercises : workout.exercises.slice(0, 4);
+  const hiddenCount = workout.exercises.length - 4;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="rounded-xl border bg-card overflow-hidden shadow-sm"
+    >
+      {/* Header with gradient */}
+      <div className="p-4 bg-brand-gradient text-white">
+        <h3 className="font-semibold text-lg">{workout.name}</h3>
+        <div className="flex items-center gap-3 text-sm text-white/80 mt-1">
+          <span className="flex items-center gap-1">
+            <Clock className="h-3.5 w-3.5" />
+            {workout.estimatedDuration} min
+          </span>
+          <span className="capitalize">{workout.difficulty}</span>
+          {workout.structure && (
+            <span className="text-white/60">| {workout.structure}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Description */}
+      {workout.description && (
+        <div className="px-4 pt-3">
+          <p className="text-sm text-muted-foreground">{workout.description}</p>
+        </div>
+      )}
+
+      {/* Warmup */}
+      {workout.warmup && workout.warmup.length > 0 && (
+        <div className="px-4 pt-3">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Warmup</p>
+          <p className="text-sm text-foreground/70">{workout.warmup.join(" | ")}</p>
+        </div>
+      )}
+
+      {/* Exercise list */}
+      <div className="p-4 space-y-2">
+        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Exercises</p>
+
+        {visibleExercises.map((exercise, index) => (
+          <motion.div
+            key={index}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: index * 0.05 }}
+            className="flex items-start gap-3 py-2 border-b border-border/30 last:border-0"
+          >
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand text-xs font-medium">
+              {index + 1}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">{exercise.name}</span>
+                {exercise.supersetGroup && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500">
+                    Superset {exercise.supersetGroup}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span>{exercise.sets}x{exercise.reps}</span>
+                {exercise.restSeconds && exercise.restSeconds > 0 && (
+                  <span>| {exercise.restSeconds}s rest</span>
+                )}
+              </div>
+              {/* Member prescriptions */}
+              {exercise.memberPrescriptions && exercise.memberPrescriptions.length > 0 && (
+                <div className="mt-1 space-y-0.5">
+                  {exercise.memberPrescriptions.map((rx, rxIdx) => (
+                    <div key={rxIdx} className="text-xs text-brand/80">
+                      {rx.memberName}: {rx.weight || rx.bodyweightMod || rx.cardioTarget || "standard"}
+                      {rx.rpeTarget && ` @ RPE ${rx.rpeTarget}`}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {exercise.notes && (
+                <p className="text-xs text-muted-foreground/70 mt-1 italic">{exercise.notes}</p>
+              )}
+            </div>
+          </motion.div>
+        ))}
+
+        {/* Expand/collapse button */}
+        {workout.exercises.length > 4 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="w-full mt-2 text-xs text-muted-foreground"
+          >
+            {isExpanded ? (
+              <>
+                <ChevronUp className="h-3 w-3 mr-1" />
+                Show less
+              </>
+            ) : (
+              <>
+                <ChevronDown className="h-3 w-3 mr-1" />
+                +{hiddenCount} more exercises
+              </>
+            )}
+          </Button>
+        )}
+      </div>
+
+      {/* Cooldown */}
+      {workout.cooldown && workout.cooldown.length > 0 && (
+        <div className="px-4 pb-3">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Cooldown</p>
+          <p className="text-sm text-foreground/70">{workout.cooldown.join(" | ")}</p>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="p-4 border-t bg-muted/30 flex gap-2">
+        {actions.map((action) => (
+          <Button
+            key={action.id}
+            variant={getButtonVariant(action.variant)}
+            onClick={() => handleAction(action.action)}
+            disabled={
+              isStarting ||
+              isSaving ||
+              (action.action === "save_plan" && !!savedPlanId)
+            }
+            className={cn(
+              "flex-1",
+              action.variant === "primary" && "bg-brand-gradient hover:opacity-90"
+            )}
+          >
+            {getActionIcon(action.action)}
+            <span className="ml-2">
+              {action.action === "save_plan" && savedPlanId ? "Saved" : action.label}
+            </span>
+          </Button>
+        ))}
+      </div>
+    </motion.div>
+  );
+}

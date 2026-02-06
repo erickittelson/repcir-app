@@ -219,7 +219,9 @@ export default async function YouPage() {
               birthMonth: profile.birthMonth || undefined,
               birthYear: profile.birthYear || undefined,
               city: profile.city || undefined,
+              state: (profile as any).state || undefined,
               country: profile.country || undefined,
+              locationVisibility: (profile as any).locationVisibility || "city",
               visibility: profile.visibility,
               socialLinks: profile.socialLinks || {},
               notificationPreferences: {

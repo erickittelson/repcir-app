@@ -187,13 +187,13 @@ export function ProfilePreviewDialog({
         </Tabs>
 
         {/* Info Banner */}
-        <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 mt-4">
-          <AlertTriangle className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+        <div className="flex items-start gap-3 p-3 rounded-lg bg-brand/10 border border-brand/20 mt-4">
+          <AlertTriangle className="h-5 w-5 text-brand flex-shrink-0 mt-0.5" />
           <div className="text-sm">
-            <p className="font-medium text-blue-800 dark:text-blue-200">
+            <p className="font-medium text-foreground">
               {viewMode === "public" ? "Public View" : "Rally Member View"}
             </p>
-            <p className="text-blue-600 dark:text-blue-300">
+            <p className="text-muted-foreground">
               {viewMode === "public"
                 ? "This is how strangers and non-rally members see your profile."
                 : "This is how members of your rallies see your profile."}

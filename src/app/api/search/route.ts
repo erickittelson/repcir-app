@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { exercises, circleMembers } from "@/lib/db/schema";
-import { eq, sql, and, or, ilike } from "drizzle-orm";
+import { exercises, circleMembers, userProfiles } from "@/lib/db/schema";
+import { eq, sql, and, or, ilike, inArray } from "drizzle-orm";
 
 export const runtime = "nodejs";
 
@@ -87,10 +87,11 @@ async function searchExercises(query: string, limit: number) {
 }
 
 async function searchMembers(query: string, limit: number, circleId: string) {
-  const results = await db
+  const members = await db
     .select({
       id: circleMembers.id,
       name: circleMembers.name,
+      userId: circleMembers.userId,
       profilePicture: circleMembers.profilePicture,
       role: circleMembers.role,
     })
@@ -102,6 +103,30 @@ async function searchMembers(query: string, limit: number, circleId: string) {
       )
     )
     .limit(limit);
+
+  // Fetch user profiles for members with userId
+  const userIds = members
+    .filter((m) => m.userId)
+    .map((m) => m.userId as string);
+
+  const profiles = userIds.length > 0
+    ? await db.query.userProfiles.findMany({
+        where: inArray(userProfiles.userId, userIds),
+      })
+    : [];
+
+  const profileMap = new Map(profiles.map((p) => [p.userId, p]));
+
+  // Merge profile data
+  const results = members.map((member) => {
+    const profile = member.userId ? profileMap.get(member.userId) : null;
+    return {
+      id: member.id,
+      name: member.name,
+      profilePicture: profile?.profilePicture || member.profilePicture,
+      role: member.role,
+    };
+  });
 
   return NextResponse.json({
     results,

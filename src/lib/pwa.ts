@@ -19,14 +19,13 @@ export function registerServiceWorker() {
         if (newWorker) {
           newWorker.addEventListener("statechange", () => {
             if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
-              // New version available
-              console.log("New version available. Refresh to update.");
+              // New version available - user will be notified via UI
             }
           });
         }
       });
 
-      console.log("Service worker registered successfully");
+      // Service worker registered successfully
     } catch (error) {
       console.error("Service worker registration failed:", error);
     }

@@ -12,7 +12,7 @@ import {
   userProgramSchedules,
   programWorkouts,
 } from "@/lib/db/schema";
-import { eq, and, asc, ne, gte } from "drizzle-orm";
+import { eq, and, asc, ne, gte, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 const autoRescheduleSchema = z.object({
@@ -102,6 +102,34 @@ export async function POST(request: Request) {
       newDate: string;
     }[] = [];
 
+    // Batch fetch all existing scheduled workouts for all schedules in ONE query (fixes N+1)
+    const scheduleIds = Array.from(workoutsBySchedule.keys());
+    const allExistingScheduled = scheduleIds.length > 0
+      ? await db.query.scheduledWorkouts.findMany({
+          where: and(
+            inArray(scheduledWorkouts.scheduleId, scheduleIds),
+            eq(scheduledWorkouts.status, "scheduled"),
+            gte(scheduledWorkouts.scheduledDate, todayStr)
+          ),
+          orderBy: [asc(scheduledWorkouts.scheduledDate)],
+        })
+      : [];
+
+    // Build a map of scheduleId -> Set of existing dates
+    const existingDatesBySchedule = new Map<string, Set<string>>();
+    const lastScheduledBySchedule = new Map<string, typeof allExistingScheduled[0] | null>();
+    for (const scheduled of allExistingScheduled) {
+      if (!existingDatesBySchedule.has(scheduled.scheduleId)) {
+        existingDatesBySchedule.set(scheduled.scheduleId, new Set());
+      }
+      existingDatesBySchedule.get(scheduled.scheduleId)!.add(scheduled.scheduledDate);
+      // Keep track of last scheduled for end_of_schedule strategy
+      lastScheduledBySchedule.set(scheduled.scheduleId, scheduled);
+    }
+
+    // Collect all updates to batch at the end (fixes N+1 updates)
+    const updateOperations: { id: string; data: Parameters<typeof db.update>[0] extends infer T ? T : never }[] = [];
+
     // Process each schedule
     for (const [schId, scheduleWorkouts] of workoutsBySchedule) {
       const schedule = scheduleWorkouts[0].schedule;
@@ -112,17 +140,7 @@ export async function POST(request: Request) {
         continue;
       }
 
-      // Get existing scheduled workouts for this schedule
-      const existingScheduled = await db.query.scheduledWorkouts.findMany({
-        where: and(
-          eq(scheduledWorkouts.scheduleId, schId),
-          eq(scheduledWorkouts.status, "scheduled"),
-          gte(scheduledWorkouts.scheduledDate, todayStr)
-        ),
-        orderBy: [asc(scheduledWorkouts.scheduledDate)],
-      });
-
-      const existingDates = new Set(existingScheduled.map((w) => w.scheduledDate));
+      const existingDates = existingDatesBySchedule.get(schId) || new Set<string>();
 
       // Helper to find next available date
       const findNextAvailableDate = (
@@ -190,9 +208,9 @@ export async function POST(request: Request) {
 
         case "end_of_schedule":
           // Add missed workouts to the end of the current schedule
-          const lastScheduled = existingScheduled[existingScheduled.length - 1];
-          let endDate = lastScheduled
-            ? new Date(lastScheduled.scheduledDate)
+          const lastScheduledForSchedule = lastScheduledBySchedule.get(schId);
+          let endDate = lastScheduledForSchedule
+            ? new Date(lastScheduledForSchedule.scheduledDate)
             : new Date();
 
           for (const { workout, programWorkout } of scheduleWorkouts) {

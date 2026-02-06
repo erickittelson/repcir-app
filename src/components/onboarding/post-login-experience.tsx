@@ -127,7 +127,7 @@ const FEATURE_STEPS: Array<{
     title: "Home",
     description: "Your personalized dashboard shows today's workout, your streak, and quick access to everything you need.",
     tip: "Check here daily for your recommended workout based on your schedule.",
-    gradient: "from-blue-500 to-cyan-400",
+    gradient: "from-brand to-energy",
   },
   {
     id: "discover-feature",

@@ -780,8 +780,18 @@ export const userProfiles = pgTable(
     profilePicture: text("profile_picture"), // Vercel Blob Storage URL
     birthMonth: integer("birth_month"), // 1-12
     birthYear: integer("birth_year"), // e.g., 1990
+    gender: text("gender"), // male, female, other, prefer_not_to_say
     city: text("city"),
-    country: text("country"),
+    state: text("state"), // US state abbreviation (e.g., "TX", "CA")
+    country: text("country").default("US"),
+    // Workout location (optional gym/studio)
+    workoutLocation: text("workout_location"), // e.g., "24 Hour Fitness - Downtown"
+    workoutLocationAddress: text("workout_location_address"), // Full address for autocomplete
+    workoutLocationLat: real("workout_location_lat"),
+    workoutLocationLng: real("workout_location_lng"),
+    workoutLocationType: text("workout_location_type"), // "gym" | "park" | "studio" | "home_gym" | "other"
+    // Location visibility controls: "none" | "state" | "city" | "full"
+    locationVisibility: text("location_visibility").default("city"),
     visibility: text("visibility").default("private").notNull(), // 'public' | 'private'
     notificationPreferences: jsonb("notification_preferences")
       .$type<{
@@ -875,6 +885,39 @@ export const userProfiles = pgTable(
     index("user_profiles_user_idx").on(profile.userId),
     index("user_profiles_visibility_idx").on(profile.visibility),
     index("user_profiles_city_idx").on(profile.city),
+    // Handle lookup - case-insensitive (use raw SQL for functional index)
+    index("user_profiles_handle_lower_idx").on(sql`LOWER(${profile.handle})`),
+    // Location-based discovery
+    index("user_profiles_location_idx").on(profile.country, profile.state, profile.city),
+  ]
+);
+
+// ============================================================================
+// SUBSCRIPTIONS (Stripe payments and billing)
+// ============================================================================
+
+export const subscriptions = pgTable(
+  "subscriptions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull().unique(), // Neon Auth user ID
+    stripeCustomerId: text("stripe_customer_id").unique(),
+    stripeSubscriptionId: text("stripe_subscription_id").unique(),
+    stripePriceId: text("stripe_price_id"),
+    plan: text("plan").default("free").notNull(), // free, pro
+    status: text("status").default("active").notNull(), // active, canceled, past_due, trialing
+    currentPeriodStart: timestamp("current_period_start", { withTimezone: true }),
+    currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+    cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false).notNull(),
+    canceledAt: timestamp("canceled_at", { withTimezone: true }),
+    trialEnd: timestamp("trial_end", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (sub) => [
+    index("subscriptions_user_idx").on(sub.userId),
+    index("subscriptions_stripe_customer_idx").on(sub.stripeCustomerId),
+    index("subscriptions_status_idx").on(sub.status),
   ]
 );
 
@@ -1102,6 +1145,10 @@ export const challenges = pgTable(
     index("challenges_popularity_idx").on(challenge.popularityScore),
     index("challenges_trending_idx").on(challenge.trendingScore),
     index("challenges_program_idx").on(challenge.programId),
+    // Compound indexes for discovery queries
+    index("challenges_discovery_popular_idx").on(challenge.visibility, challenge.popularityScore),
+    index("challenges_discovery_rating_idx").on(challenge.visibility, challenge.avgRating),
+    index("challenges_discovery_participants_idx").on(challenge.visibility, challenge.participantCount),
   ]
 );
 
@@ -1515,6 +1562,10 @@ export const sharedWorkouts = pgTable(
     index("shared_workouts_featured_idx").on(shared.isFeatured),
     index("shared_workouts_popularity_idx").on(shared.popularityScore),
     index("shared_workouts_trending_idx").on(shared.trendingScore),
+    // Compound indexes for discovery queries
+    index("shared_workouts_discovery_popular_idx").on(shared.visibility, shared.popularityScore),
+    index("shared_workouts_discovery_saves_idx").on(shared.visibility, shared.saveCount),
+    index("shared_workouts_discovery_rating_idx").on(shared.visibility, shared.avgRating),
   ]
 );
 
@@ -1641,6 +1692,8 @@ export const userSkills = pgTable(
   (skill) => [
     index("user_skills_user_idx").on(skill.userId),
     index("user_skills_status_idx").on(skill.userId, skill.currentStatus),
+    // Prevent duplicate skills per user
+    uniqueIndex("user_skills_unique_idx").on(skill.userId, skill.name),
   ]
 );
 
@@ -1661,6 +1714,32 @@ export const userLocations = pgTable(
     address: text("address"),
     isActive: boolean("is_active").default(false).notNull(), // Currently selected location
     equipment: jsonb("equipment").$type<string[]>().default([]).notNull(), // Array of equipment IDs
+    // Detailed equipment specs for home gyms
+    equipmentDetails: jsonb("equipment_details")
+      .$type<{
+        // Dumbbell details
+        dumbbells?: {
+          available: boolean;
+          type?: "fixed" | "adjustable" | "both";
+          weights?: number[]; // Available weights in lbs: [5, 10, 15, 20, 25, 30, ...]
+          maxWeight?: number; // Max dumbbell weight available
+        };
+        // Barbell details
+        barbell?: {
+          available: boolean;
+          type?: "standard" | "olympic" | "both"; // Standard = 1" sleeve, Olympic = 2" sleeve
+          barWeight?: number; // Bar weight in lbs (45 for olympic, 15-25 for standard)
+          plates?: number[]; // Available plate weights: [2.5, 5, 10, 25, 35, 45]
+          totalPlateWeight?: number; // Total weight of all plates combined
+        };
+        // Machines available (for home gyms with cable machines, etc.)
+        machines?: string[];
+        // Cardio equipment
+        cardio?: string[];
+        // Other notes
+        notes?: string;
+      }>()
+      .default({}),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -1710,6 +1789,8 @@ export const equipmentCatalog = pgTable(
 
 // ============================================================================
 // CIRCLE REQUESTS (for public profile discovery)
+// @deprecated Use circleJoinRequests instead. This table is unused in application code.
+// TODO: Remove in future migration after verifying no production data exists.
 // ============================================================================
 
 export const circleRequests = pgTable(
@@ -1752,6 +1833,9 @@ export const circleInvitationsRelations = relations(circleInvitations, ({ one })
     references: [circles.id],
   }),
 }));
+
+// Subscriptions have no relations (userId is Neon Auth user, not a table reference)
+// Query via: db.query.subscriptions.findFirst({ where: eq(subscriptions.userId, userId) })
 
 export const circleMembersRelations = relations(circleMembers, ({ one, many }) => ({
   circle: one(circles, {
@@ -2226,6 +2310,8 @@ export const userSports = pgTable(
     index("user_sports_user_idx").on(sport.userId),
     index("user_sports_sport_idx").on(sport.sport),
     index("user_sports_active_idx").on(sport.userId, sport.currentlyActive),
+    // Prevent duplicate sports per user
+    uniqueIndex("user_sports_unique_idx").on(sport.userId, sport.sport),
   ]
 );
 
@@ -2529,6 +2615,8 @@ export const circlePosts = pgTable(
 
 /**
  * Circle post likes
+ * @note Consider consolidating with contentRatings (using rating=1 for likes) in future refactor
+ * for unified content engagement tracking. Keep separate for now as they serve different UX patterns.
  */
 export const circlePostLikes = pgTable(
   "circle_post_likes",
@@ -2549,6 +2637,8 @@ export const circlePostLikes = pgTable(
 
 /**
  * Circle post comments
+ * @note Consider consolidating with contentComments (contentType='circle_post') in future refactor
+ * for unified comment system. Keep separate for now as circle posts have specific relations.
  */
 export const circlePostComments = pgTable(
   "circle_post_comments",
@@ -2770,9 +2860,37 @@ export const challengeProofUploadsRelations = relations(challengeProofUploads, (
 }));
 
 // ============================================================================
+// AUDIT LOGS (GDPR/Security Compliance)
+// ============================================================================
+
+export const auditLogs = pgTable(
+  "audit_logs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull(),
+    action: text("action").notNull(), // data_export, data_deletion, profile_view, etc.
+    severity: text("severity").default("info").notNull(), // info, warning, critical
+    resourceType: text("resource_type"), // profile, workout, message, etc.
+    resourceId: text("resource_id"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (log) => [
+    index("audit_logs_user_idx").on(log.userId),
+    index("audit_logs_action_idx").on(log.action),
+    index("audit_logs_severity_idx").on(log.severity),
+    index("audit_logs_created_at_idx").on(log.createdAt),
+  ]
+);
+
+// ============================================================================
 // TYPE EXPORTS
 // ============================================================================
 
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type NewAuditLog = typeof auditLogs.$inferInsert;
 export type Circle = typeof circles.$inferSelect;
 export type NewCircle = typeof circles.$inferInsert;
 export type CircleMember = typeof circleMembers.$inferSelect;

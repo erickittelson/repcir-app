@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { circleMembers, userFollows } from "@/lib/db/schema";
-import { eq, ne, and, notInArray } from "drizzle-orm";
+import { circleMembers, userFollows, userProfiles } from "@/lib/db/schema";
+import { eq, ne, and, notInArray, inArray } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 export async function GET() {
@@ -33,16 +33,28 @@ export async function GET() {
       }
     }
 
+    // Fetch user profiles for profile pictures
+    const userIds = Array.from(userMap.keys());
+    const profiles = userIds.length > 0
+      ? await db.query.userProfiles.findMany({
+          where: inArray(userProfiles.userId, userIds),
+        })
+      : [];
+    const profileMap = new Map(profiles.map((p) => [p.userId, p]));
+
     // Convert to suggested user format
     const suggestedUsers = Array.from(userMap.values())
       .slice(0, 20)
-      .map((member) => ({
-        id: member.userId,
-        displayName: member.name,
-        name: member.name,
-        profilePicture: member.profilePicture,
-        isFollowing: false,
-      }));
+      .map((member) => {
+        const profile = member.userId ? profileMap.get(member.userId) : null;
+        return {
+          id: member.userId,
+          displayName: profile?.displayName || member.name,
+          name: member.name,
+          profilePicture: profile?.profilePicture || member.profilePicture,
+          isFollowing: false,
+        };
+      });
 
     return NextResponse.json({ users: suggestedUsers });
   } catch (error) {

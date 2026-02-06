@@ -161,37 +161,48 @@ export async function GET(request: Request) {
       timestamp: new Date().toISOString(),
     };
 
-    // Add detailed member stats if requested
+    // Add detailed member stats if requested - OPTIMIZED: Single aggregate query instead of N+1
     if (detailed && memberIds.length > 0) {
-      const memberStats = await Promise.all(
-        members.map(async (m) => {
-          const [sessions, activeGoals, snapshot] = await Promise.all([
-            dbRead
-              .select({ count: count() })
-              .from(workoutSessions)
-              .where(eq(workoutSessions.memberId, m.id)),
-            dbRead
-              .select({ count: count() })
-              .from(goals)
-              .where(and(eq(goals.memberId, m.id), eq(goals.status, "active"))),
-            dbRead
-              .select({ lastUpdated: memberContextSnapshot.lastUpdated })
-              .from(memberContextSnapshot)
-              .where(eq(memberContextSnapshot.memberId, m.id))
-              .limit(1),
-          ]);
+      // Single query with aggregations instead of N queries
+      const memberStatsResult = await dbRead.execute(sql`
+        SELECT
+          m.id,
+          m.name,
+          COALESCE(ws.workout_count, 0) as workout_count,
+          COALESCE(g.active_goals, 0) as active_goals,
+          mcs.last_updated as snapshot_updated
+        FROM circle_members m
+        LEFT JOIN (
+          SELECT member_id, COUNT(*) as workout_count
+          FROM workout_sessions
+          WHERE member_id = ANY(${memberIds})
+          GROUP BY member_id
+        ) ws ON ws.member_id = m.id
+        LEFT JOIN (
+          SELECT member_id, COUNT(*) as active_goals
+          FROM goals
+          WHERE member_id = ANY(${memberIds}) AND status = 'active'
+          GROUP BY member_id
+        ) g ON g.member_id = m.id
+        LEFT JOIN member_context_snapshot mcs ON mcs.member_id = m.id
+        WHERE m.id = ANY(${memberIds})
+      `);
 
-          return {
-            id: m.id,
-            name: m.name,
-            workouts: sessions[0].count,
-            activeGoals: activeGoals[0].count,
-            snapshotAge: snapshot[0]?.lastUpdated
-              ? Math.round((Date.now() - snapshot[0].lastUpdated.getTime()) / 60000) + " min"
-              : "No snapshot",
-          };
-        })
-      );
+      const memberStats = (memberStatsResult.rows as Array<{
+        id: string;
+        name: string;
+        workout_count: number;
+        active_goals: number;
+        snapshot_updated: Date | null;
+      }>).map((row) => ({
+        id: row.id,
+        name: row.name,
+        workouts: Number(row.workout_count),
+        activeGoals: Number(row.active_goals),
+        snapshotAge: row.snapshot_updated
+          ? Math.round((Date.now() - new Date(row.snapshot_updated).getTime()) / 60000) + " min"
+          : "No snapshot",
+      }));
 
       response.memberStats = memberStats;
     }

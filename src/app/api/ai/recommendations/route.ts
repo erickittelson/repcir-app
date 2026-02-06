@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { getSession } from "@/lib/neon-auth";
 import { db } from "@/lib/db";
 import {
@@ -12,6 +13,10 @@ import {
 import { eq, and, desc, gte, sql, not, inArray } from "drizzle-orm";
 import { generateText } from "ai";
 import { aiModel, getMemberContext, buildSystemPrompt } from "@/lib/ai";
+import { applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit";
+
+// Query parameter validation
+const recommendationTypeSchema = z.enum(["workouts", "challenges", "programs", "all"]);
 
 /**
  * AI-powered recommendations for workouts, challenges, and programs
@@ -22,9 +27,28 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Apply rate limiting for AI operations
+  const rateLimitResult = applyRateLimit(
+    `ai-recommendations:${session.user.id}`,
+    RATE_LIMITS.aiGeneration
+  );
+  if (!rateLimitResult.success) {
+    return createRateLimitResponse(rateLimitResult);
+  }
+
   try {
     const { searchParams } = new URL(request.url);
-    const type = searchParams.get("type") || "all"; // workouts, challenges, programs, all
+    const typeParam = searchParams.get("type") || "all";
+
+    // Validate type parameter
+    const typeValidation = recommendationTypeSchema.safeParse(typeParam);
+    if (!typeValidation.success) {
+      return NextResponse.json(
+        { error: "Invalid type. Must be one of: workouts, challenges, programs, all" },
+        { status: 400 }
+      );
+    }
+    const type = typeValidation.data;
 
     const memberId = session.activeCircle?.memberId;
     const userId = session.user.id;
@@ -77,11 +101,45 @@ export async function GET(request: NextRequest) {
       (cat) => !categoryCount[cat] || categoryCount[cat] < 2
     );
 
+    // Type definitions for recommendations
+    interface WorkoutRecommendation {
+      id: string;
+      title: string;
+      description: string | null;
+      category: string | null;
+      difficulty: string | null;
+      estimatedDuration: number | null;
+      saveCount: number | null;
+      reason: string;
+    }
+
+    interface ChallengeRecommendation {
+      id: string;
+      name: string;
+      shortDescription: string | null;
+      category: string | null;
+      difficulty: string | null;
+      durationDays: number | null;
+      participantCount: number | null;
+      reason: string;
+    }
+
+    interface ProgramRecommendation {
+      id: string;
+      name: string;
+      description: string | null;
+      category: string | null;
+      difficulty: string | null;
+      durationWeeks: number | null;
+      enrollmentCount: number | null;
+      reason: string;
+    }
+
     // Build recommendations based on context
     const recommendations: {
-      workouts: any[];
-      challenges: any[];
-      programs: any[];
+      workouts: WorkoutRecommendation[];
+      challenges: ChallengeRecommendation[];
+      programs: ProgramRecommendation[];
       aiInsight: string;
     } = {
       workouts: [],

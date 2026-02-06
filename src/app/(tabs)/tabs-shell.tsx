@@ -11,6 +11,7 @@ import {
 } from "@/components/navigation";
 import { PostLoginExperience } from "@/components/onboarding/post-login-experience";
 import { RallyproofLogo } from "@/components/ui/rallyproof-logo";
+import { NotificationsBell } from "@/components/notifications-bell";
 import type { RallyMember } from "@/components/social/rally-member-selector";
 
 interface UserData {
@@ -109,11 +110,14 @@ export function TabsShell({ session, children }: TabsShellProps) {
           </span>
         </Link>
 
-        {/* Right: Rally Switcher */}
-        <CircleSwitcher
-          activeCircle={session.activeCircle}
-          circles={session.circles}
-        />
+        {/* Right: Notifications + Rally Switcher */}
+        <div className="flex items-center gap-1">
+          <NotificationsBell />
+          <CircleSwitcher
+            activeCircle={session.activeCircle}
+            circles={session.circles}
+          />
+        </div>
       </header>
 
       {/* Main content area */}

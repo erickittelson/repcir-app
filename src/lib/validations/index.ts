@@ -255,6 +255,31 @@ export const coachingModes = [
 export type CoachingMode = typeof coachingModes[number];
 
 // Support both legacy (content string) and modern (parts array) AI SDK message formats
+// Clarification context types for workout generation
+const clarificationContextTypes = [
+  "location",
+  "duration",
+  "limitations",
+  "energy",
+  "focus",
+  "intensity",
+] as const;
+
+// Conversation state for multi-turn clarification
+const conversationStateSchema = z.object({
+  active: z.boolean(),
+  context: z.object({
+    location: z.string().optional(),
+    duration: z.number().optional(),
+    energy: z.string().optional(),
+    limitations: z.array(z.string()).optional(),
+    focus: z.string().optional(),
+    intensity: z.string().optional(),
+  }),
+  pendingQuestions: z.array(z.string()),
+  answeredQuestions: z.array(z.string()),
+}).optional();
+
 export const aiChatSchema = z.object({
   messages: z.array(z.object({
     id: z.string().optional(),
@@ -273,7 +298,100 @@ export const aiChatSchema = z.object({
   conversationId: uuidSchema.nullish(), // accepts null, undefined, or valid UUID
   // Coaching mode
   mode: z.enum(coachingModes).optional().default("general"),
+  // Clarification flow state
+  clarificationState: conversationStateSchema,
+  // User's answer to a clarification question
+  clarificationAnswer: z.string().optional(),
+  // Which context the answer is for
+  clarificationContext: z.enum(clarificationContextTypes).optional(),
 });
+
+// ============================================================================
+// User Profile schemas
+// ============================================================================
+
+// Social links schema
+const socialLinkSchema = z.object({
+  platform: z.string().max(50),
+  url: z.string().url().max(500),
+}).strict();
+
+// Visibility options
+const visibilityEnum = z.enum(["public", "connections", "private"]);
+
+export const updateUserProfileSchema = z.object({
+  // Basic info - all with length limits
+  displayName: z.string().max(100).trim().optional(),
+  handle: z.string()
+    .max(30)
+    .regex(/^[a-zA-Z0-9_]+$/, "Handle can only contain letters, numbers, and underscores")
+    .trim()
+    .optional(),
+  bio: z.string().max(500).optional(),
+
+  // Birth info - validated ranges
+  birthMonth: z.number().int().min(1).max(12).optional().nullable(),
+  birthYear: z.number().int().min(1900).max(new Date().getFullYear()).optional().nullable(),
+
+  // Location - with length limits
+  city: z.string().max(100).trim().optional().nullable(),
+  state: z.string().max(100).trim().optional().nullable(),
+  country: z.string().max(100).trim().optional().nullable(),
+
+  // Workout location
+  workoutLocation: z.string().max(200).trim().optional().nullable(),
+  workoutLocationAddress: z.string().max(500).trim().optional().nullable(),
+  workoutLocationLat: z.number().min(-90).max(90).optional().nullable(),
+  workoutLocationLng: z.number().min(-180).max(180).optional().nullable(),
+  workoutLocationType: z.enum(["home", "gym", "outdoor", "studio", "other"]).optional().nullable(),
+  locationVisibility: visibilityEnum.optional(),
+
+  // Profile picture (URL)
+  profilePicture: z.string().url().max(1000).optional().nullable(),
+
+  // Gallery photos - max 5
+  galleryPhotos: z.array(z.string().url().max(1000)).max(5).optional(),
+
+  // Visibility settings
+  visibility: visibilityEnum.optional(),
+  fieldVisibility: z.record(z.string(), visibilityEnum).optional(),
+
+  // Social links - max 10
+  socialLinks: z.array(socialLinkSchema).max(10).optional(),
+
+  // Featured items - max 5 each
+  featuredGoals: z.array(uuidSchema).max(5).optional(),
+  featuredAchievements: z.array(uuidSchema).max(5).optional(),
+
+  // Gender (if updatable)
+  gender: z.enum(["male", "female", "other", "prefer_not_to_say"]).optional().nullable(),
+}).strict(); // strict() prevents extra fields (mass assignment protection)
+
+// Partial schema for PATCH updates (all fields optional)
+export const patchUserProfileSchema = updateUserProfileSchema.partial();
+
+// ============================================================================
+// Circle Post schemas
+// ============================================================================
+
+export const createCirclePostSchema = z.object({
+  content: z.string()
+    .min(1, "Post content is required")
+    .max(5000, "Post content must be less than 5000 characters")
+    .trim(),
+  mediaUrls: z.array(z.string().url().max(1000)).max(10).optional(),
+  type: z.enum(["text", "workout", "achievement", "question"]).optional().default("text"),
+  workoutSessionId: uuidSchema.optional().nullable(),
+  visibility: visibilityEnum.optional().default("public"),
+}).strict();
+
+export const createCircleCommentSchema = z.object({
+  content: z.string()
+    .min(1, "Comment is required")
+    .max(2000, "Comment must be less than 2000 characters")
+    .trim(),
+  parentId: uuidSchema.optional().nullable(),
+}).strict();
 
 // ============================================================================
 // Helper function to validate request body

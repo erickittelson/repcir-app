@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { auth, hashPasskey } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { circles } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -64,7 +64,8 @@ export async function PATCH(request: Request) {
           { status: 400 }
         );
       }
-      updates.passkey = passkey; // In production, hash this
+      // Note: hashPasskey is deprecated as app now uses Neon Auth
+      updates.passkey = await hashPasskey(passkey);
     }
 
     await db

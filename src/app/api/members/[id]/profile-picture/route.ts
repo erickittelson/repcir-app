@@ -3,10 +3,11 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { circleMembers } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { writeFile, mkdir, unlink } from "fs/promises";
-import { join } from "path";
-import { v4 as uuidv4 } from "uuid";
+import { put, del } from "@vercel/blob";
 import { moderateImageBase64 } from "@/lib/moderation";
+import { validateImageFile } from "@/lib/file-validation";
+
+export const runtime = "nodejs";
 
 export async function POST(
   request: Request,
@@ -57,6 +58,15 @@ export async function POST(
       );
     }
 
+    // Validate file content (magic number check)
+    const validation = await validateImageFile(file);
+    if (!validation.isValid) {
+      return NextResponse.json(
+        { error: validation.error || "Invalid image file" },
+        { status: 400 }
+      );
+    }
+
     // Read file for moderation
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
@@ -84,33 +94,39 @@ export async function POST(
       );
     }
 
-    // Create upload directory if it doesn't exist
-    const uploadDir = join(process.cwd(), "public", "uploads", "profile-pictures");
-    await mkdir(uploadDir, { recursive: true });
-
-    // Generate unique filename
+    // Generate unique filename for Vercel Blob
     const ext = file.name.split(".").pop() || "jpg";
-    const filename = `${uuidv4()}.${ext}`;
-    const filepath = join(uploadDir, filename);
+    const filename = `member-profile-pictures/${session.circleId}/${id}/${Date.now()}.${ext}`;
 
-    // Write file to disk (already passed moderation)
-    await writeFile(filepath, buffer);
+    // Delete old profile picture from Blob if exists
+    if (member.profilePicture && member.profilePicture.includes("blob.vercel-storage.com")) {
+      try {
+        await del(member.profilePicture);
+      } catch (error) {
+        // Ignore deletion errors - file may not exist
+        console.warn("Failed to delete old profile picture:", error);
+      }
+    }
 
-    // Generate URL path
-    const profilePictureUrl = `/uploads/profile-pictures/${filename}`;
+    // Upload to Vercel Blob
+    const blob = await put(filename, buffer, {
+      access: "public",
+      addRandomSuffix: true,
+      contentType: file.type,
+    });
 
     // Update member with profile picture URL
     await db
       .update(circleMembers)
       .set({
-        profilePicture: profilePictureUrl,
+        profilePicture: blob.url,
         updatedAt: new Date(),
       })
       .where(eq(circleMembers.id, id));
 
     return NextResponse.json({
       success: true,
-      profilePicture: profilePictureUrl,
+      profilePicture: blob.url,
     });
   } catch (error) {
     console.error("Error uploading profile picture:", error);
@@ -143,6 +159,16 @@ export async function DELETE(
 
     if (!member) {
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
+    }
+
+    // Delete from Vercel Blob if exists
+    if (member.profilePicture && member.profilePicture.includes("blob.vercel-storage.com")) {
+      try {
+        await del(member.profilePicture);
+      } catch (error) {
+        // Ignore deletion errors - file may not exist
+        console.warn("Failed to delete profile picture from blob:", error);
+      }
     }
 
     // Remove profile picture URL from member

@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
@@ -23,7 +24,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Users,
   UserMinus,
@@ -32,8 +32,12 @@ import {
   Loader2,
   UserPlus,
   Inbox,
+  Search,
+  Clock,
+  MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 // ============================================================================
 // Types
@@ -57,10 +61,22 @@ export interface ConnectionRequest {
   requestedAt: string;
 }
 
+export interface SearchResult {
+  id: string;
+  userId: string;
+  name: string;
+  handle?: string | null;
+  profilePicture?: string | null;
+  city?: string | null;
+  state?: string | null;
+  bio?: string | null;
+  connectionStatus: "connected" | "pending_outgoing" | "pending_incoming" | "not_connected";
+}
+
 interface ConnectionsSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  initialTab?: "connections" | "requests";
+  initialTab?: "connections" | "requests" | "find";
 }
 
 // ============================================================================
@@ -207,6 +223,104 @@ function RequestItem({
 }
 
 // ============================================================================
+// Search Result Item Component
+// ============================================================================
+
+function SearchResultItem({
+  user,
+  onConnect,
+  isProcessing,
+}: {
+  user: SearchResult;
+  onConnect: () => void;
+  isProcessing: boolean;
+}) {
+  const statusLabels = {
+    connected: "Connected",
+    pending_outgoing: "Requested",
+    pending_incoming: "Accept",
+    not_connected: "Connect",
+  };
+
+  const isActionable = user.connectionStatus === "not_connected" || user.connectionStatus === "pending_incoming";
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/50 transition-colors"
+    >
+      <Avatar className="h-12 w-12 border-2 border-border">
+        <AvatarImage src={user.profilePicture || undefined} />
+        <AvatarFallback className="bg-brand/20 text-brand font-semibold">
+          {getInitials(user.name)}
+        </AvatarFallback>
+      </Avatar>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="font-medium truncate">{user.name}</p>
+          {user.handle && (
+            <span className="text-xs text-brand">@{user.handle}</span>
+          )}
+        </div>
+        {(user.city || user.state) && (
+          <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
+            <MapPin className="h-3 w-3 flex-shrink-0" />
+            {[user.city, user.state].filter(Boolean).join(", ")}
+          </p>
+        )}
+        {user.bio && (
+          <p className="text-xs text-muted-foreground/80 truncate mt-0.5">
+            {user.bio.length > 60 ? `${user.bio.substring(0, 60)}...` : user.bio}
+          </p>
+        )}
+      </div>
+
+      {user.connectionStatus === "connected" ? (
+        <span className="text-xs text-success flex items-center gap-1">
+          <Check className="h-3 w-3" />
+          Connected
+        </span>
+      ) : user.connectionStatus === "pending_outgoing" ? (
+        <span className="text-xs text-muted-foreground flex items-center gap-1">
+          <Clock className="h-3 w-3" />
+          Pending
+        </span>
+      ) : (
+        <Button
+          size="sm"
+          onClick={onConnect}
+          disabled={isProcessing}
+          className={cn(
+            "h-8",
+            user.connectionStatus === "pending_incoming"
+              ? "bg-brand hover:bg-brand/90 text-brand-foreground"
+              : "bg-brand/10 text-brand hover:bg-brand/20"
+          )}
+        >
+          {isProcessing ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : user.connectionStatus === "pending_incoming" ? (
+            <>
+              <Check className="h-4 w-4 mr-1" />
+              Accept
+            </>
+          ) : (
+            <>
+              <UserPlus className="h-4 w-4 mr-1" />
+              Connect
+            </>
+          )}
+        </Button>
+      )}
+    </motion.div>
+  );
+}
+
+// ============================================================================
 // Empty States
 // ============================================================================
 
@@ -246,6 +360,35 @@ function EmptyRequests() {
   );
 }
 
+function EmptySearch({ hasQuery }: { hasQuery: boolean }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex flex-col items-center justify-center py-12 text-center"
+    >
+      <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
+        <Search className="h-8 w-8 text-muted-foreground" />
+      </div>
+      <p className="font-medium text-lg">
+        {hasQuery ? "No users found" : "Find People"}
+      </p>
+      <p className="text-sm text-muted-foreground mt-1 max-w-[280px]">
+        {hasQuery
+          ? "Try a different name, @handle, or location"
+          : "Search by name, @handle, city, or bio to find and connect with others"}
+      </p>
+      {!hasQuery && (
+        <div className="flex flex-wrap justify-center gap-2 mt-4">
+          <span className="px-2 py-1 bg-muted/50 rounded text-xs text-muted-foreground">@username</span>
+          <span className="px-2 py-1 bg-muted/50 rounded text-xs text-muted-foreground">New York</span>
+          <span className="px-2 py-1 bg-muted/50 rounded text-xs text-muted-foreground">powerlifting</span>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
 // ============================================================================
 // Main ConnectionsSheet Component
 // ============================================================================
@@ -255,51 +398,128 @@ export function ConnectionsSheet({
   onOpenChange,
   initialTab = "connections",
 }: ConnectionsSheetProps) {
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [activeTab, setActiveTab] = useState<"connections" | "requests" | "find">(initialTab);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [requests, setRequests] = useState<ConnectionRequest[]>([]);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [removeConfirm, setRemoveConfirm] = useState<Connection | null>(null);
 
   // Fetch connections and requests
-  const fetchData = useCallback(async () => {
+  useEffect(() => {
     if (!open) return;
 
-    setLoading(true);
-    try {
-      const [connectionsRes, requestsRes] = await Promise.all([
-        fetch("/api/connections"),
-        fetch("/api/connections/requests"),
-      ]);
+    const controller = new AbortController();
 
-      if (connectionsRes.ok) {
-        const data = await connectionsRes.json();
-        setConnections(data.connections || []);
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const [connectionsRes, requestsRes] = await Promise.all([
+          fetch("/api/connections", { signal: controller.signal }),
+          fetch("/api/connections/requests", { signal: controller.signal }),
+        ]);
+
+        if (connectionsRes.ok) {
+          const data = await connectionsRes.json();
+          setConnections(data.connections || []);
+        }
+
+        if (requestsRes.ok) {
+          const data = await requestsRes.json();
+          setRequests(data.requests || []);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name !== "AbortError") {
+          console.error("Failed to fetch connections:", error);
+          toast.error("Failed to load connections");
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
+    };
 
-      if (requestsRes.ok) {
-        const data = await requestsRes.json();
-        setRequests(data.requests || []);
-      }
-    } catch (error) {
-      console.error("Failed to fetch connections:", error);
-      toast.error("Failed to load connections");
-    } finally {
-      setLoading(false);
-    }
-  }, [open]);
-
-  useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    return () => controller.abort();
+  }, [open]);
 
   // Reset tab when opening
   useEffect(() => {
     if (open) {
       setActiveTab(initialTab);
+      setSearchQuery("");
+      setSearchResults([]);
     }
   }, [open, initialTab]);
+
+  // Search for users
+  useEffect(() => {
+    if (activeTab !== "find") return;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const url = searchQuery
+          ? `/api/users/search?q=${encodeURIComponent(searchQuery)}&limit=20`
+          : `/api/users/search?limit=20`;
+        const res = await fetch(url, { signal: controller.signal });
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data.users || []);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name !== "AbortError") {
+          console.error("Failed to search users:", error);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setSearchLoading(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [searchQuery, activeTab]);
+
+  // Handle sending a connection request
+  const handleSendRequest = async (user: SearchResult) => {
+    setProcessingId(user.userId);
+    try {
+      const response = await fetch("/api/connections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ addresseeId: user.userId }),
+      });
+
+      if (response.ok) {
+        // Update search results to show pending status
+        setSearchResults((prev) =>
+          prev.map((u) =>
+            u.userId === user.userId
+              ? { ...u, connectionStatus: "pending_outgoing" as const }
+              : u
+          )
+        );
+        toast.success(`Connection request sent to ${user.name}`);
+      } else {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to send request");
+      }
+    } catch (error) {
+      console.error("Failed to send connection request:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to send request");
+    } finally {
+      setProcessingId(null);
+    }
+  };
 
   // Handle removing a connection
   const handleRemoveConnection = async () => {
@@ -402,37 +622,72 @@ export function ConnectionsSheet({
             </SheetDescription>
           </SheetHeader>
 
-          <Tabs
-            value={activeTab}
-            onValueChange={(v) => setActiveTab(v as "connections" | "requests")}
-            className="flex flex-col h-[calc(100%-80px)]"
-          >
-            <TabsList className="mx-4 mb-4 grid w-[calc(100%-32px)] grid-cols-2">
-              <TabsTrigger value="connections" className="gap-2">
-                <Users className="h-4 w-4" />
-                My Connections
-                {connections.length > 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    ({connections.length})
-                  </span>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="requests" className="gap-2 relative">
-                <UserPlus className="h-4 w-4" />
-                Requests
-                {pendingCount > 0 && (
-                  <Badge
-                    variant="default"
-                    className="absolute -top-1 -right-1 h-5 min-w-5 px-1.5 bg-brand text-brand-foreground"
-                  >
-                    {pendingCount}
-                  </Badge>
-                )}
-              </TabsTrigger>
-            </TabsList>
+          {/* Custom tab buttons with clear selected state */}
+          <div className="flex gap-2 mx-4 mb-4">
+            <button
+              onClick={() => setActiveTab("connections")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-medium transition-all",
+                activeTab === "connections"
+                  ? "bg-brand text-brand-foreground shadow-sm"
+                  : "bg-muted/50 text-muted-foreground hover:bg-muted"
+              )}
+            >
+              <Users className="h-4 w-4" />
+              Connections
+              {connections.length > 0 && (
+                <span className={cn(
+                  "text-xs px-1.5 py-0.5 rounded-full",
+                  activeTab === "connections" ? "bg-brand-foreground/20" : "bg-muted"
+                )}>
+                  {connections.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab("requests")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-medium transition-all relative",
+                activeTab === "requests"
+                  ? "bg-brand text-brand-foreground shadow-sm"
+                  : "bg-muted/50 text-muted-foreground hover:bg-muted"
+              )}
+            >
+              <Inbox className="h-4 w-4" />
+              Requests
+              {pendingCount > 0 && (
+                <Badge
+                  variant="default"
+                  className={cn(
+                    "h-5 min-w-5 px-1.5",
+                    activeTab === "requests"
+                      ? "bg-brand-foreground/20 text-brand-foreground"
+                      : "bg-destructive text-destructive-foreground"
+                  )}
+                >
+                  {pendingCount}
+                </Badge>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab("find")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-medium transition-all",
+                activeTab === "find"
+                  ? "bg-brand text-brand-foreground shadow-sm"
+                  : "bg-muted/50 text-muted-foreground hover:bg-muted"
+              )}
+            >
+              <Search className="h-4 w-4" />
+              Find
+            </button>
+          </div>
 
-            <TabsContent value="connections" className="flex-1 mt-0">
-              <ScrollArea className="h-full px-4">
+          <div className="flex flex-col flex-1 overflow-hidden">
+
+            {/* Connections Tab */}
+            {activeTab === "connections" && (
+              <ScrollArea className="flex-1 px-4">
                 {loading ? (
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="h-6 w-6 animate-spin text-brand" />
@@ -454,10 +709,11 @@ export function ConnectionsSheet({
                   </AnimatePresence>
                 )}
               </ScrollArea>
-            </TabsContent>
+            )}
 
-            <TabsContent value="requests" className="flex-1 mt-0">
-              <ScrollArea className="h-full px-4">
+            {/* Requests Tab */}
+            {activeTab === "requests" && (
+              <ScrollArea className="flex-1 px-4">
                 {loading ? (
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="h-6 w-6 animate-spin text-brand" />
@@ -480,8 +736,48 @@ export function ConnectionsSheet({
                   </AnimatePresence>
                 )}
               </ScrollArea>
-            </TabsContent>
-          </Tabs>
+            )}
+
+            {/* Find/Search Tab */}
+            {activeTab === "find" && (
+              <div className="flex flex-col flex-1 overflow-hidden">
+                <div className="px-4 pb-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search by name or @handle..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-9"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+                <ScrollArea className="flex-1 px-4">
+                  {searchLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-6 w-6 animate-spin text-brand" />
+                    </div>
+                  ) : searchResults.length === 0 ? (
+                    <EmptySearch hasQuery={searchQuery.length > 0} />
+                  ) : (
+                    <AnimatePresence mode="popLayout">
+                      <div className="space-y-1">
+                        {searchResults.map((user) => (
+                          <SearchResultItem
+                            key={user.userId}
+                            user={user}
+                            onConnect={() => handleSendRequest(user)}
+                            isProcessing={processingId === user.userId}
+                          />
+                        ))}
+                      </div>
+                    </AnimatePresence>
+                  )}
+                </ScrollArea>
+              </div>
+            )}
+          </div>
         </SheetContent>
       </Sheet>
 

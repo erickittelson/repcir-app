@@ -1,13 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MentionInput } from "@/components/ui/mention-input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Heart,
   MessageCircle,
@@ -21,8 +27,8 @@ import {
   Trash2,
   Loader2,
   X,
-  Mic,
-  MicOff,
+  Clock,
+  Plus,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -64,6 +70,35 @@ interface CircleFeedProps {
   userRole: string | null;
 }
 
+interface WorkoutPlan {
+  id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  difficulty?: string;
+  estimatedDuration?: number;
+  exerciseCount?: number;
+}
+
+interface Challenge {
+  id: string;
+  name: string;
+  shortDescription?: string;
+  category?: string;
+  difficulty?: string;
+  durationDays?: number;
+  participantCount?: number;
+  coverImage?: string;
+}
+
+interface PostAttachment {
+  type: "image" | "workout" | "challenge";
+  imageUrl?: string;
+  imagePreview?: string;
+  workout?: WorkoutPlan;
+  challenge?: Challenge;
+}
+
 export function CircleFeed({ circleId, userId, userRole }: CircleFeedProps) {
   const router = useRouter();
   const [posts, setPosts] = useState<CirclePost[]>([]);
@@ -74,37 +109,224 @@ export function CircleFeed({ circleId, userId, userRole }: CircleFeedProps) {
   const [deleteTarget, setDeleteTarget] = useState<CirclePost | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Attachment state
+  const [attachment, setAttachment] = useState<PostAttachment | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Dialog state
+  const [workoutDialogOpen, setWorkoutDialogOpen] = useState(false);
+  const [challengeDialogOpen, setChallengeDialogOpen] = useState(false);
+  const [workouts, setWorkouts] = useState<WorkoutPlan[]>([]);
+  const [challenges, setChallenges] = useState<Challenge[]>([]);
+  const [loadingWorkouts, setLoadingWorkouts] = useState(false);
+  const [loadingChallenges, setLoadingChallenges] = useState(false);
+
   const isAdmin = userRole === "admin" || userRole === "owner";
 
   useEffect(() => {
+    const controller = new AbortController();
+
+    const fetchPosts = async () => {
+      try {
+        const res = await fetch(`/api/circles/${circleId}/posts`, { signal: controller.signal });
+        if (res.ok) {
+          const data = await res.json();
+          setPosts(data.posts);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name !== "AbortError") {
+          console.error("Failed to fetch posts:", error);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+
     fetchPosts();
+    return () => controller.abort();
   }, [circleId]);
 
-  const fetchPosts = async () => {
+  // Handle image file selection
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be less than 5MB");
+      return;
+    }
+
+    // Create preview
+    const previewUrl = URL.createObjectURL(file);
+    setAttachment({
+      type: "image",
+      imagePreview: previewUrl,
+    });
+
+    // Upload the image
+    setIsUploading(true);
     try {
-      const res = await fetch(`/api/circles/${circleId}/posts`);
-      if (res.ok) {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch(`/api/circles/${circleId}/posts/upload-image`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
         const data = await res.json();
-        setPosts(data.posts);
+        throw new Error(data.error || "Upload failed");
       }
+
+      const { url } = await res.json();
+      setAttachment((prev) =>
+        prev ? { ...prev, imageUrl: url } : null
+      );
+      haptics.success();
     } catch (error) {
-      console.error("Failed to fetch posts:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to upload image");
+      setAttachment(null);
+      URL.revokeObjectURL(previewUrl);
     } finally {
-      setLoading(false);
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
+  // Fetch workouts for selection dialog
+  const fetchWorkouts = async () => {
+    setLoadingWorkouts(true);
+    try {
+      const res = await fetch(`/api/circles/${circleId}/workouts`);
+      if (res.ok) {
+        const data = await res.json();
+        setWorkouts(data.workouts || data || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch workouts:", error);
+    } finally {
+      setLoadingWorkouts(false);
+    }
+  };
+
+  // Fetch challenges for selection dialog
+  const fetchChallenges = async () => {
+    setLoadingChallenges(true);
+    try {
+      const res = await fetch("/api/challenges/featured");
+      if (res.ok) {
+        const data = await res.json();
+        setChallenges(data.challenges || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch challenges:", error);
+    } finally {
+      setLoadingChallenges(false);
+    }
+  };
+
+  // Handle workout button click
+  const handleWorkoutClick = () => {
+    setWorkoutDialogOpen(true);
+    if (workouts.length === 0) {
+      fetchWorkouts();
+    }
+  };
+
+  // Handle challenge button click
+  const handleChallengeClick = () => {
+    setChallengeDialogOpen(true);
+    if (challenges.length === 0) {
+      fetchChallenges();
+    }
+  };
+
+  // Select a workout to attach
+  const selectWorkout = (workout: WorkoutPlan) => {
+    setAttachment({
+      type: "workout",
+      workout,
+    });
+    setWorkoutDialogOpen(false);
+    haptics.light();
+  };
+
+  // Select a challenge to attach
+  const selectChallenge = (challenge: Challenge) => {
+    setAttachment({
+      type: "challenge",
+      challenge,
+    });
+    setChallengeDialogOpen(false);
+    haptics.light();
+  };
+
+  // Clear attachment
+  const clearAttachment = () => {
+    if (attachment?.imagePreview) {
+      URL.revokeObjectURL(attachment.imagePreview);
+    }
+    setAttachment(null);
+  };
+
   const handlePost = async () => {
-    if (!newPostContent.trim()) return;
+    // Must have content or an attachment
+    if (!newPostContent.trim() && !attachment) return;
+
+    // If uploading, wait
+    if (isUploading) {
+      toast.error("Please wait for image upload to complete");
+      return;
+    }
 
     setIsPosting(true);
     try {
+      // Determine post type and attached data
+      let postType = "text";
+      let imageUrl: string | undefined;
+      let workoutPlanId: string | undefined;
+      let challengeId: string | undefined;
+
+      if (attachment) {
+        switch (attachment.type) {
+          case "image":
+            postType = "image";
+            imageUrl = attachment.imageUrl;
+            break;
+          case "workout":
+            postType = "workout";
+            workoutPlanId = attachment.workout?.id;
+            break;
+          case "challenge":
+            postType = "challenge";
+            challengeId = attachment.challenge?.id;
+            break;
+        }
+      }
+
       const res = await fetch(`/api/circles/${circleId}/posts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          postType: "text",
-          content: newPostContent.trim(),
+          postType,
+          content: newPostContent.trim() || null,
+          imageUrl,
+          workoutPlanId,
+          challengeId,
         }),
       });
 
@@ -112,7 +334,9 @@ export function CircleFeed({ circleId, userId, userRole }: CircleFeedProps) {
         const newPost = await res.json();
         setPosts((prev) => [newPost, ...prev]);
         setNewPostContent("");
+        clearAttachment();
         toast.success("Posted!");
+        haptics.success();
       } else {
         throw new Error();
       }
@@ -223,12 +447,13 @@ export function CircleFeed({ circleId, userId, userRole }: CircleFeedProps) {
             </Avatar>
             <div className="flex-1">
               <div className="relative">
-                <Textarea
-                  placeholder="Share something with your circle..."
+                <MentionInput
+                  placeholder="Share something with your circle... Use @ to mention users"
                   value={newPostContent}
-                  onChange={(e) => setNewPostContent(e.target.value)}
+                  onChange={setNewPostContent}
                   className="min-h-[60px] resize-none pr-12"
                   rows={2}
+                  disabled={isPosting}
                 />
                 {/* Voice input button */}
                 <div className="absolute right-2 top-2">
@@ -243,17 +468,123 @@ export function CircleFeed({ circleId, userId, userRole }: CircleFeedProps) {
                   />
                 </div>
               </div>
+              {/* Attachment Preview */}
+              {attachment && (
+                <div className="mt-3 relative">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-background border shadow-sm z-10"
+                    onClick={clearAttachment}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+
+                  {attachment.type === "image" && (
+                    <div className="relative rounded-lg overflow-hidden bg-muted">
+                      {isUploading && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                          <Loader2 className="h-6 w-6 animate-spin text-white" />
+                        </div>
+                      )}
+                      <img
+                        src={attachment.imagePreview}
+                        alt="Upload preview"
+                        className="w-full max-h-48 object-cover"
+                      />
+                    </div>
+                  )}
+
+                  {attachment.type === "workout" && attachment.workout && (
+                    <div className="p-3 bg-brand/10 rounded-lg border border-brand/20">
+                      <div className="flex items-center gap-2">
+                        <Dumbbell className="h-4 w-4 text-brand" />
+                        <span className="font-medium text-sm">{attachment.workout.name}</span>
+                      </div>
+                      {attachment.workout.description && (
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                          {attachment.workout.description}
+                        </p>
+                      )}
+                      <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+                        {attachment.workout.difficulty && (
+                          <span className="capitalize">{attachment.workout.difficulty}</span>
+                        )}
+                        {attachment.workout.estimatedDuration && (
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {attachment.workout.estimatedDuration} min
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {attachment.type === "challenge" && attachment.challenge && (
+                    <div className="p-3 bg-energy/10 rounded-lg border border-energy/20">
+                      <div className="flex items-center gap-2">
+                        <Trophy className="h-4 w-4 text-energy" />
+                        <span className="font-medium text-sm">{attachment.challenge.name}</span>
+                      </div>
+                      {attachment.challenge.shortDescription && (
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                          {attachment.challenge.shortDescription}
+                        </p>
+                      )}
+                      <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+                        {attachment.challenge.difficulty && (
+                          <span className="capitalize">{attachment.challenge.difficulty}</span>
+                        )}
+                        {attachment.challenge.durationDays && (
+                          <span>{attachment.challenge.durationDays} days</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center justify-between mt-3">
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" disabled>
-                    <ImageIcon className="h-4 w-4" />
+                  {/* Hidden file input */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    className="hidden"
+                    onChange={handleImageSelect}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading || !!attachment}
+                    className={cn(attachment?.type === "image" && "text-brand")}
+                  >
+                    {isUploading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ImageIcon className="h-4 w-4" />
+                    )}
                   </Button>
                   {isAdmin && (
                     <>
-                      <Button variant="ghost" size="sm" disabled>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleWorkoutClick}
+                        disabled={!!attachment}
+                        className={cn(attachment?.type === "workout" && "text-brand")}
+                      >
                         <Dumbbell className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" disabled>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleChallengeClick}
+                        disabled={!!attachment}
+                        className={cn(attachment?.type === "challenge" && "text-energy")}
+                      >
                         <Trophy className="h-4 w-4" />
                       </Button>
                     </>
@@ -262,7 +593,7 @@ export function CircleFeed({ circleId, userId, userRole }: CircleFeedProps) {
                 <Button
                   size="sm"
                   onClick={handlePost}
-                  disabled={!newPostContent.trim() || isPosting}
+                  disabled={(!newPostContent.trim() && !attachment) || isPosting || isUploading}
                 >
                   {isPosting ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -298,15 +629,10 @@ export function CircleFeed({ circleId, userId, userRole }: CircleFeedProps) {
               {/* Post Header */}
               <div className="flex items-start gap-3">
                 <Avatar className="h-10 w-10">
-                  {post.authorImage ? (
-                    <AvatarFallback className="bg-brand/20">
-                      {post.authorName?.charAt(0) || "?"}
-                    </AvatarFallback>
-                  ) : (
-                    <AvatarFallback className="bg-brand/20 text-brand">
-                      {post.authorName?.charAt(0) || "?"}
-                    </AvatarFallback>
-                  )}
+                  {post.authorImage && <AvatarImage src={post.authorImage} alt={post.authorName || "User"} />}
+                  <AvatarFallback className="bg-brand/20 text-brand">
+                    {post.authorName?.charAt(0) || "?"}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -364,7 +690,9 @@ export function CircleFeed({ circleId, userId, userRole }: CircleFeedProps) {
 
               {/* Post Content */}
               {post.content && (
-                <p className="mt-3 text-sm whitespace-pre-wrap">{post.content}</p>
+                <p className="mt-3 text-sm whitespace-pre-wrap">
+                  <PostContentWithMentions content={post.content} />
+                </p>
               )}
 
               {/* Post Image */}
@@ -380,23 +708,11 @@ export function CircleFeed({ circleId, userId, userRole }: CircleFeedProps) {
 
               {/* Linked Content Preview */}
               {(post.workoutPlanId || post.challengeId || post.goalId) && (
-                <div className="mt-3 p-3 bg-muted/50 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    {getPostTypeIcon(post.postType)}
-                    <span className="text-sm font-medium">
-                      {post.postType === "workout"
-                        ? "Workout"
-                        : post.postType === "challenge"
-                        ? "Challenge"
-                        : "Goal"}
-                    </span>
-                  </div>
-                  {post.dueDate && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Due: {new Date(post.dueDate).toLocaleDateString()}
-                    </p>
-                  )}
-                </div>
+                <LinkedContentPreview
+                  post={post}
+                  circleId={circleId}
+                  onNavigate={(path) => router.push(path)}
+                />
               )}
 
               {/* Post Actions */}
@@ -455,6 +771,370 @@ export function CircleFeed({ circleId, userId, userRole }: CircleFeedProps) {
         onConfirm={handleDelete}
         loading={isDeleting}
       />
+
+      {/* Workout Selection Dialog */}
+      <Dialog open={workoutDialogOpen} onOpenChange={setWorkoutDialogOpen}>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Dumbbell className="h-5 w-5 text-brand" />
+              Share a Workout
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+            {loadingWorkouts ? (
+              <div className="space-y-2">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+              </div>
+            ) : workouts.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">
+                <Dumbbell className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                <p className="font-medium">No workouts available</p>
+                <p className="text-sm mt-1">Create workouts in the Programs section first</p>
+              </div>
+            ) : (
+              workouts.map((workout) => (
+                <button
+                  key={workout.id}
+                  onClick={() => selectWorkout(workout)}
+                  className="w-full p-3 text-left rounded-lg border hover:border-brand hover:bg-brand/5 transition-colors"
+                >
+                  <div className="font-medium text-sm">{workout.name}</div>
+                  {workout.description && (
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                      {workout.description}
+                    </p>
+                  )}
+                  <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+                    {workout.difficulty && (
+                      <Badge variant="outline" className="text-[10px]">
+                        {workout.difficulty}
+                      </Badge>
+                    )}
+                    {workout.estimatedDuration && (
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {workout.estimatedDuration} min
+                      </span>
+                    )}
+                    {workout.exerciseCount !== undefined && (
+                      <span>{workout.exerciseCount} exercises</span>
+                    )}
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Challenge Selection Dialog */}
+      <Dialog open={challengeDialogOpen} onOpenChange={setChallengeDialogOpen}>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-energy" />
+              Share a Challenge
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+            {loadingChallenges ? (
+              <div className="space-y-2">
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-20 w-full" />
+              </div>
+            ) : challenges.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">
+                <Trophy className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                <p className="font-medium">No challenges available</p>
+                <p className="text-sm mt-1">Check back later for new challenges</p>
+              </div>
+            ) : (
+              challenges.map((challenge) => (
+                <button
+                  key={challenge.id}
+                  onClick={() => selectChallenge(challenge)}
+                  className="w-full p-3 text-left rounded-lg border hover:border-energy hover:bg-energy/5 transition-colors"
+                >
+                  <div className="flex gap-3">
+                    {challenge.coverImage && (
+                      <img
+                        src={challenge.coverImage}
+                        alt=""
+                        className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm">{challenge.name}</div>
+                      {challenge.shortDescription && (
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                          {challenge.shortDescription}
+                        </p>
+                      )}
+                      <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+                        {challenge.difficulty && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {challenge.difficulty}
+                          </Badge>
+                        )}
+                        {challenge.durationDays && (
+                          <span>{challenge.durationDays} days</span>
+                        )}
+                        {challenge.participantCount !== undefined && (
+                          <span>{challenge.participantCount} participants</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// Post content with highlighted mentions
+function PostContentWithMentions({ content }: { content: string }) {
+  // Parse and highlight @mentions and #circles
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+
+  // Combined regex for both user mentions (@) and circle mentions (#)
+  const mentionRegex = /(@[a-zA-Z0-9_]+|#[a-zA-Z0-9_]+)/g;
+  let match;
+
+  while ((match = mentionRegex.exec(content)) !== null) {
+    // Add text before the mention
+    if (match.index > lastIndex) {
+      parts.push(content.slice(lastIndex, match.index));
+    }
+
+    // Add the highlighted mention
+    const mention = match[0];
+    const isUserMention = mention.startsWith("@");
+    parts.push(
+      <span
+        key={match.index}
+        className={cn(
+          "font-medium cursor-pointer hover:underline",
+          isUserMention ? "text-brand" : "text-purple-500"
+        )}
+        onClick={(e) => {
+          e.stopPropagation();
+          // TODO: Navigate to user profile or circle page
+          if (isUserMention) {
+            window.location.href = `/${mention}`;
+          }
+        }}
+      >
+        {mention}
+      </span>
+    );
+
+    lastIndex = match.index + mention.length;
+  }
+
+  // Add remaining text
+  if (lastIndex < content.length) {
+    parts.push(content.slice(lastIndex));
+  }
+
+  return <>{parts}</>;
+}
+
+// Linked Content Preview component
+function LinkedContentPreview({
+  post,
+  circleId,
+  onNavigate,
+}: {
+  post: CirclePost;
+  circleId: string;
+  onNavigate: (path: string) => void;
+}) {
+  const [details, setDetails] = useState<{
+    name?: string;
+    description?: string;
+    difficulty?: string;
+    duration?: number;
+    participantCount?: number;
+  } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [joining, setJoining] = useState(false);
+
+  useEffect(() => {
+    const fetchDetails = async () => {
+      setLoading(true);
+      try {
+        if (post.workoutPlanId) {
+          const res = await fetch(`/api/circles/${circleId}/workouts`);
+          if (res.ok) {
+            const data = await res.json();
+            const workout = data.workouts?.find((w: { id: string }) => w.id === post.workoutPlanId);
+            if (workout) {
+              setDetails({
+                name: workout.name,
+                description: workout.description,
+                difficulty: workout.difficulty,
+                duration: workout.estimatedDuration,
+              });
+            }
+          }
+        } else if (post.challengeId) {
+          const res = await fetch(`/api/challenges/${post.challengeId}`);
+          if (res.ok) {
+            const data = await res.json();
+            setDetails({
+              name: data.name,
+              description: data.shortDescription,
+              difficulty: data.difficulty,
+              duration: data.durationDays,
+              participantCount: data.participantCount,
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch linked content details:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDetails();
+  }, [post.workoutPlanId, post.challengeId, circleId]);
+
+  const handleJoinChallenge = async () => {
+    if (!post.challengeId) return;
+    setJoining(true);
+    try {
+      const res = await fetch(`/api/challenges/${post.challengeId}/join`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        toast.success("Joined challenge!");
+        haptics.success();
+        onNavigate(`/challenges/${post.challengeId}`);
+      } else {
+        const data = await res.json();
+        if (data.error?.includes("already")) {
+          onNavigate(`/challenges/${post.challengeId}`);
+        } else {
+          throw new Error(data.error);
+        }
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to join challenge");
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  const handleViewWorkout = () => {
+    if (post.workoutPlanId) {
+      onNavigate(`/circle/${circleId}/workout/${post.workoutPlanId}`);
+    }
+  };
+
+  const isWorkout = post.postType === "workout";
+  const isChallenge = post.postType === "challenge";
+
+  return (
+    <div
+      className={cn(
+        "mt-3 p-3 rounded-lg cursor-pointer transition-colors",
+        isWorkout && "bg-brand/10 hover:bg-brand/15 border border-brand/20",
+        isChallenge && "bg-energy/10 hover:bg-energy/15 border border-energy/20",
+        !isWorkout && !isChallenge && "bg-muted/50 hover:bg-muted"
+      )}
+      onClick={isWorkout ? handleViewWorkout : undefined}
+    >
+      {loading ? (
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-sm text-muted-foreground">Loading...</span>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {isWorkout && <Dumbbell className="h-4 w-4 text-brand" />}
+              {isChallenge && <Trophy className="h-4 w-4 text-energy" />}
+              {post.postType === "goal" && <Target className="h-4 w-4 text-success" />}
+              <span className="text-sm font-medium">
+                {details?.name ||
+                  (isWorkout ? "Workout" : isChallenge ? "Challenge" : "Goal")}
+              </span>
+            </div>
+            {isChallenge && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs border-energy text-energy hover:bg-energy hover:text-white"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleJoinChallenge();
+                }}
+                disabled={joining}
+              >
+                {joining ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <>
+                    <Plus className="h-3 w-3 mr-1" />
+                    Join
+                  </>
+                )}
+              </Button>
+            )}
+            {isWorkout && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs border-brand text-brand hover:bg-brand hover:text-white"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleViewWorkout();
+                }}
+              >
+                <Dumbbell className="h-3 w-3 mr-1" />
+                View
+              </Button>
+            )}
+          </div>
+          {details?.description && (
+            <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
+              {details.description}
+            </p>
+          )}
+          <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+            {details?.difficulty && (
+              <Badge variant="outline" className="text-[10px]">
+                {details.difficulty}
+              </Badge>
+            )}
+            {details?.duration && (
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {isChallenge ? `${details.duration} days` : `${details.duration} min`}
+              </span>
+            )}
+            {details?.participantCount !== undefined && (
+              <span>{details.participantCount} participants</span>
+            )}
+          </div>
+          {post.dueDate && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Due: {new Date(post.dueDate).toLocaleDateString()}
+            </p>
+          )}
+        </>
+      )}
     </div>
   );
 }

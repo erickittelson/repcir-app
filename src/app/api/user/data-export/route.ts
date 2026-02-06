@@ -5,9 +5,10 @@
  * Exports all user data in JSON format
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { logAuditEventFromRequest } from "@/lib/audit-log";
 import {
   userProfiles,
   userMetrics,
@@ -16,6 +17,9 @@ import {
   userLocations,
   userBadges,
   userSports,
+  userCapabilities,
+  userPrivacySettings,
+  userFollows,
   circleMembers,
   workoutSessions,
   personalRecords,
@@ -24,13 +28,19 @@ import {
   programEnrollments,
   notifications,
   messages,
+  activityFeed,
+  contentRatings,
+  contentComments,
+  coachConversations,
+  coachMessages,
+  onboardingProgress,
 } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, or, inArray } from "drizzle-orm";
 
 export const runtime = "nodejs";
 export const maxDuration = 60; // Allow more time for large exports
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await auth();
     if (!session) {
@@ -38,6 +48,24 @@ export async function GET() {
     }
 
     const userId = session.user.id;
+
+    // Audit log this data export operation
+    await logAuditEventFromRequest(
+      {
+        userId,
+        action: "data_export",
+        severity: "warning",
+        resourceType: "account",
+      },
+      request
+    );
+
+    // Get member IDs for this user (across all circles)
+    const memberRecords = await db
+      .select({ id: circleMembers.id })
+      .from(circleMembers)
+      .where(eq(circleMembers.userId, userId));
+    const memberIds = memberRecords.map((m) => m.id);
 
     // Fetch all user data in parallel
     const [
@@ -48,6 +76,10 @@ export async function GET() {
       locations,
       badges,
       sports,
+      capabilities,
+      privacySettings,
+      followers,
+      following,
       memberships,
       workouts,
       prs,
@@ -56,6 +88,11 @@ export async function GET() {
       programs,
       userNotifications,
       userMessages,
+      activity,
+      ratings,
+      comments,
+      aiConversations,
+      onboarding,
     ] = await Promise.all([
       // Profile data
       db.query.userProfiles.findFirst({
@@ -101,6 +138,29 @@ export async function GET() {
         .from(userSports)
         .where(eq(userSports.userId, userId)),
 
+      // Capabilities
+      db
+        .select()
+        .from(userCapabilities)
+        .where(eq(userCapabilities.userId, userId)),
+
+      // Privacy settings
+      db.query.userPrivacySettings.findFirst({
+        where: eq(userPrivacySettings.userId, userId),
+      }),
+
+      // Followers
+      db
+        .select()
+        .from(userFollows)
+        .where(eq(userFollows.followingId, userId)),
+
+      // Following
+      db
+        .select()
+        .from(userFollows)
+        .where(eq(userFollows.followerId, userId)),
+
       // Circle memberships
       db.query.circleMembers.findMany({
         where: eq(circleMembers.userId, userId),
@@ -114,31 +174,37 @@ export async function GET() {
         },
       }),
 
-      // Workout history (limit to last 2 years for performance)
-      db.query.workoutSessions.findMany({
-        where: eq(workoutSessions.memberId, session.activeCircle?.memberId || ""),
-        orderBy: desc(workoutSessions.date),
-        limit: 1000,
-      }),
+      // Workout history (all members, limit for performance)
+      memberIds.length > 0
+        ? db.query.workoutSessions.findMany({
+            where: inArray(workoutSessions.memberId, memberIds),
+            orderBy: desc(workoutSessions.date),
+            limit: 1000,
+          })
+        : [],
 
-      // Personal records
-      db.query.personalRecords.findMany({
-        where: eq(personalRecords.memberId, session.activeCircle?.memberId || ""),
-        with: {
-          exercise: {
-            columns: {
-              id: true,
-              name: true,
+      // Personal records (all members)
+      memberIds.length > 0
+        ? db.query.personalRecords.findMany({
+            where: inArray(personalRecords.memberId, memberIds),
+            with: {
+              exercise: {
+                columns: {
+                  id: true,
+                  name: true,
+                },
+              },
             },
-          },
-        },
-      }),
+          })
+        : [],
 
-      // Goals
-      db
-        .select()
-        .from(goals)
-        .where(eq(goals.memberId, session.activeCircle?.memberId || "")),
+      // Goals (all members)
+      memberIds.length > 0
+        ? db
+            .select()
+            .from(goals)
+            .where(inArray(goals.memberId, memberIds))
+        : [],
 
       // Challenge participation
       db.query.challengeParticipants.findMany({
@@ -174,13 +240,58 @@ export async function GET() {
         .orderBy(desc(notifications.createdAt))
         .limit(500),
 
-      // Messages (last 6 months)
+      // Messages (sent and received)
       db
         .select()
         .from(messages)
-        .where(eq(messages.senderId, userId))
+        .where(or(eq(messages.senderId, userId), eq(messages.recipientId, userId)))
         .orderBy(desc(messages.createdAt))
+        .limit(1000),
+
+      // Activity feed
+      db
+        .select()
+        .from(activityFeed)
+        .where(eq(activityFeed.userId, userId))
+        .orderBy(desc(activityFeed.createdAt))
         .limit(500),
+
+      // Content ratings
+      db
+        .select()
+        .from(contentRatings)
+        .where(eq(contentRatings.userId, userId)),
+
+      // Content comments
+      db
+        .select()
+        .from(contentComments)
+        .where(eq(contentComments.userId, userId)),
+
+      // AI coach conversations with messages (important for GDPR)
+      memberIds.length > 0
+        ? (async () => {
+            const conversations = await db.query.coachConversations.findMany({
+              where: inArray(coachConversations.memberId, memberIds),
+            });
+            if (conversations.length === 0) return [];
+            const conversationIds = conversations.map((c) => c.id);
+            const msgs = await db
+              .select()
+              .from(coachMessages)
+              .where(inArray(coachMessages.conversationId, conversationIds))
+              .orderBy(desc(coachMessages.createdAt));
+            return conversations.map((c) => ({
+              ...c,
+              messages: msgs.filter((m) => m.conversationId === c.id),
+            }));
+          })()
+        : [],
+
+      // Onboarding progress
+      db.query.onboardingProgress.findFirst({
+        where: eq(onboardingProgress.userId, userId),
+      }),
     ]);
 
     // Compile export data
@@ -330,11 +441,86 @@ export async function GET() {
         readAt: n.readAt,
       })),
 
-      messagesSent: userMessages.map(m => ({
-        recipientId: "[REDACTED]",
+      messages: userMessages.map(m => ({
+        direction: m.senderId === userId ? "sent" : "received",
         content: m.content,
         createdAt: m.createdAt,
+        readAt: m.readAt,
       })),
+
+      capabilities: capabilities.map(c => ({
+        assessedAt: c.assessedAt,
+        mobility: {
+          canTouchToes: c.canTouchToes,
+          canDeepSquat: c.canDeepSquat,
+          canChildsPose: c.canChildsPose,
+          canOverheadReach: c.canOverheadReach,
+          canLungeDeep: c.canLungeDeep,
+        },
+        stability: {
+          canSingleLegStand: c.canSingleLegStand,
+          canPlankHold: c.canPlankHold,
+        },
+        power: {
+          canBoxJump: c.canBoxJump,
+          canJumpRope: c.canJumpRope,
+        },
+      })),
+
+      privacySettings: privacySettings ? {
+        nameVisibility: privacySettings.nameVisibility,
+        profilePictureVisibility: privacySettings.profilePictureVisibility,
+        cityVisibility: privacySettings.cityVisibility,
+        fitnessLevelVisibility: privacySettings.fitnessLevelVisibility,
+        goalsVisibility: privacySettings.goalsVisibility,
+        workoutHistoryVisibility: privacySettings.workoutHistoryVisibility,
+        personalRecordsVisibility: privacySettings.personalRecordsVisibility,
+        updatedAt: privacySettings.updatedAt,
+      } : null,
+
+      socialConnections: {
+        followerCount: followers.length,
+        followingCount: following.length,
+      },
+
+      activityFeed: activity.map(a => ({
+        type: a.activityType,
+        metadata: a.metadata,
+        createdAt: a.createdAt,
+      })),
+
+      contentInteractions: {
+        ratings: ratings.map(r => ({
+          contentType: r.contentType,
+          rating: r.rating,
+          createdAt: r.createdAt,
+        })),
+        comments: comments.map(c => ({
+          contentType: c.contentType,
+          content: c.content,
+          createdAt: c.createdAt,
+        })),
+      },
+
+      aiCoachingHistory: aiConversations.map(c => ({
+        title: c.title,
+        mode: c.mode,
+        messageCount: c.messages?.length || 0,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+        messages: c.messages?.map((m: { role: string; content: string; createdAt: Date }) => ({
+          role: m.role,
+          content: m.content,
+          createdAt: m.createdAt,
+        })) || [],
+      })),
+
+      onboardingData: onboarding ? {
+        currentPhase: onboarding.currentPhase,
+        extractedData: onboarding.extractedData,
+        completedAt: onboarding.completedAt,
+        createdAt: onboarding.createdAt,
+      } : null,
     };
 
     // Set headers for file download

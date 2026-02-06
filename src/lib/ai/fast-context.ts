@@ -11,7 +11,7 @@
  */
 
 import { dbRead, parallelRead, cachedRead } from "@/lib/db";
-import { memberContextSnapshot, circleEquipment, exercises } from "@/lib/db/schema";
+import { memberContextSnapshot, circleEquipment, exercises, circleMembers } from "@/lib/db/schema";
 import { eq, and, inArray, sql, desc } from "drizzle-orm";
 import { getProgrammingRulesForPrompt, getCoachingModeForPrompt } from "./schemas/loader";
 
@@ -118,34 +118,61 @@ export interface FastWorkoutContext extends FastMemberContext {
 export async function getFastMemberContext(memberId: string): Promise<FastMemberContext | null> {
   const start = performance.now();
 
-  const snapshot = await cachedRead(
-    `member-context:${memberId}`,
-    async (db) => {
-      return db
-        .select()
-        .from(memberContextSnapshot)
-        .where(eq(memberContextSnapshot.memberId, memberId))
-        .limit(1);
-    },
-    30 // 30 second cache
-  );
+  // Parallel load snapshot and member name for efficiency
+  const [snapshotResult, memberResult] = await Promise.all([
+    cachedRead(
+      `member-context:${memberId}`,
+      async (db) => {
+        return db
+          .select()
+          .from(memberContextSnapshot)
+          .where(eq(memberContextSnapshot.memberId, memberId))
+          .limit(1);
+      },
+      30 // 30 second cache
+    ),
+    cachedRead(
+      `member-name:${memberId}`,
+      async (db) => {
+        return db
+          .select({ name: circleMembers.name, dateOfBirth: circleMembers.dateOfBirth })
+          .from(circleMembers)
+          .where(eq(circleMembers.id, memberId))
+          .limit(1);
+      },
+      300 // 5 minute cache for names
+    ),
+  ]);
 
-  if (!snapshot || snapshot.length === 0) {
+  if (!snapshotResult || snapshotResult.length === 0) {
     console.warn(`No snapshot found for member ${memberId}, falling back to live query`);
     return null;
   }
 
-  const s = snapshot[0];
+  const s = snapshotResult[0];
+  const member = memberResult?.[0];
   const elapsed = performance.now() - start;
 
   if (elapsed > 50) {
     console.warn(`Slow context load: ${elapsed.toFixed(1)}ms for member ${memberId}`);
   }
 
+  // Calculate age from date of birth
+  let age: number | null = null;
+  if (member?.dateOfBirth) {
+    const birthDate = new Date(member.dateOfBirth);
+    const today = new Date();
+    age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+  }
+
   return {
     memberId: s.memberId,
-    name: "", // Not stored in snapshot, would need join
-    age: null,
+    name: member?.name || "Member",
+    age,
     fitnessLevel: s.fitnessLevel,
     trainingAge: s.trainingAge,
     currentWeight: s.currentWeight ? parseFloat(s.currentWeight) : null,
@@ -175,18 +202,42 @@ export async function getFastMemberContexts(
 ): Promise<Map<string, FastMemberContext>> {
   const start = performance.now();
 
-  const snapshots = await dbRead
-    .select()
-    .from(memberContextSnapshot)
-    .where(inArray(memberContextSnapshot.memberId, memberIds));
+  // Parallel load snapshots and member names
+  const [snapshots, members] = await Promise.all([
+    dbRead
+      .select()
+      .from(memberContextSnapshot)
+      .where(inArray(memberContextSnapshot.memberId, memberIds)),
+    dbRead
+      .select({ id: circleMembers.id, name: circleMembers.name, dateOfBirth: circleMembers.dateOfBirth })
+      .from(circleMembers)
+      .where(inArray(circleMembers.id, memberIds)),
+  ]);
+
+  // Create a map of member names and dates of birth
+  const memberInfo = new Map(members.map(m => [m.id, { name: m.name, dateOfBirth: m.dateOfBirth }]));
 
   const result = new Map<string, FastMemberContext>();
 
   for (const s of snapshots) {
+    const info = memberInfo.get(s.memberId);
+
+    // Calculate age from date of birth
+    let age: number | null = null;
+    if (info?.dateOfBirth) {
+      const birthDate = new Date(info.dateOfBirth);
+      const today = new Date();
+      age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+    }
+
     result.set(s.memberId, {
       memberId: s.memberId,
-      name: "",
-      age: null,
+      name: info?.name || "Member",
+      age,
       fitnessLevel: s.fitnessLevel,
       trainingAge: s.trainingAge,
       currentWeight: s.currentWeight ? parseFloat(s.currentWeight) : null,

@@ -23,6 +23,11 @@ export async function GET() {
       columns: { id: true, name: true, profilePicture: true },
     });
 
+    // Safety check for members array
+    if (!members || !Array.isArray(members)) {
+      return NextResponse.json([]);
+    }
+
     const memberIds = members.map((m) => m.id);
     const memberMap = Object.fromEntries(
       members.map((m) => [m.id, { name: m.name, profilePicture: m.profilePicture }])

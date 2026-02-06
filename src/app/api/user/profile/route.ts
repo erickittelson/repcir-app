@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { userProfiles } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { moderateText } from "@/lib/moderation";
+import { patchUserProfileSchema, updateUserProfileSchema, validateBody } from "@/lib/validations";
 
 export async function GET() {
   try {
@@ -33,30 +34,42 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
+    // Validate request body with schema
+    const validation = await validateBody(request, patchUserProfileSchema);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+
+    const data = validation.data;
 
     // Check if profile exists
     const existingProfile = await db.query.userProfiles.findFirst({
       where: eq(userProfiles.userId, session.user.id),
     });
 
-    const profileData = {
-      displayName: body.displayName,
-      birthMonth: body.birthMonth,
-      birthYear: body.birthYear,
-      city: body.city,
-      country: body.country,
+    // Build profile data from validated fields only
+    const profileData: Record<string, unknown> = {
       updatedAt: new Date(),
     };
 
+    // Only include fields that were provided in the validated data
+    if (data.displayName !== undefined) profileData.displayName = data.displayName;
+    if (data.birthMonth !== undefined) profileData.birthMonth = data.birthMonth;
+    if (data.birthYear !== undefined) profileData.birthYear = data.birthYear;
+    if (data.city !== undefined) profileData.city = data.city;
+    if (data.state !== undefined) profileData.state = data.state;
+    if (data.country !== undefined) profileData.country = data.country;
+    if (data.workoutLocation !== undefined) profileData.workoutLocation = data.workoutLocation;
+    if (data.workoutLocationAddress !== undefined) profileData.workoutLocationAddress = data.workoutLocationAddress;
+    if (data.workoutLocationType !== undefined) profileData.workoutLocationType = data.workoutLocationType;
+    if (data.locationVisibility !== undefined) profileData.locationVisibility = data.locationVisibility;
+
     if (existingProfile) {
-      // Update existing profile
       await db
         .update(userProfiles)
         .set(profileData)
         .where(eq(userProfiles.userId, session.user.id));
     } else {
-      // Create new profile
       await db.insert(userProfiles).values({
         userId: session.user.id,
         ...profileData,
@@ -80,28 +93,22 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
+    // Validate request body with schema (validates types, lengths, and prevents mass assignment)
+    const validation = await validateBody(request, updateUserProfileSchema);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+
+    const data = validation.data;
 
     // Check if profile exists
     const existingProfile = await db.query.userProfiles.findFirst({
       where: eq(userProfiles.userId, session.user.id),
     });
 
-    // Validate gallery photos (max 5)
-    if (body.galleryPhotos && body.galleryPhotos.length > 5) {
-      return NextResponse.json(
-        { error: "Maximum 5 gallery photos allowed" },
-        { status: 400 }
-      );
-    }
-
-    const profileData: Record<string, unknown> = {
-      updatedAt: new Date(),
-    };
-
     // Moderate bio content if provided
-    if (body.bio !== undefined && body.bio.length > 0) {
-      const bioModeration = moderateText(body.bio);
+    if (data.bio && data.bio.length > 0) {
+      const bioModeration = moderateText(data.bio);
       if (!bioModeration.isClean && bioModeration.severity !== "mild") {
         return NextResponse.json(
           { error: "Bio contains inappropriate content. Please revise." },
@@ -110,31 +117,41 @@ export async function PUT(request: Request) {
       }
     }
 
-    // Only update fields that are provided
-    if (body.handle !== undefined) profileData.handle = body.handle;
-    if (body.displayName !== undefined) profileData.displayName = body.displayName;
-    if (body.birthMonth !== undefined) profileData.birthMonth = body.birthMonth;
-    if (body.birthYear !== undefined) profileData.birthYear = body.birthYear;
-    if (body.city !== undefined) profileData.city = body.city;
-    if (body.country !== undefined) profileData.country = body.country;
-    if (body.profilePicture !== undefined) profileData.profilePicture = body.profilePicture;
-    if (body.galleryPhotos !== undefined) profileData.galleryPhotos = body.galleryPhotos;
-    if (body.visibility !== undefined) profileData.visibility = body.visibility;
-    if (body.socialLinks !== undefined) profileData.socialLinks = body.socialLinks;
-    // New fields for profile customization
-    if (body.bio !== undefined) profileData.bio = body.bio;
-    if (body.fieldVisibility !== undefined) profileData.fieldVisibility = body.fieldVisibility;
-    if (body.featuredGoals !== undefined) profileData.featuredGoals = body.featuredGoals;
-    if (body.featuredAchievements !== undefined) profileData.featuredAchievements = body.featuredAchievements;
+    // Build profile data from validated fields only
+    const profileData: Record<string, unknown> = {
+      updatedAt: new Date(),
+    };
+
+    // Only update fields that are provided in the validated data
+    if (data.handle !== undefined) profileData.handle = data.handle;
+    if (data.displayName !== undefined) profileData.displayName = data.displayName;
+    if (data.birthMonth !== undefined) profileData.birthMonth = data.birthMonth;
+    if (data.birthYear !== undefined) profileData.birthYear = data.birthYear;
+    if (data.city !== undefined) profileData.city = data.city;
+    if (data.state !== undefined) profileData.state = data.state;
+    if (data.country !== undefined) profileData.country = data.country;
+    if (data.profilePicture !== undefined) profileData.profilePicture = data.profilePicture;
+    if (data.galleryPhotos !== undefined) profileData.galleryPhotos = data.galleryPhotos;
+    if (data.visibility !== undefined) profileData.visibility = data.visibility;
+    if (data.socialLinks !== undefined) profileData.socialLinks = data.socialLinks;
+    if (data.bio !== undefined) profileData.bio = data.bio;
+    if (data.fieldVisibility !== undefined) profileData.fieldVisibility = data.fieldVisibility;
+    if (data.featuredGoals !== undefined) profileData.featuredGoals = data.featuredGoals;
+    if (data.featuredAchievements !== undefined) profileData.featuredAchievements = data.featuredAchievements;
+    if (data.workoutLocation !== undefined) profileData.workoutLocation = data.workoutLocation;
+    if (data.workoutLocationAddress !== undefined) profileData.workoutLocationAddress = data.workoutLocationAddress;
+    if (data.workoutLocationLat !== undefined) profileData.workoutLocationLat = data.workoutLocationLat;
+    if (data.workoutLocationLng !== undefined) profileData.workoutLocationLng = data.workoutLocationLng;
+    if (data.workoutLocationType !== undefined) profileData.workoutLocationType = data.workoutLocationType;
+    if (data.locationVisibility !== undefined) profileData.locationVisibility = data.locationVisibility;
+    if (data.gender !== undefined) profileData.gender = data.gender;
 
     if (existingProfile) {
-      // Update existing profile
       await db
         .update(userProfiles)
         .set(profileData)
         .where(eq(userProfiles.userId, session.user.id));
     } else {
-      // Create new profile
       await db.insert(userProfiles).values({
         userId: session.user.id,
         ...profileData,

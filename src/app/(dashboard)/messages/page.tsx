@@ -25,36 +25,53 @@ export default function MessagesPage() {
 
   // Fetch conversations on mount
   useEffect(() => {
+    const controller = new AbortController();
+
     async function fetchConversations() {
       try {
-        const response = await fetch("/api/messages");
+        const response = await fetch("/api/messages", { signal: controller.signal });
         if (!response.ok) {
           throw new Error("Failed to fetch conversations");
         }
         const data = await response.json();
         setConversations(data.conversations || []);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "An error occurred");
+        if (err instanceof Error && err.name !== "AbortError") {
+          setError(err.message);
+        }
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
       }
     }
 
     fetchConversations();
+    return () => controller.abort();
   }, []);
 
   // Set up SSE for real-time updates
   useEffect(() => {
     const eventSource = new EventSource("/api/messages/stream");
+    let refreshController: AbortController | null = null;
 
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         if (data.type === "message") {
+          // Cancel any pending refresh
+          refreshController?.abort();
+          refreshController = new AbortController();
+
           // Refresh conversations when new message arrives
-          fetch("/api/messages")
+          fetch("/api/messages", { signal: refreshController.signal })
             .then((res) => res.json())
-            .then((data) => setConversations(data.conversations || []));
+            .then((data) => setConversations(data.conversations || []))
+            .catch((err) => {
+              if (err instanceof Error && err.name !== "AbortError") {
+                console.error("Failed to refresh conversations:", err);
+              }
+            });
         }
       } catch {
         // Ignore parse errors
@@ -68,6 +85,7 @@ export default function MessagesPage() {
 
     return () => {
       eventSource.close();
+      refreshController?.abort();
     };
   }, []);
 
@@ -152,8 +170,8 @@ export default function MessagesPage() {
                   )}
                 >
                   {/* Avatar */}
-                  <div className="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
-                    <User className="w-6 h-6 text-white" />
+                  <div className="flex-shrink-0 w-12 h-12 rounded-full bg-brand-gradient flex items-center justify-center">
+                    <User className="w-6 h-6 text-brand-foreground" />
                   </div>
 
                   {/* Content */}

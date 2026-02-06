@@ -9,6 +9,7 @@ import {
   Users,
   User,
   Sparkles,
+  Dumbbell,
 } from "lucide-react";
 
 interface TabItem {
@@ -18,15 +19,13 @@ interface TabItem {
   isAction?: boolean;
 }
 
-// New navigation: Home (Feed) | Rallies | Log (FAB) | Coach | You
-// Removed: Discover tab (content-focused)
-// Changed: Create → Log (quick workout logging)
-// Added: Coach tab (AI-powered)
+// Navigation: Home (Feed) | Rallies | Log (FAB) | Workouts | You
+// Workouts tab: create, publish, and manage workout plans
 const tabs: TabItem[] = [
   { href: "/", icon: Home, label: "Home" },
   { href: "/circles", icon: Users, label: "Rallies" },
   { href: "#log", icon: Plus, label: "Log", isAction: true },
-  { href: "/coach", icon: Sparkles, label: "Coach" },
+  { href: "/workouts", icon: Dumbbell, label: "Workouts" },
   { href: "/you", icon: User, label: "You" },
 ];
 

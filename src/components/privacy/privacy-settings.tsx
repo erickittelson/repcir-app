@@ -98,7 +98,7 @@ const VISIBILITY_OPTIONS: {
     label: "Rally Only",
     description: "Only rally members",
     icon: <Users className="h-4 w-4" />,
-    color: "text-blue-600",
+    color: "text-brand",
   },
   {
     value: "private",
@@ -421,7 +421,7 @@ export function PrivacySettingsComponent({ onPreview }: PrivacySettingsProps) {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <Users className="h-4 w-4 text-blue-600" />
+          <Users className="h-4 w-4 text-brand" />
           <span className="text-sm">
             {Object.values(settings).filter(v => v === "circle").length} Rally Only
           </span>

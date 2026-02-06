@@ -68,46 +68,58 @@ export default function AnalyticsPage() {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
+
+    const fetchMembers = async () => {
+      try {
+        const response = await fetch("/api/members", { signal: controller.signal });
+        if (response.ok) {
+          const data = await response.json();
+          setMembers(data);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name !== "AbortError") {
+          console.error("Failed to fetch members:", error);
+        }
+      }
+    };
+
     fetchMembers();
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
-    if (members.length > 0 || selectedMember === "all") {
-      fetchAnalytics();
-    }
-  }, [selectedMember, timeRange, members]);
+    if (members.length === 0 && selectedMember !== "all") return;
 
-  const fetchMembers = async () => {
-    try {
-      const response = await fetch("/api/members");
-      if (response.ok) {
-        const data = await response.json();
-        setMembers(data);
+    const controller = new AbortController();
+
+    const fetchAnalytics = async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (selectedMember !== "all") params.append("memberId", selectedMember);
+        params.append("days", timeRange);
+
+        const response = await fetch(`/api/analytics?${params}`, { signal: controller.signal });
+        if (response.ok) {
+          const data = await response.json();
+          setAnalytics(data);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name !== "AbortError") {
+          console.error("Failed to fetch analytics:", error);
+          toast.error("Failed to load analytics");
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
-    } catch (error) {
-      console.error("Failed to fetch members:", error);
-    }
-  };
+    };
 
-  const fetchAnalytics = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (selectedMember !== "all") params.append("memberId", selectedMember);
-      params.append("days", timeRange);
-
-      const response = await fetch(`/api/analytics?${params}`);
-      if (response.ok) {
-        const data = await response.json();
-        setAnalytics(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch analytics:", error);
-      toast.error("Failed to load analytics");
-    } finally {
-      setLoading(false);
-    }
-  };
+    fetchAnalytics();
+    return () => controller.abort();
+  }, [selectedMember, timeRange, members.length]);
 
   if (loading && !analytics) {
     return (

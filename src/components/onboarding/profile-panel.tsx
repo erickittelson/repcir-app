@@ -724,7 +724,7 @@ export function ProfilePanel({
                                   : null;
                                 const skillColor = isSkill
                                   ? max.value === "mastered" ? "bg-green-500/20 text-green-600"
-                                    : max.value === "consistent" ? "bg-blue-500/20 text-blue-600"
+                                    : max.value === "consistent" ? "bg-brand/20 text-brand"
                                     : "bg-amber-500/20 text-amber-600"
                                   : "bg-brand/10";
 

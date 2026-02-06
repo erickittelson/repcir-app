@@ -16,6 +16,7 @@ export async function GET() {
     const members = await db.query.circleMembers.findMany({
       where: eq(circleMembers.circleId, session.circleId),
       columns: { id: true, name: true },
+      limit: 100, // Prevent unbounded queries
     });
 
     const memberIds = members.map((m) => m.id);
@@ -28,8 +29,11 @@ export async function GET() {
     const allGoals = await db.query.goals.findMany({
       where: inArray(goals.memberId, memberIds),
       with: {
-        milestones: true,
+        milestones: {
+          limit: 20, // Typical milestones per goal
+        },
       },
+      limit: 200, // Prevent unbounded queries
     });
 
     const formattedGoals = allGoals.map((goal) => ({

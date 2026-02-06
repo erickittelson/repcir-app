@@ -4,6 +4,7 @@ import { put } from "@vercel/blob";
 import { db } from "@/lib/db";
 import { circles, circleMembers } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
+import { validateImageFile, getSafeExtension } from "@/lib/file-validation";
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file type
+    // Validate file type (MIME check)
     if (!file.type.startsWith("image/")) {
       return NextResponse.json(
         { error: "File must be an image" },
@@ -39,6 +40,15 @@ export async function POST(request: NextRequest) {
     if (file.size > 5 * 1024 * 1024) {
       return NextResponse.json(
         { error: "File size must be less than 5MB" },
+        { status: 400 }
+      );
+    }
+
+    // Validate file content (magic number check to prevent spoofing)
+    const validation = await validateImageFile(file);
+    if (!validation.isValid) {
+      return NextResponse.json(
+        { error: validation.error || "Invalid image file" },
         { status: 400 }
       );
     }

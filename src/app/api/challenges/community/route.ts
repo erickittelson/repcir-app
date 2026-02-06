@@ -15,8 +15,10 @@ export async function GET(request: Request) {
     const category = searchParams.get("category");
     const difficulty = searchParams.get("difficulty");
     const sort = searchParams.get("sort") || "popular"; // popular, rating, newest, participants
-    const limit = parseInt(searchParams.get("limit") || "20");
-    const offset = parseInt(searchParams.get("offset") || "0");
+    const limitParam = parseInt(searchParams.get("limit") || "20");
+    const offsetParam = parseInt(searchParams.get("offset") || "0");
+    const limit = isNaN(limitParam) || limitParam < 1 ? 20 : Math.min(limitParam, 100);
+    const offset = isNaN(offsetParam) || offsetParam < 0 ? 0 : offsetParam;
 
     // Build where clause
     const conditions = [

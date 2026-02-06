@@ -16,6 +16,7 @@ export async function GET() {
         eq(userLimitations.userId, session.user.id),
         eq(userLimitations.active, true)
       ),
+      limit: 30, // Prevent unbounded queries
     });
 
     return NextResponse.json({ limitations });

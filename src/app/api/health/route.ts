@@ -8,6 +8,7 @@
 import { NextResponse } from "next/server";
 import { db, dbRead } from "@/lib/db";
 import { getCacheStats } from "@/lib/ai/cache";
+import { getCacheStats as getRedisCacheStats } from "@/lib/cache";
 import { sql } from "drizzle-orm";
 
 interface HealthStatus {
@@ -18,6 +19,7 @@ interface HealthStatus {
     database: ComponentHealth;
     readReplica: ComponentHealth;
     cache: ComponentHealth;
+    redis: ComponentHealth;
     ai: ComponentHealth;
   };
   metrics: {
@@ -84,6 +86,16 @@ function checkCache(): ComponentHealth {
   }
 }
 
+function checkRedis(): ComponentHealth {
+  const stats = getRedisCacheStats();
+  return {
+    status: stats.redisAvailable ? "up" : "degraded",
+    message: stats.redisAvailable
+      ? `Redis connected, ${stats.memorySize} memory entries`
+      : `Fallback mode, ${stats.memorySize} memory entries`,
+  };
+}
+
 async function checkAI(): Promise<ComponentHealth> {
   // Don't expose whether API key is configured in public endpoint
   // Just return that the service is available
@@ -104,9 +116,10 @@ export async function GET(request: Request) {
   ]);
 
   const cache = checkCache();
+  const redis = checkRedis();
   const cacheStats = getCacheStats();
 
-  const allUp = [database, readReplica, cache, ai].every((c) => c.status === "up");
+  const allUp = [database, readReplica, cache, redis, ai].every((c) => c.status === "up");
   const anyDown = [database, readReplica].some((c) => c.status === "down");
 
   const overallStatus: HealthStatus["status"] = anyDown
@@ -123,6 +136,7 @@ export async function GET(request: Request) {
       database,
       readReplica,
       cache,
+      redis,
       ai,
     },
     metrics: {

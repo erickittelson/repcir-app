@@ -29,6 +29,10 @@ export async function GET(request: Request) {
           totalHits: sql<number>`COALESCE(SUM(hit_count), 0)`,
           avgHits: sql<number>`COALESCE(AVG(hit_count), 0)`,
           expired: sql<number>`COUNT(*) FILTER (WHERE expires_at < NOW())`,
+          totalGenerationCost: sql<number>`COALESCE(SUM(total_cost::numeric), 0)`,
+          totalTokens: sql<number>`COALESCE(SUM(input_tokens + output_tokens), 0)`,
+          // Cost savings = cost per entry * number of hits (each hit avoided regeneration)
+          estimatedSavings: sql<number>`COALESCE(SUM(total_cost::numeric * hit_count), 0)`,
         })
         .from(aiResponseCache),
 
@@ -38,6 +42,7 @@ export async function GET(request: Request) {
           cacheKey: aiResponseCache.cacheKey,
           cacheType: aiResponseCache.cacheType,
           hitCount: aiResponseCache.hitCount,
+          totalCost: aiResponseCache.totalCost,
           createdAt: aiResponseCache.createdAt,
           expiresAt: aiResponseCache.expiresAt,
         })
@@ -52,6 +57,8 @@ export async function GET(request: Request) {
         hits: memoryStats.hits,
         misses: memoryStats.misses,
         hitRate: (memoryStats.hitRate * 100).toFixed(1) + "%",
+        avgRetrievalTimeMs: memoryStats.avgRetrievalTimeMs.toFixed(2),
+        estimatedCostSaved: "$" + memoryStats.estimatedCostSaved.toFixed(4),
       },
       database: {
         aiCache: {
@@ -59,12 +66,17 @@ export async function GET(request: Request) {
           expired: aiStats[0].expired,
           totalHits: aiStats[0].totalHits,
           avgHitsPerEntry: Number(aiStats[0].avgHits).toFixed(2),
+          totalTokensGenerated: aiStats[0].totalTokens,
+          totalGenerationCost: "$" + Number(aiStats[0].totalGenerationCost).toFixed(4),
+          estimatedSavingsFromCache: "$" + Number(aiStats[0].estimatedSavings).toFixed(4),
         },
       },
       topEntries: topEntries.map((e) => ({
         key: e.cacheKey.slice(0, 32) + "...",
         type: e.cacheType,
         hits: e.hitCount,
+        cost: e.totalCost ? "$" + Number(e.totalCost).toFixed(4) : "N/A",
+        savedByCaching: e.totalCost && e.hitCount ? "$" + (Number(e.totalCost) * (e.hitCount || 0)).toFixed(4) : "N/A",
         age: Math.round((Date.now() - e.createdAt!.getTime()) / 60000) + " min",
         expiresIn: Math.round((e.expiresAt.getTime() - Date.now()) / 60000) + " min",
       })),

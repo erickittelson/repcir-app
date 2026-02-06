@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { activityFeed, userFollows, circleMembers } from "@/lib/db/schema";
+import { activityFeed, userFollows, circleMembers, userProfiles } from "@/lib/db/schema";
 import { eq, inArray, desc, or } from "drizzle-orm";
 
 export async function GET() {
@@ -34,13 +34,22 @@ export async function GET() {
       where: inArray(circleMembers.userId, userIds),
     });
 
-    // Create a map of userId to member info (take first occurrence)
+    // Fetch user profiles for profile pictures and display names
+    const profiles = userIds.length > 0
+      ? await db.query.userProfiles.findMany({
+          where: inArray(userProfiles.userId, userIds),
+        })
+      : [];
+    const profileMap = new Map(profiles.map((p) => [p.userId, p]));
+
+    // Create a map of userId to member info (prefer userProfile, fallback to circleMembers)
     const userInfoMap = new Map<string, { name?: string | null; profilePicture?: string | null }>();
     for (const member of members) {
       if (member.userId && !userInfoMap.has(member.userId)) {
+        const profile = profileMap.get(member.userId);
         userInfoMap.set(member.userId, {
-          name: member.name,
-          profilePicture: member.profilePicture,
+          name: profile?.displayName || member.name,
+          profilePicture: profile?.profilePicture || member.profilePicture,
         });
       }
     }

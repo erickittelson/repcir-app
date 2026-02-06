@@ -234,7 +234,7 @@ const DOMAIN_INFO: Record<string, { label: string; description: string; color: s
   olympic_weightlifting: { label: "Olympic Lifting", description: "Snatch & Clean/Jerk", color: "text-yellow-500" },
   calisthenics: { label: "Calisthenics", description: "Bodyweight mastery", color: "text-cyan-500" },
   plyometrics: { label: "Plyometrics", description: "Explosive power", color: "text-green-500" },
-  functional: { label: "Functional", description: "Real-world strength", color: "text-blue-500" },
+  functional: { label: "Functional", description: "Real-world strength", color: "text-brand" },
   sport_specific: { label: "Sport Training", description: "Athletic performance", color: "text-pink-500" },
 };
 
@@ -1397,7 +1397,7 @@ export function DiscoverPage({
                                 </Badge>
                               )}
                               {isAdmin && !isOwner && (
-                                <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20 text-[10px] px-1.5 py-0 gap-1">
+                                <Badge className="bg-brand/10 text-brand border-brand/20 text-[10px] px-1.5 py-0 gap-1">
                                   <Shield className="h-2.5 w-2.5" />
                                   Admin
                                 </Badge>

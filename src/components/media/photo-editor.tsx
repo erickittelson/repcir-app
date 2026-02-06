@@ -295,38 +295,38 @@ function EditorToolbar({
 
   return (
     <div className="flex flex-col gap-2">
-      {/* Undo/Redo/Reset */}
-      <div className="flex items-center justify-center gap-2 pb-2 border-b border-border">
+      {/* Undo/Redo/Reset - compact row */}
+      <div className="flex items-center justify-center gap-1 pb-2 border-b border-border">
         <Button
           variant="ghost"
-          size="icon"
+          size="sm"
           onClick={onUndo}
           disabled={!canUndo}
-          className="h-10 w-10"
+          className="h-8 w-8 p-0"
         >
-          <Undo2 className="h-5 w-5" />
+          <Undo2 className="h-4 w-4" />
         </Button>
         <Button
           variant="ghost"
-          size="icon"
+          size="sm"
           onClick={onRedo}
           disabled={!canRedo}
-          className="h-10 w-10"
+          className="h-8 w-8 p-0"
         >
-          <Redo2 className="h-5 w-5" />
+          <Redo2 className="h-4 w-4" />
         </Button>
         <Button
           variant="ghost"
-          size="icon"
+          size="sm"
           onClick={onReset}
-          className="h-10 w-10 text-muted-foreground"
+          className="h-8 w-8 p-0 text-muted-foreground"
         >
-          <RotateCcw className="h-5 w-5" />
+          <RotateCcw className="h-4 w-4" />
         </Button>
       </div>
 
-      {/* Tool Icons */}
-      <div className="flex items-center justify-around overflow-x-auto pb-safe-area">
+      {/* Tool Icons - scrollable on small screens */}
+      <div className="flex items-center gap-1 overflow-x-auto pb-safe-area scrollbar-hide px-1">
         {tools.map((tool) => {
           const Icon = tool.icon;
           const isActive = activeTool === tool.id;
@@ -335,15 +335,15 @@ function EditorToolbar({
               key={tool.id}
               onClick={() => onToolSelect(isActive ? null : tool.id)}
               className={cn(
-                "flex flex-col items-center gap-1 p-2 rounded-lg transition-all min-w-[56px]",
-                "touch-target",
+                "flex flex-col items-center gap-0.5 p-2 rounded-lg transition-all flex-shrink-0",
+                "min-w-[48px] min-h-[48px]",
                 isActive
                   ? "bg-brand/20 text-brand"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50 active:bg-muted"
               )}
             >
-              <Icon className="h-6 w-6" />
-              <span className="text-[10px] font-medium">{tool.label}</span>
+              <Icon className="h-5 w-5" />
+              <span className="text-[9px] font-medium leading-tight">{tool.label}</span>
             </button>
           );
         })}
@@ -1851,7 +1851,11 @@ export function PhotoEditor({
           ))}
 
           {/* Draw Paths - SVG Overlay */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none">
+          <svg
+            className="absolute inset-0 w-full h-full pointer-events-none"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+          >
             {state.drawPaths.map((path) => {
               if (path.points.length < 2) return null;
               const d = path.points
@@ -1865,15 +1869,9 @@ export function PhotoEditor({
                   d={d}
                   fill="none"
                   stroke={path.color}
-                  strokeWidth={path.brushSize}
+                  strokeWidth={path.brushSize * 0.3}
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  vectorEffect="non-scaling-stroke"
-                  transform="scale(1)"
-                  style={{
-                    transform: `scale(${1 / 100})`,
-                    transformOrigin: "0 0",
-                  }}
                 />
               );
             })}
@@ -1886,14 +1884,9 @@ export function PhotoEditor({
                   .join(" ")}
                 fill="none"
                 stroke={brushColor}
-                strokeWidth={brushSize}
+                strokeWidth={brushSize * 0.3}
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                vectorEffect="non-scaling-stroke"
-                style={{
-                  transform: `scale(${1 / 100})`,
-                  transformOrigin: "0 0",
-                }}
               />
             )}
           </svg>

@@ -74,6 +74,8 @@ export function PublicProfilePage({ identifier, initialData }: PublicProfilePage
   const router = useRouter();
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [hasRequestedConnection, setHasRequestedConnection] = useState(false);
 
   const { 
     profile, 
@@ -119,13 +121,42 @@ export function PublicProfilePage({ identifier, initialData }: PublicProfilePage
     router.push(`/messages/${profile.userId}`);
   };
 
-  const handleInvite = () => {
+  const handleInvite = async () => {
     if (!isLoggedIn) {
       router.push("/login");
       return;
     }
-    // TODO: Open invite modal
-    toast.info("Invite feature coming soon!");
+
+    if (hasRequestedConnection) {
+      toast.info("Connection request already sent");
+      return;
+    }
+
+    setInviteLoading(true);
+    try {
+      const res = await fetch("/api/connections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ addresseeId: profile.userId }),
+      });
+
+      if (res.ok) {
+        setHasRequestedConnection(true);
+        toast.success("Connection request sent!");
+      } else {
+        const data = await res.json();
+        if (data.error?.includes("already")) {
+          setHasRequestedConnection(true);
+          toast.info("Connection request already exists");
+        } else {
+          toast.error(data.error || "Failed to send request");
+        }
+      }
+    } catch {
+      toast.error("Failed to send connection request");
+    } finally {
+      setInviteLoading(false);
+    }
   };
 
   // Private profile view
@@ -135,7 +166,7 @@ export function PublicProfilePage({ identifier, initialData }: PublicProfilePage
         {/* Header */}
         <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border">
           <div className="max-w-2xl mx-auto px-4 h-14 flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => router.back()}>
+            <Button variant="ghost" size="icon" onClick={() => router.back()} aria-label="Go back">
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <h1 className="font-semibold">Profile</h1>
@@ -195,7 +226,7 @@ export function PublicProfilePage({ identifier, initialData }: PublicProfilePage
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => router.back()}>
+            <Button variant="ghost" size="icon" onClick={() => router.back()} aria-label="Go back">
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <h1 className="font-semibold">
@@ -334,13 +365,14 @@ export function PublicProfilePage({ identifier, initialData }: PublicProfilePage
                   </Button>
                 )}
                 {canInvite && (
-                  <Button 
-                    onClick={handleInvite} 
-                    variant="outline"
+                  <Button
+                    onClick={handleInvite}
+                    variant={hasRequestedConnection ? "secondary" : "outline"}
                     className="flex-1"
+                    disabled={inviteLoading || hasRequestedConnection}
                   >
                     <Users className="h-4 w-4 mr-2" />
-                    Invite
+                    {inviteLoading ? "Sending..." : hasRequestedConnection ? "Requested" : "Connect"}
                   </Button>
                 )}
               </>

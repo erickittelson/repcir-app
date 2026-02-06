@@ -3,22 +3,24 @@ import { db } from "@/lib/db";
 import { userPrivacySettings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/neon-auth/session";
+import { logAuditEventFromRequest } from "@/lib/audit-log";
 
-// Default privacy settings
+// Default privacy settings - Privacy-first approach
+// Users must explicitly opt-in to share data publicly
 const DEFAULT_SETTINGS = {
-  nameVisibility: "public",
-  profilePictureVisibility: "public",
-  cityVisibility: "circle",
+  nameVisibility: "circle",        // Changed from "public" - only circle members see name
+  profilePictureVisibility: "circle", // Changed from "public" - only circle members see photo
+  cityVisibility: "private",       // Changed from "circle" - location is sensitive
   ageVisibility: "private",
   weightVisibility: "private",
   bodyFatVisibility: "private",
-  fitnessLevelVisibility: "circle",
+  fitnessLevelVisibility: "private", // Changed from "circle" - health data
   goalsVisibility: "circle",
   limitationsVisibility: "private",
   workoutHistoryVisibility: "circle",
   personalRecordsVisibility: "circle",
-  badgesVisibility: "public",
-  sportsVisibility: "public",
+  badgesVisibility: "circle",      // Changed from "public" - achievement data
+  sportsVisibility: "circle",      // Changed from "public"
   capabilitiesVisibility: "private",
 };
 
@@ -144,6 +146,22 @@ export async function PUT(request: Request) {
           updatedAt: new Date(),
         },
       });
+
+    // Audit log privacy settings change
+    await logAuditEventFromRequest(
+      {
+        userId: session.user.id,
+        action: "profile_update",
+        resourceType: "privacy_settings",
+        resourceId: session.user.id,
+        metadata: {
+          changedFields: Object.keys(body).filter(
+            (k) => body[k] !== undefined
+          ),
+        },
+      },
+      request
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {

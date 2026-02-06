@@ -21,6 +21,7 @@ export async function GET() {
       with: {
         exercise: true,
       },
+      limit: 200, // Prevent unbounded queries
     });
 
     return NextResponse.json({ 

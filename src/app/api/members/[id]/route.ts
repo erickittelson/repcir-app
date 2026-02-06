@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { circleMembers, memberMetrics, memberLimitations, goals, personalRecords, memberSkills } from "@/lib/db/schema";
+import { circleMembers, memberMetrics, memberLimitations, goals, personalRecords, memberSkills, userProfiles } from "@/lib/db/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { logAuditEventFromRequest } from "@/lib/audit-log";
 
 export async function GET(
   request: Request,
@@ -45,12 +46,28 @@ export async function GET(
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
+    // Get user profile if member has userId
+    const profile = member.userId
+      ? await db.query.userProfiles.findFirst({
+          where: eq(userProfiles.userId, member.userId),
+        })
+      : null;
+
+    // Calculate dateOfBirth from userProfile or fallback to member
+    let dateOfBirth: string | null = null;
+    if (profile?.birthMonth && profile?.birthYear) {
+      dateOfBirth = `${profile.birthYear}-${String(profile.birthMonth).padStart(2, "0")}-15`;
+    } else if (member.dateOfBirth) {
+      dateOfBirth = member.dateOfBirth.toISOString().split("T")[0];
+    }
+
     return NextResponse.json({
       id: member.id,
       name: member.name,
-      profilePicture: member.profilePicture,
-      dateOfBirth: member.dateOfBirth?.toISOString().split("T")[0],
-      gender: member.gender,
+      // Prefer userProfile data, fallback to circleMembers for legacy/standalone members
+      profilePicture: profile?.profilePicture || member.profilePicture,
+      dateOfBirth,
+      gender: profile?.gender || member.gender,
       role: member.role,
       metrics: member.metrics,
       limitations: member.limitations,
@@ -93,7 +110,7 @@ export async function PUT(
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
-    // Update member
+    // Update member (keep legacy fields for backward compatibility)
     await db
       .update(circleMembers)
       .set({
@@ -104,6 +121,22 @@ export async function PUT(
         updatedAt: new Date(),
       })
       .where(eq(circleMembers.id, id));
+
+    // Also update userProfile if member has userId
+    if (existingMember.userId) {
+      const birthDate = dateOfBirth ? new Date(dateOfBirth) : null;
+      await db
+        .update(userProfiles)
+        .set({
+          profilePicture: profilePicture || undefined,
+          birthMonth: birthDate ? birthDate.getMonth() + 1 : undefined,
+          birthYear: birthDate ? birthDate.getFullYear() : undefined,
+          gender: gender || undefined,
+          displayName: name || undefined,
+          updatedAt: new Date(),
+        })
+        .where(eq(userProfiles.userId, existingMember.userId));
+    }
 
     // Add new metrics entry if provided
     if (metrics && (metrics.weight || metrics.height || metrics.bodyFatPercentage || metrics.fitnessLevel)) {
@@ -116,6 +149,23 @@ export async function PUT(
         notes: metrics.notes,
       });
     }
+
+    // Audit log profile/health data update
+    const isHealthDataUpdate = metrics && (metrics.weight || metrics.height || metrics.bodyFatPercentage);
+    await logAuditEventFromRequest(
+      {
+        userId: session.user.id,
+        action: isHealthDataUpdate ? "health_data_access" : "profile_update",
+        resourceType: "circle_member",
+        resourceId: id,
+        metadata: {
+          memberId: id,
+          updatedFields: Object.keys(body).filter((k) => body[k] !== undefined),
+          hasMetricsUpdate: !!metrics,
+        },
+      },
+      request
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -150,6 +200,22 @@ export async function DELETE(
     if (!existingMember) {
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
+
+    // Audit log member removal (before deletion)
+    await logAuditEventFromRequest(
+      {
+        userId: session.user.id,
+        action: "member_remove",
+        resourceType: "circle_member",
+        resourceId: id,
+        metadata: {
+          memberId: id,
+          memberName: existingMember.name,
+          circleId: session.circleId,
+        },
+      },
+      request
+    );
 
     // Delete member (cascade will handle related records)
     await db.delete(circleMembers).where(eq(circleMembers.id, id));

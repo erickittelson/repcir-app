@@ -59,7 +59,7 @@ const ENERGY_LEVELS = [
 ];
 
 const DIFFICULTY_OPTIONS = [
-  { value: "too_easy", icon: ThumbsDown, label: "Too Easy", color: "text-blue-500" },
+  { value: "too_easy", icon: ThumbsDown, label: "Too Easy", color: "text-brand" },
   { value: "just_right", icon: ThumbsUp, label: "Just Right", color: "text-green-500" },
   { value: "challenging", icon: Zap, label: "Challenging", color: "text-yellow-500" },
   { value: "too_hard", icon: AlertTriangle, label: "Too Hard", color: "text-red-500" },

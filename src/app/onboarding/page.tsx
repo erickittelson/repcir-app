@@ -81,8 +81,27 @@ export interface OnboardingData {
     movementsToAvoid?: string[];
   }>;
   limitationsAcknowledged?: boolean; // true = added limitations or said "no limitations"
-  // Equipment
+  // Equipment & Gym Locations
+  gymLocations?: string[]; // home, commercial, crossfit, school, outdoor
   equipmentAccess?: string[];
+  equipmentDetails?: {
+    dumbbells?: {
+      available: boolean;
+      type?: "fixed" | "adjustable" | "both";
+      maxWeight?: number;
+      weights?: number[];
+    };
+    barbell?: {
+      available: boolean;
+      type?: "standard" | "olympic";
+      barWeight?: number;
+      plates?: number[];
+      totalPlateWeight?: number;
+    };
+    machines?: string[];
+    cardio?: string[];
+    notes?: string;
+  };
   // Preferences
   workoutDuration?: number;
   workoutDays?: string[];
@@ -101,7 +120,7 @@ const SECTIONS = [
   { id: "sports", required: ["sportsAcknowledged"] },
   { id: "maxes", required: ["maxesAcknowledged"] },
   { id: "limitations", required: ["limitationsAcknowledged"] },
-  { id: "equipment", required: ["equipmentAccess"] },
+  { id: "equipment", required: ["gymLocations"] },
   { id: "preferences", required: ["workoutDuration", "workoutDays"] },
   { id: "complete", required: [] },
 ] as const;

@@ -17,6 +17,7 @@ import { db, dbRead } from "@/lib/db";
 import { aiResponseCache } from "@/lib/db/schema";
 import { eq, and, gt, sql } from "drizzle-orm";
 import crypto from "crypto";
+import { CACHE_TTL, MEMORY_CACHE_SIZE, MODEL_PRICING, getModelPricing } from "./config";
 
 // =============================================================================
 // TYPES
@@ -108,7 +109,7 @@ class LRUCache<T> {
 // CACHE INSTANCE
 // =============================================================================
 
-const memoryCache = new LRUCache<CacheEntry>(500);
+const memoryCache = new LRUCache<CacheEntry>(MEMORY_CACHE_SIZE);
 
 // Stats tracking
 let cacheStats: CacheStats = {
@@ -120,6 +121,9 @@ let cacheStats: CacheStats = {
 };
 
 const retrievalTimes: number[] = [];
+
+// Track saved costs per hit
+let totalSavedCost = 0;
 
 // =============================================================================
 // HASHING
@@ -161,7 +165,7 @@ export async function getCachedResponse<T>(
   // Check memory cache first
   const memoryHit = memoryCache.get(cacheKey) as CacheEntry<T> | undefined;
   if (memoryHit) {
-    recordHit(performance.now() - start);
+    recordHit(performance.now() - start, memoryHit);
     return memoryHit;
   }
 
@@ -196,7 +200,7 @@ export async function getCachedResponse<T>(
         memoryCache.set(cacheKey, entry, ttl);
       }
 
-      // Update hit count in background
+      // Update hit count in background (log errors but don't block)
       db.update(aiResponseCache)
         .set({
           hitCount: sql`${aiResponseCache.hitCount} + 1`,
@@ -204,13 +208,20 @@ export async function getCachedResponse<T>(
         })
         .where(eq(aiResponseCache.cacheKey, cacheKey))
         .execute()
-        .catch(() => {}); // Fire and forget
+        .catch((error) => {
+          console.warn("Failed to update cache hit count:", error instanceof Error ? error.message : "Unknown error");
+        });
 
-      recordHit(performance.now() - start);
+      recordHit(performance.now() - start, entry);
       return entry;
     }
   } catch (error) {
-    console.error("Cache read error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorCode = (error as { code?: string })?.code;
+    console.error(`Cache read error [${errorCode || "UNKNOWN"}]: ${errorMessage}`, {
+      cacheKey,
+      errorType: error?.constructor?.name,
+    });
   }
 
   recordMiss();
@@ -306,40 +317,13 @@ export async function invalidateMemberCache(memberId: string): Promise<void> {
 // =============================================================================
 
 function getDefaultTTL(cacheType: CacheType): number {
-  const ttlConfig: Record<CacheType, number> = {
-    workout_plan: 3600, // 1 hour
-    workout_generation: 3600, // 1 hour
-    exercise_recommendations: 1800, // 30 minutes
-    coaching_response: 7200, // 2 hours
-    milestone_generation: 86400, // 24 hours
-    context_analysis: 3600, // 1 hour
-  };
-
-  return ttlConfig[cacheType] || 3600;
+  // Use centralized config for TTL values
+  return CACHE_TTL[cacheType] || CACHE_TTL.context_analysis;
 }
 
 // =============================================================================
 // COST CALCULATION
 // =============================================================================
-
-// GPT-5.2 pricing (January 2026)
-const PRICING = {
-  "gpt-5.2": {
-    inputPer1M: 1.75,
-    outputPer1M: 14.0,
-    cachedInputPer1M: 0.175, // 90% discount
-  },
-  "gpt-5.2-pro": {
-    inputPer1M: 5.0,
-    outputPer1M: 40.0,
-    cachedInputPer1M: 0.5,
-  },
-  "gpt-5.2-chat-latest": {
-    inputPer1M: 0.5,
-    outputPer1M: 2.0,
-    cachedInputPer1M: 0.05,
-  },
-};
 
 function calculateCost(
   inputTokens?: number,
@@ -348,7 +332,8 @@ function calculateCost(
 ): string | undefined {
   if (!inputTokens && !outputTokens) return undefined;
 
-  const pricing = PRICING[model as keyof typeof PRICING] || PRICING["gpt-5.2"];
+  // Use centralized pricing config
+  const pricing = getModelPricing(model || "gpt-5.2");
   const inputCost = ((inputTokens || 0) / 1_000_000) * pricing.inputPer1M;
   const outputCost = ((outputTokens || 0) / 1_000_000) * pricing.outputPer1M;
 
@@ -359,8 +344,18 @@ function calculateCost(
 // STATS TRACKING
 // =============================================================================
 
-function recordHit(retrievalTimeMs: number): void {
+function recordHit(retrievalTimeMs: number, entry?: CacheEntry): void {
   cacheStats.hits++;
+
+  // Calculate estimated cost saved from this hit
+  if (entry?.inputTokens || entry?.outputTokens) {
+    const costStr = calculateCost(entry.inputTokens, entry.outputTokens, entry.modelUsed);
+    if (costStr) {
+      totalSavedCost += parseFloat(costStr);
+      cacheStats.estimatedCostSaved = totalSavedCost;
+    }
+  }
+
   updateStats(retrievalTimeMs);
 }
 
@@ -393,6 +388,7 @@ export function resetCacheStats(): void {
     avgRetrievalTimeMs: 0,
   };
   retrievalTimes.length = 0;
+  totalSavedCost = 0;
 }
 
 // =============================================================================
@@ -404,7 +400,7 @@ export function resetCacheStats(): void {
  * Call this on app startup or periodically
  */
 export async function warmCache(): Promise<void> {
-  console.log("🔥 Warming AI cache...");
+  // Cache warming started
 
   // Load recent cache entries into memory
   const recentEntries = await dbRead
@@ -426,7 +422,7 @@ export async function warmCache(): Promise<void> {
     }
   }
 
-  console.log(`   Warmed ${recentEntries.length} cache entries`);
+  // Warmed cache entries: recentEntries.length
 }
 
 // =============================================================================
@@ -452,7 +448,7 @@ export async function cleanupExpiredCache(): Promise<number> {
 export function clearExpiredCache(): void {
   // The LRU cache automatically handles expiration on access
   // This is a no-op but can be extended if needed
-  console.log("Memory cache cleared of expired entries");
+  // Memory cache cleared of expired entries
 }
 
 /**
@@ -461,7 +457,7 @@ export function clearExpiredCache(): void {
 export function clearAllCache(): void {
   memoryCache.clear();
   resetCacheStats();
-  console.log("All memory cache cleared");
+  // All memory cache cleared
 }
 
 /**

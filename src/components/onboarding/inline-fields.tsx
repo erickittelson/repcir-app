@@ -446,7 +446,7 @@ const FITNESS_LEVELS = [
     value: "intermediate" as const,
     label: "Intermediate",
     description: "Consistent for 6+ months, know the basics",
-    color: "from-blue-500 to-cyan-500",
+    color: "from-brand to-energy",
   },
   {
     value: "advanced" as const,
@@ -1616,7 +1616,7 @@ const MAX_EXERCISE_CATEGORIES = [
 const SKILL_LEVELS: { value: SkillLevel; label: string; color: string }[] = [
   { value: "working_on", label: "Working On", color: "bg-amber-500" },
   { value: "mastered", label: "Mastered", color: "bg-green-500" },
-  { value: "consistent", label: "Consistent", color: "bg-blue-500" },
+  { value: "consistent", label: "Consistent", color: "bg-brand" },
 ];
 
 const UNIT_OPTIONS: { value: MaxUnit; label: string }[] = [
@@ -2076,7 +2076,7 @@ interface SpecificGoalsInputProps {
 // Skill level options for gymnastics/movement skills
 const GOAL_SKILL_LEVELS: { value: GoalSkillLevel; label: string; color: string; description: string }[] = [
   { value: "learning", label: "Learning", color: "bg-amber-500", description: "Working toward it" },
-  { value: "consistent", label: "Consistent", color: "bg-blue-500", description: "Can do it reliably" },
+  { value: "consistent", label: "Consistent", color: "bg-brand", description: "Can do it reliably" },
   { value: "mastered", label: "Mastered", color: "bg-green-500", description: "Fully confident" },
 ];
 

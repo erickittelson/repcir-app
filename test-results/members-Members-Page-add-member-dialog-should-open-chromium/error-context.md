@@ -1,0 +1,58 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - img "Rallyproof" [ref=e7]
+        - generic [ref=e10]: RALLYPROOF
+        - generic [ref=e11]: Effort is the standard. Sign in to continue.
+      - generic [ref=e14]:
+        - generic [ref=e15]:
+          - generic [ref=e16]: Sign In
+          - generic [ref=e17]: Enter your email and password to sign in
+        - generic [ref=e18]:
+          - generic [ref=e20]:
+            - generic [ref=e21]:
+              - generic [ref=e22]: Email
+              - textbox "Email" [ref=e23]:
+                - /placeholder: you@example.com
+            - generic [ref=e24]:
+              - generic [ref=e25]:
+                - generic [ref=e26]: Password
+                - link "Forgot your password?" [ref=e27] [cursor=pointer]:
+                  - /url: /auth/forgot-password
+              - textbox "Password" [ref=e29]:
+                - /placeholder: Enter your password
+            - button "Login" [ref=e30]
+          - generic [ref=e32]: Or continue with
+          - button "Sign in with Google" [ref=e35]:
+            - img
+            - text: Sign in with Google
+        - generic [ref=e36]:
+          - text: Don't have an account?
+          - link "Create Account" [ref=e37] [cursor=pointer]:
+            - /url: /auth/sign-up
+            - button "Create Account" [ref=e38]
+    - generic [ref=e41]:
+      - generic [ref=e42]:
+        - img [ref=e44]
+        - generic [ref=e46]:
+          - heading "We value your privacy" [level=3] [ref=e47]
+          - paragraph [ref=e48]:
+            - text: We use cookies to improve your experience and analyze site usage.
+            - link "Privacy Policy" [ref=e49] [cursor=pointer]:
+              - /url: /privacy-policy
+      - generic [ref=e50]:
+        - button "Customize" [ref=e51]:
+          - img
+          - text: Customize
+        - button "Reject All" [ref=e52]
+        - button "Accept All" [ref=e53]
+    - region "Notifications alt+T"
+    - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e59] [cursor=pointer]:
+    - img [ref=e60]
+  - alert [ref=e63]
+```

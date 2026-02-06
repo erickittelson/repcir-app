@@ -39,8 +39,21 @@ export async function createOpenAIConversation(
 
     return conversation.id;
   } catch (error) {
-    console.error("Failed to create OpenAI conversation:", error);
-    throw error;
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const isRetryable = errorMessage.includes("rate limit") ||
+                        errorMessage.includes("timeout") ||
+                        errorMessage.includes("ETIMEDOUT");
+
+    console.error("Failed to create OpenAI conversation:", {
+      error: errorMessage,
+      localConversationId,
+      isRetryable,
+    });
+
+    // Wrap with context for better debugging
+    const wrappedError = new Error(`OpenAI conversation creation failed: ${errorMessage}`);
+    (wrappedError as Error & { isRetryable?: boolean }).isRetryable = isRetryable;
+    throw wrappedError;
   }
 }
 

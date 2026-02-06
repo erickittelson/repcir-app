@@ -88,9 +88,8 @@ export function CreateSheet({ open, onOpenChange }: CreateSheetProps) {
             );
             // Show toast (would need to add toast import)
           }
-        } catch (err) {
-          // User cancelled or share failed
-          console.log("Share cancelled or failed:", err);
+        } catch {
+          // User cancelled or share failed - this is expected behavior
         }
         onOpenChange(false);
       },

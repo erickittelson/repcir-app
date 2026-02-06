@@ -225,7 +225,7 @@ export function WorkoutDetailSheet({
       case "beginner":
         return "bg-green-500/20 text-green-600 border-green-500/30";
       case "intermediate":
-        return "bg-blue-500/20 text-blue-600 border-blue-500/30";
+        return "bg-brand/20 text-brand border-brand/30";
       case "advanced":
         return "bg-orange-500/20 text-orange-600 border-orange-500/30";
       default:

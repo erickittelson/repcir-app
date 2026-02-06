@@ -72,6 +72,7 @@ import {
   Check,
   X,
   Search,
+  Camera,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/neon-auth/client";
@@ -180,7 +181,12 @@ interface ProfilePageProps {
     birthMonth?: number;
     birthYear?: number;
     city?: string;
+    state?: string;
     country?: string;
+    workoutLocation?: string;
+    workoutLocationAddress?: string;
+    workoutLocationType?: string;
+    locationVisibility?: string; // "none" | "state" | "city" | "full"
     visibility: string;
     socialLinks: {
       instagram?: string;
@@ -1637,35 +1643,88 @@ function BioModal({
   );
 }
 
-// Location Edit Modal
-function LocationEditModal({ 
-  open, 
-  onOpenChange, 
-  currentCity, 
-  currentCountry,
-  onSave 
-}: { 
-  open: boolean; 
-  onOpenChange: (open: boolean) => void; 
-  currentCity?: string;
-  currentCountry?: string;
-  onSave: (city: string, country: string) => Promise<void>;
+// Location Edit Modal - Enhanced with privacy controls and workout location
+const US_STATES_MAP: Record<string, string> = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+  CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
+  HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
+  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi", MO: "Missouri",
+  MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey",
+  NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio",
+  OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
+  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont",
+  VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
+  DC: "Washington, D.C."
+};
+
+const US_STATES_LIST = Object.entries(US_STATES_MAP).map(([value, label]) => ({ value, label }));
+
+const LOCATION_VISIBILITY_OPTIONS_MODAL = [
+  { value: "none", label: "No one", description: "Location hidden" },
+  { value: "state", label: "State only", description: "Shows state name" },
+  { value: "city", label: "City & State", description: "Shows city, state" },
+  { value: "full", label: "Full details", description: "Shows workout spot" },
+];
+
+function LocationEditModal({
+  open,
+  onOpenChange,
+  profile,
+  onSave
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  profile: ProfilePageProps["profile"];
+  onSave: (data: {
+    city: string;
+    state: string;
+    country: string;
+    workoutLocation: string | null;
+    workoutLocationAddress: string | null;
+    workoutLocationType: string | null;
+    locationVisibility: string;
+  }) => Promise<void>;
 }) {
-  const [city, setCity] = useState(currentCity || "");
-  const [country, setCountry] = useState(currentCountry || "");
+  const [city, setCity] = useState(profile?.city || "");
+  const [state, setState] = useState(profile?.state || "");
+  const [country, setCountry] = useState(profile?.country || "US");
+  const [showWorkoutSpot, setShowWorkoutSpot] = useState(!!profile?.workoutLocation);
+  const [workoutLocation, setWorkoutLocation] = useState(profile?.workoutLocation || "");
+  const [workoutLocationAddress, setWorkoutLocationAddress] = useState(profile?.workoutLocationAddress || "");
+  const [workoutLocationType, setWorkoutLocationType] = useState(profile?.workoutLocationType || "gym");
+  const [locationVisibility, setLocationVisibility] = useState(profile?.locationVisibility || "city");
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { 
-    if (open) { 
-      setCity(currentCity || ""); 
-      setCountry(currentCountry || "");
-    } 
-  }, [open, currentCity, currentCountry]);
+  useEffect(() => {
+    if (open) {
+      setCity(profile?.city || "");
+      setState(profile?.state || "");
+      setCountry(profile?.country || "US");
+      setShowWorkoutSpot(!!profile?.workoutLocation);
+      setWorkoutLocation(profile?.workoutLocation || "");
+      setWorkoutLocationAddress(profile?.workoutLocationAddress || "");
+      setWorkoutLocationType(profile?.workoutLocationType || "gym");
+      setLocationVisibility(profile?.locationVisibility || "city");
+    }
+  }, [open, profile]);
 
   const handleSave = async () => {
+    if (city && !state) {
+      toast.error("Please select a state");
+      return;
+    }
     setSaving(true);
     try {
-      await onSave(city, country);
+      await onSave({
+        city,
+        state,
+        country,
+        workoutLocation: showWorkoutSpot ? workoutLocation : null,
+        workoutLocationAddress: showWorkoutSpot ? workoutLocationAddress : null,
+        workoutLocationType: showWorkoutSpot ? workoutLocationType : null,
+        locationVisibility,
+      });
       onOpenChange(false);
       toast.success("Location saved!");
     } catch {
@@ -1678,7 +1737,15 @@ function LocationEditModal({
   const handleClear = async () => {
     setSaving(true);
     try {
-      await onSave("", "");
+      await onSave({
+        city: "",
+        state: "",
+        country: "US",
+        workoutLocation: null,
+        workoutLocationAddress: null,
+        workoutLocationType: null,
+        locationVisibility: "city",
+      });
       onOpenChange(false);
       toast.success("Location removed");
     } catch {
@@ -1690,34 +1757,125 @@ function LocationEditModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Location</DialogTitle>
-          <DialogDescription>Share your city with your profile visitors</DialogDescription>
+          <DialogTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5" />
+            Edit Location
+          </DialogTitle>
+          <DialogDescription>Manage your location and privacy settings</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label>City</Label>
-            <Input 
-              value={city} 
-              onChange={(e) => setCity(e.target.value)}
-              placeholder="New York, Los Angeles, London..."
-            />
+        <div className="space-y-6 py-4">
+          {/* Basic Location */}
+          <div className="space-y-4">
+            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Your Location</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>City {city && <span className="text-destructive">*</span>}</Label>
+                <Input
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="Austin, Dallas..."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>State {city && <span className="text-destructive">*</span>}</Label>
+                <Select value={state} onValueChange={setState}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select state" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {US_STATES_LIST.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label>Country (optional)</Label>
-            <Input 
-              value={country} 
-              onChange={(e) => setCountry(e.target.value)}
-              placeholder="USA, UK, Canada..."
-            />
+
+          {/* Workout Spot */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+              <div className="space-y-0.5">
+                <Label className="font-medium">Add Workout Spot</Label>
+                <p className="text-xs text-muted-foreground">Share where you work out</p>
+              </div>
+              <Switch checked={showWorkoutSpot} onCheckedChange={setShowWorkoutSpot} />
+            </div>
+
+            {showWorkoutSpot && (
+              <div className="space-y-3 pl-4 border-l-2 border-brand/30">
+                <div className="space-y-2">
+                  <Label>Location Name</Label>
+                  <Input
+                    value={workoutLocation}
+                    onChange={(e) => setWorkoutLocation(e.target.value)}
+                    placeholder="24 Hour Fitness - Downtown"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Address (optional)</Label>
+                  <Input
+                    value={workoutLocationAddress}
+                    onChange={(e) => setWorkoutLocationAddress(e.target.value)}
+                    placeholder="123 Main St..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Type</Label>
+                  <Select value={workoutLocationType} onValueChange={setWorkoutLocationType}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gym">Gym</SelectItem>
+                      <SelectItem value="park">Park</SelectItem>
+                      <SelectItem value="studio">Studio</SelectItem>
+                      <SelectItem value="home_gym">Home Gym</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
           </div>
-          <p className="text-xs text-muted-foreground">
-            Only your city is shown publicly, not your exact address.
-          </p>
+
+          {/* Privacy Controls */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Who can see your location?</h4>
+            <div className="grid grid-cols-2 gap-2">
+              {LOCATION_VISIBILITY_OPTIONS_MODAL.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setLocationVisibility(option.value)}
+                  className={cn(
+                    "p-3 rounded-lg border text-left transition-colors",
+                    locationVisibility === option.value
+                      ? "border-brand bg-brand/10"
+                      : "border-muted hover:border-brand/50"
+                  )}
+                >
+                  <span className="font-medium text-sm">{option.label}</span>
+                  <p className="text-xs text-muted-foreground">{option.description}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Safety Warning */}
+          <div className="flex gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+            <Activity className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-600 dark:text-amber-500">
+              Only share public workout locations like gyms or parks. Never share your home address for safety.
+            </p>
+          </div>
         </div>
         <DialogFooter className="flex-col sm:flex-row gap-2">
-          {(currentCity || currentCountry) && (
+          {(profile?.city || profile?.state) && (
             <Button variant="ghost" onClick={handleClear} disabled={saving} className="text-destructive hover:text-destructive">
               Remove Location
             </Button>
@@ -1926,6 +2084,63 @@ function PasswordResetModal({ open, onOpenChange, email }: { open: boolean; onOp
   );
 }
 
+// ==================== LOCATION DISPLAY HELPER ====================
+function formatLocationDisplay(profile: ProfilePageProps["profile"]): string | null {
+  if (!profile) return null;
+
+  const visibility = profile.locationVisibility || "city";
+
+  if (visibility === "none") {
+    return null;
+  }
+
+  if (visibility === "state" && profile.state) {
+    // Return full state name
+    const stateNames: Record<string, string> = {
+      AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+      CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
+      HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
+      KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+      MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi", MO: "Missouri",
+      MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey",
+      NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio",
+      OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
+      SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont",
+      VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
+      DC: "Washington, D.C."
+    };
+    return stateNames[profile.state] || profile.state;
+  }
+
+  if (visibility === "city" && (profile.city || profile.state)) {
+    if (profile.city && profile.state) {
+      return `${profile.city}, ${profile.state}`;
+    }
+    return profile.city || profile.state || null;
+  }
+
+  if (visibility === "full") {
+    const cityState = profile.city && profile.state
+      ? `${profile.city}, ${profile.state}`
+      : (profile.city || profile.state);
+
+    if (profile.workoutLocation) {
+      return cityState ? `${profile.workoutLocation} - ${cityState}` : profile.workoutLocation;
+    }
+    return cityState || null;
+  }
+
+  // Default fallback - show city, state
+  if (profile.city || profile.state) {
+    if (profile.city && profile.state) {
+      return `${profile.city}, ${profile.state}`;
+    }
+    return profile.city || profile.state || null;
+  }
+
+  return null;
+}
+
 // ==================== MAIN COMPONENT ====================
 export function ProfilePage({ user, profile, metrics, limitations, skills, locations, sports, circles, goals, workoutPlans, personalRecords, badges, featuredBadges, completeness }: ProfilePageProps) {
   const router = useRouter();
@@ -1956,6 +2171,10 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
   const [connectionsSheet, setConnectionsSheet] = useState(false);
   const [connectionCount, setConnectionCount] = useState(0);
 
+  // Profile picture upload state
+  const [uploadingProfilePic, setUploadingProfilePic] = useState(false);
+  const profilePicInputRef = useRef<HTMLInputElement>(null);
+
   // Accordion state
   const sectionFromUrl = searchParams.get("section") || "";
   const [openSections, setOpenSections] = useState<string[]>(sectionFromUrl ? [sectionFromUrl] : []);
@@ -1963,7 +2182,13 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
   useEffect(() => {
     if (sectionFromUrl) {
       setOpenSections((prev) => prev.includes(sectionFromUrl) ? prev : [...prev, sectionFromUrl]);
-      setTimeout(() => { document.querySelector(`[data-section="${sectionFromUrl}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 100);
+      setTimeout(() => {
+        document.querySelector(`[data-section="${sectionFromUrl}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        // Clear the URL param after scrolling to prevent re-scroll on navigation
+        const url = new URL(window.location.href);
+        url.searchParams.delete("section");
+        window.history.replaceState({}, "", url.pathname);
+      }, 100);
     }
   }, [sectionFromUrl]);
 
@@ -2051,11 +2276,19 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
     router.refresh();
   };
 
-  const handleSaveCityLocation = async (city: string, country: string) => {
+  const handleSaveProfileLocation = async (data: {
+    city: string;
+    state: string;
+    country: string;
+    workoutLocation: string | null;
+    workoutLocationAddress: string | null;
+    workoutLocationType: string | null;
+    locationVisibility: string;
+  }) => {
     const response = await fetch("/api/user/profile", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ city, country }),
+      body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error();
     router.refresh();
@@ -2105,6 +2338,50 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
     }
   };
 
+  const handleProfilePicUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be less than 5MB");
+      return;
+    }
+
+    setUploadingProfilePic(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/user/profile/upload-image", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Upload failed");
+      }
+
+      toast.success("Profile picture updated!");
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to upload image");
+    } finally {
+      setUploadingProfilePic(false);
+      // Reset file input
+      if (profilePicInputRef.current) {
+        profilePicInputRef.current.value = "";
+      }
+    }
+  };
+
   return (
     <div className="space-y-4 px-4 py-4 pb-32">
       {/* Profile Completeness */}
@@ -2116,32 +2393,71 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-start gap-4">
-            <Avatar className="h-16 w-16">
-              <AvatarImage src={profileImage} />
-              <AvatarFallback className="text-xl bg-brand/20 text-brand">{displayName.charAt(0).toUpperCase()}</AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0">
-              <button 
-                onClick={() => setDisplayNameModal(true)} 
-                className="text-xl font-bold truncate hover:text-brand transition-colors flex items-center gap-1 group"
+            {/* Profile Picture with Edit Overlay */}
+            <div className="relative group">
+              <input
+                ref={profilePicInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                className="hidden"
+                onChange={handleProfilePicUpload}
+              />
+              <Avatar className="h-16 w-16">
+                <AvatarImage src={profileImage} />
+                <AvatarFallback className="text-xl bg-brand/20 text-brand">{displayName.charAt(0).toUpperCase()}</AvatarFallback>
+              </Avatar>
+              <button
+                onClick={() => profilePicInputRef.current?.click()}
+                disabled={uploadingProfilePic}
+                className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
               >
-                {displayName}
-                <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" />
+                {uploadingProfilePic ? (
+                  <Loader2 className="h-5 w-5 text-white animate-spin" />
+                ) : (
+                  <Camera className="h-5 w-5 text-white" />
+                )}
               </button>
-              {profile?.handle ? (
-                <button onClick={() => setHandleModal(true)} className="text-brand text-sm hover:underline">@{profile.handle}</button>
-              ) : (
-                <button onClick={() => setHandleModal(true)} className="text-sm text-muted-foreground hover:text-brand flex items-center gap-1">
-                  <AtSign className="h-3 w-3" />Set your handle
-                </button>
-              )}
-              {profile?.city && (
-                <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1"><MapPin className="h-3 w-3" />{profile.city}</p>
-              )}
             </div>
+            <div className="flex-1 min-w-0">
+              {/* Name */}
+              <h2 className="text-xl font-bold truncate">{displayName}</h2>
+
+              {/* Handle & Location on same line */}
+              <div className="flex items-center gap-2 text-sm mt-0.5 flex-wrap">
+                {profile?.handle ? (
+                  <span className="text-brand">@{profile.handle}</span>
+                ) : (
+                  <button
+                    onClick={() => setHandleModal(true)}
+                    className="text-muted-foreground hover:text-brand transition-colors"
+                  >
+                    + Add handle
+                  </button>
+                )}
+                {(profile?.handle && formatLocationDisplay(profile)) && (
+                  <span className="text-muted-foreground">·</span>
+                )}
+                {formatLocationDisplay(profile) ? (
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    <MapPin className="h-3 w-3" />{formatLocationDisplay(profile)}
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => setLocationEditModal(true)}
+                    className="text-muted-foreground hover:text-brand transition-colors flex items-center gap-1"
+                  >
+                    <MapPin className="h-3 w-3" />Add location
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Edit menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm"><Edit className="h-4 w-4" /></Button>
+                <Button variant="outline" size="sm" className="shrink-0">
+                  <Edit className="h-4 w-4" />
+                </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => setDisplayNameModal(true)}>
@@ -2150,12 +2466,101 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
                 <DropdownMenuItem onClick={() => setHandleModal(true)}>
                   <AtSign className="h-4 w-4 mr-2" />Edit Handle
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setLocationEditModal(true)}>
+                  <MapPin className="h-4 w-4 mr-2" />Edit Location
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
 
-          {/* Share Link CTA */}
+          {/* Social Links - prominent section right after header */}
+          <div className="mt-4">
+            {(profile?.socialLinks?.instagram || profile?.socialLinks?.tiktok || profile?.socialLinks?.youtube || profile?.socialLinks?.twitter || profile?.socialLinks?.linkedin) ? (
+              <div className="flex items-center gap-2 flex-wrap">
+                {profile?.socialLinks?.instagram && (
+                  <a href={`https://instagram.com/${profile.socialLinks.instagram}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-purple-500/10 to-pink-500/10 hover:from-purple-500/20 hover:to-pink-500/20 text-sm transition-colors">
+                    <Instagram className="h-4 w-4 text-pink-500" />
+                    <span className="text-muted-foreground">@{profile.socialLinks.instagram}</span>
+                  </a>
+                )}
+                {profile?.socialLinks?.tiktok && (
+                  <a href={`https://tiktok.com/@${profile.socialLinks.tiktok}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted hover:bg-muted/80 text-sm transition-colors">
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64 2.93 2.93 0 01.88.13V9.4a6.84 6.84 0 00-1-.05A6.33 6.33 0 005 20.1a6.34 6.34 0 0010.86-4.43v-7a8.16 8.16 0 004.77 1.52v-3.4a4.85 4.85 0 01-1-.1z"/></svg>
+                    <span className="text-muted-foreground">@{profile.socialLinks.tiktok}</span>
+                  </a>
+                )}
+                {profile?.socialLinks?.youtube && (
+                  <a href={profile.socialLinks.youtube.startsWith("http") ? profile.socialLinks.youtube : `https://youtube.com/@${profile.socialLinks.youtube}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-500/10 hover:bg-red-500/20 text-sm transition-colors">
+                    <Youtube className="h-4 w-4 text-red-500" />
+                    <span className="text-muted-foreground">{profile.socialLinks.youtube}</span>
+                  </a>
+                )}
+                {profile?.socialLinks?.twitter && (
+                  <a href={`https://x.com/${profile.socialLinks.twitter}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted hover:bg-muted/80 text-sm transition-colors">
+                    <Twitter className="h-4 w-4" />
+                    <span className="text-muted-foreground">@{profile.socialLinks.twitter}</span>
+                  </a>
+                )}
+                {profile?.socialLinks?.linkedin && (
+                  <a href={profile.socialLinks.linkedin.startsWith("http") ? profile.socialLinks.linkedin : `https://linkedin.com/in/${profile.socialLinks.linkedin}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/10 hover:bg-blue-500/20 text-sm transition-colors">
+                    <Linkedin className="h-4 w-4 text-blue-500" />
+                    <span className="text-muted-foreground">{profile.socialLinks.linkedin}</span>
+                  </a>
+                )}
+                <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => setSocialLinksModal(true)}>
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setSocialLinksModal(true)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-muted-foreground/30 hover:border-brand hover:bg-brand/5 transition-colors w-full"
+              >
+                <div className="flex -space-x-1">
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 flex items-center justify-center">
+                    <Instagram className="h-3 w-3 text-pink-500" />
+                  </div>
+                  <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64 2.93 2.93 0 01.88.13V9.4a6.84 6.84 0 00-1-.05A6.33 6.33 0 005 20.1a6.34 6.34 0 0010.86-4.43v-7a8.16 8.16 0 004.77 1.52v-3.4a4.85 4.85 0 01-1-.1z"/></svg>
+                  </div>
+                  <div className="w-6 h-6 rounded-full bg-red-500/20 flex items-center justify-center">
+                    <Youtube className="h-3 w-3 text-red-500" />
+                  </div>
+                </div>
+                <span className="text-sm text-muted-foreground">Add your social links</span>
+                <Plus className="h-4 w-4 text-muted-foreground ml-auto" />
+              </button>
+            )}
+          </div>
+
+          {/* Bio Section */}
           <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Bio</span>
+              </div>
+              <VisibilityBadge
+                visibility={profile?.fieldVisibility?.bio || "public"}
+                onChange={(v) => updateFieldVisibility("bio", v)}
+              />
+            </div>
+            {profile?.bio ? (
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm text-muted-foreground flex-1">{profile.bio}</p>
+                <Button variant="ghost" size="sm" className="shrink-0" onClick={() => setBioModal(true)}>
+                  <Edit className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground" onClick={() => setBioModal(true)}>
+                <Plus className="h-3.5 w-3.5 mr-1" />Add a bio (160 chars max)
+              </Button>
+            )}
+          </div>
+
+          {/* Share Link CTA */}
+          <div className="mt-3 p-3 bg-muted/50 rounded-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Share2 className="h-4 w-4 text-brand" />
@@ -2166,14 +2571,14 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
             <p className="text-xs text-muted-foreground mt-1">Add this link to your Instagram, TikTok, or Linktree bio</p>
           </div>
 
-          {/* Profile Visibility */}
+          {/* Profile Visibility - last item */}
           <div className="mt-3 p-3 bg-muted/50 rounded-lg">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <Shield className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium">Profile Visibility</span>
               </div>
-              <Switch 
+              <Switch
                 checked={profile?.visibility === "public"}
                 onCheckedChange={async (checked) => {
                   try {
@@ -2210,85 +2615,27 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
             </div>
           </div>
 
-          {/* Bio Section */}
-          <div className="mt-3 p-3 bg-muted/50 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <User className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Bio</span>
-              </div>
-              <VisibilityBadge 
-                visibility={profile?.fieldVisibility?.bio || "public"} 
-                onChange={(v) => updateFieldVisibility("bio", v)}
-              />
-            </div>
-            {profile?.bio ? (
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-sm text-muted-foreground flex-1">{profile.bio}</p>
-                <Button variant="ghost" size="sm" className="shrink-0" onClick={() => setBioModal(true)}>
-                  <Edit className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            ) : (
-              <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground" onClick={() => setBioModal(true)}>
-                <Plus className="h-3.5 w-3.5 mr-1" />Add a bio (160 chars max)
-              </Button>
-            )}
-          </div>
-
-          {/* Location Section */}
-          <div className="mt-3 p-3 bg-muted/50 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Location</span>
-              </div>
-              <VisibilityBadge 
-                visibility={profile?.fieldVisibility?.city || "public"} 
-                onChange={(v) => updateFieldVisibility("city", v)}
-              />
-            </div>
-            {profile?.city ? (
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">{profile.city}{profile.country ? `, ${profile.country}` : ""}</p>
-                <Button variant="ghost" size="sm" onClick={() => setLocationEditModal(true)}>
-                  <Edit className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            ) : (
-              <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground" onClick={() => setLocationEditModal(true)}>
-                <Plus className="h-3.5 w-3.5 mr-1" />Add your city
-              </Button>
-            )}
-          </div>
-
-          {/* Social Links */}
-          <div className="mt-4 flex items-center justify-between">
-            <div className="flex gap-2">
-              {profile?.socialLinks?.instagram && (
-                <a href={`https://instagram.com/${profile.socialLinks.instagram}`} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-muted hover:bg-muted/80"><Instagram className="h-4 w-4" /></a>
-              )}
-              {profile?.socialLinks?.tiktok && (
-                <a href={`https://tiktok.com/@${profile.socialLinks.tiktok}`} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-muted hover:bg-muted/80"><svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64 2.93 2.93 0 01.88.13V9.4a6.84 6.84 0 00-1-.05A6.33 6.33 0 005 20.1a6.34 6.34 0 0010.86-4.43v-7a8.16 8.16 0 004.77 1.52v-3.4a4.85 4.85 0 01-1-.1z"/></svg></a>
-              )}
-              {profile?.socialLinks?.youtube && (
-                <a href={profile.socialLinks.youtube.startsWith("http") ? profile.socialLinks.youtube : `https://youtube.com/@${profile.socialLinks.youtube}`} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-muted hover:bg-muted/80"><Youtube className="h-4 w-4" /></a>
-              )}
-              {profile?.socialLinks?.linkedin && (
-                <a href={profile.socialLinks.linkedin.startsWith("http") ? profile.socialLinks.linkedin : `https://linkedin.com/in/${profile.socialLinks.linkedin}`} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-muted hover:bg-muted/80"><Linkedin className="h-4 w-4" /></a>
-              )}
-              {profile?.socialLinks?.twitter && (
-                <a href={`https://x.com/${profile.socialLinks.twitter}`} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-muted hover:bg-muted/80"><Twitter className="h-4 w-4" /></a>
-              )}
-            </div>
-            <Button variant="ghost" size="sm" onClick={() => setSocialLinksModal(true)}><Edit className="h-3.5 w-3.5 mr-1" />Edit</Button>
-          </div>
         </CardContent>
       </Card>
 
       {/* ==================== QUICK STATS ==================== */}
       <div className="grid grid-cols-4 gap-3">
-        <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{circles.length}</p><p className="text-xs text-muted-foreground">Rallies</p></CardContent></Card>
+        <button
+          onClick={() => {
+            setOpenSections((prev) => prev.includes("circles") ? prev : [...prev, "circles"]);
+            setTimeout(() => {
+              document.querySelector('[data-section="circles"]')?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }, 100);
+          }}
+          className="text-left"
+        >
+          <Card className="h-full hover:border-brand/50 transition-colors cursor-pointer">
+            <CardContent className="pt-4 pb-3 text-center">
+              <p className="text-2xl font-bold">{circles.length}</p>
+              <p className="text-xs text-muted-foreground">Rallies</p>
+            </CardContent>
+          </Card>
+        </button>
         <button onClick={() => setConnectionsSheet(true)} className="text-left">
           <Card className="h-full hover:border-brand/50 transition-colors cursor-pointer">
             <CardContent className="pt-4 pb-3 text-center">
@@ -2297,8 +2644,33 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
             </CardContent>
           </Card>
         </button>
-        <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{workoutPlans.length}</p><p className="text-xs text-muted-foreground">Workouts</p></CardContent></Card>
-        <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{badges.length}</p><p className="text-xs text-muted-foreground">Badges</p></CardContent></Card>
+        <button
+          onClick={() => router.push("/workouts")}
+          className="text-left"
+        >
+          <Card className="h-full hover:border-brand/50 transition-colors cursor-pointer">
+            <CardContent className="pt-4 pb-3 text-center">
+              <p className="text-2xl font-bold">{workoutPlans.length}</p>
+              <p className="text-xs text-muted-foreground">Workouts</p>
+            </CardContent>
+          </Card>
+        </button>
+        <button
+          onClick={() => {
+            setOpenSections((prev) => prev.includes("badges") ? prev : [...prev, "badges"]);
+            setTimeout(() => {
+              document.querySelector('[data-section="badges"]')?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }, 100);
+          }}
+          className="text-left"
+        >
+          <Card className="h-full hover:border-brand/50 transition-colors cursor-pointer">
+            <CardContent className="pt-4 pb-3 text-center">
+              <p className="text-2xl font-bold">{badges.length}</p>
+              <p className="text-xs text-muted-foreground">Badges</p>
+            </CardContent>
+          </Card>
+        </button>
       </div>
 
       {/* Featured Badges Display */}
@@ -2503,11 +2875,15 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
           <AccordionContent className="pb-4">
             <div className="space-y-2 pt-2">
               {circles.map((c) => (
-                <div key={c.id} className="flex items-center gap-3 rounded-lg bg-muted p-3">
+                <button
+                  key={c.id}
+                  onClick={() => router.push(`/circle/${c.id}`)}
+                  className="flex items-center gap-3 rounded-lg bg-muted p-3 w-full text-left hover:bg-muted/80 transition-colors"
+                >
                   <Avatar className="h-10 w-10"><AvatarImage src={c.imageUrl} /><AvatarFallback className="text-sm">{c.name.charAt(0)}</AvatarFallback></Avatar>
                   <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{c.name}</p><p className="text-xs text-muted-foreground">{c.memberCount} members · {c.role}</p></div>
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                </div>
+                </button>
               ))}
               <Button variant="outline" size="sm" className="w-full" onClick={() => router.push("/discover?tab=circles")}><Plus className="mr-1 h-4 w-4" />Join or Create Rally</Button>
             </div>
@@ -2596,7 +2972,7 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
       <HandleModal open={handleModal} onOpenChange={setHandleModal} currentHandle={profile?.handle} onSave={handleSaveHandle} />
       <DisplayNameModal open={displayNameModal} onOpenChange={setDisplayNameModal} currentName={displayName} onSave={handleSaveDisplayName} />
       <BioModal open={bioModal} onOpenChange={setBioModal} currentBio={profile?.bio} onSave={handleSaveBio} />
-      <LocationEditModal open={locationEditModal} onOpenChange={setLocationEditModal} currentCity={profile?.city} currentCountry={profile?.country} onSave={handleSaveCityLocation} />
+      <LocationEditModal open={locationEditModal} onOpenChange={setLocationEditModal} profile={profile} onSave={handleSaveProfileLocation} />
       <SocialLinksModal open={socialLinksModal} onOpenChange={setSocialLinksModal} socialLinks={profile?.socialLinks || {}} onSave={handleSaveSocialLinks} />
       <ChangeEmailModal open={changeEmailModal} onOpenChange={setChangeEmailModal} currentEmail={user.email} />
       <PasswordResetModal open={passwordResetModal} onOpenChange={setPasswordResetModal} email={user.email} />

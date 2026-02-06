@@ -134,8 +134,8 @@ export function MemberStats({ memberId, compact = false }: MemberStatsProps) {
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-500/10 rounded-lg">
-                <Dumbbell className="h-5 w-5 text-blue-500" />
+              <div className="p-2 bg-brand/10 rounded-lg">
+                <Dumbbell className="h-5 w-5 text-brand" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.workouts.total}</p>
@@ -201,8 +201,8 @@ export function MemberStats({ memberId, compact = false }: MemberStatsProps) {
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-500/10 rounded-lg">
-                <Weight className="h-5 w-5 text-blue-500" />
+              <div className="p-2 bg-brand/10 rounded-lg">
+                <Weight className="h-5 w-5 text-brand" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.volume.formatted}</p>

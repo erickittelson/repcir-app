@@ -266,7 +266,7 @@ export function CircleFeed({
         {posts.length > 0 ? (
           <div className="space-y-3">
             {posts.map((post) => (
-              <PostCard key={post.id} post={post} />
+              <PostCard key={post.id} post={post} circleId={circle.id} />
             ))}
           </div>
         ) : (
@@ -284,9 +284,66 @@ export function CircleFeed({
   );
 }
 
-function PostCard({ post }: { post: CircleFeedProps["posts"][0] }) {
+function PostCard({ post, circleId }: { post: CircleFeedProps["posts"][0]; circleId: string }) {
   const [liked, setLiked] = useState(post.isLiked);
   const [likesCount, setLikesCount] = useState(post.likesCount);
+  const [showComments, setShowComments] = useState(false);
+  const [comments, setComments] = useState<Array<{
+    id: string;
+    authorName: string;
+    authorImage?: string | null;
+    content: string;
+    createdAt: string;
+  }>>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [newComment, setNewComment] = useState("");
+  const [postingComment, setPostingComment] = useState(false);
+
+  const toggleComments = async () => {
+    if (!showComments && comments.length === 0) {
+      setLoadingComments(true);
+      try {
+        const res = await fetch(`/api/circles/${circleId}/posts/${post.id}/comments`);
+        if (res.ok) {
+          const data = await res.json();
+          setComments(data.comments || []);
+        }
+      } catch (error) {
+        console.error("Failed to load comments:", error);
+      } finally {
+        setLoadingComments(false);
+      }
+    }
+    setShowComments(!showComments);
+  };
+
+  const handlePostComment = async () => {
+    if (!newComment.trim()) return;
+    setPostingComment(true);
+    try {
+      const res = await fetch(`/api/circles/${circleId}/posts/${post.id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: newComment }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // API returns comment directly, not wrapped
+        setComments((prev) => [...prev, {
+          id: data.id,
+          authorName: data.authorName || "Unknown",
+          authorImage: data.authorImage,
+          content: data.content,
+          createdAt: data.createdAt,
+        }]);
+        setNewComment("");
+      }
+    } catch (error) {
+      console.error("Failed to post comment:", error);
+    } finally {
+      setPostingComment(false);
+    }
+  };
 
   const handleLike = async () => {
     const newLiked = !liked;
@@ -363,11 +420,68 @@ function PostCard({ post }: { post: CircleFeedProps["posts"][0] }) {
                 {likesCount > 0 && <span>{likesCount}</span>}
               </button>
 
-              <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+              <button
+                onClick={toggleComments}
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
                 <MessageCircle className="h-4 w-4" />
-                {post.commentsCount > 0 && <span>{post.commentsCount}</span>}
+                {(post.commentsCount > 0 || comments.length > 0) && (
+                  <span>{Math.max(post.commentsCount, comments.length)}</span>
+                )}
               </button>
             </div>
+
+            {/* Comments Section */}
+            {showComments && (
+              <div className="mt-4 pt-4 border-t space-y-3">
+                {loadingComments ? (
+                  <p className="text-sm text-muted-foreground">Loading comments...</p>
+                ) : comments.length > 0 ? (
+                  <div className="space-y-3">
+                    {comments.filter(Boolean).map((comment) => (
+                      <div key={comment.id} className="flex items-start gap-2">
+                        <Avatar className="h-6 w-6">
+                          <AvatarImage src={comment.authorImage ?? undefined} />
+                          <AvatarFallback className="text-xs">
+                            {(comment.authorName || "?").charAt(0)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 bg-muted/50 rounded-lg px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">{comment.authorName || "Unknown"}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {comment.createdAt ? formatRelativeTime(comment.createdAt) : ""}
+                            </span>
+                          </div>
+                          <p className="text-sm mt-1">{comment.content}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No comments yet</p>
+                )}
+
+                {/* Add comment input */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder="Write a comment..."
+                    className="flex-1 bg-muted/50 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
+                    onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handlePostComment()}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handlePostComment}
+                    disabled={!newComment.trim() || postingComment}
+                  >
+                    {postingComment ? "..." : "Post"}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </CardContent>

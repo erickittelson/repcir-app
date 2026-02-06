@@ -7,7 +7,7 @@ import {
   sharedWorkouts,
   exercises,
 } from "@/lib/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 
 export async function GET() {
   try {
@@ -79,41 +79,56 @@ export async function POST(request: Request) {
       })
       .returning();
 
-    // Add exercises to the plan
+    // Add exercises to the plan (batched queries to avoid N+1)
     if (exerciseList.length > 0) {
-      // First, try to find or create exercises
-      for (let i = 0; i < exerciseList.length; i++) {
-        const ex = exerciseList[i];
+      // Batch fetch all existing exercises by name in ONE query
+      const exerciseNames = exerciseList.map((ex: { name: string }) => ex.name);
+      const existingExercises = await db.query.exercises.findMany({
+        where: inArray(exercises.name, exerciseNames),
+      });
 
-        // Try to find existing exercise by name
-        let exercise = await db.query.exercises.findFirst({
-          where: eq(exercises.name, ex.name),
-        });
+      // Build a map of name -> exercise for quick lookups
+      const exerciseMap = new Map<string, typeof existingExercises[0]>();
+      for (const ex of existingExercises) {
+        exerciseMap.set(ex.name, ex);
+      }
 
-        // If no exercise found, create a placeholder
-        if (!exercise) {
-          const [newExercise] = await db
-            .insert(exercises)
-            .values({
-              name: ex.name,
+      // Find exercises that need to be created
+      const missingNames = exerciseNames.filter((name: string) => !exerciseMap.has(name));
+
+      // Batch create missing exercises
+      if (missingNames.length > 0) {
+        const newExercises = await db
+          .insert(exercises)
+          .values(
+            missingNames.map((name: string) => ({
+              name,
               category: category || "general",
               isCustom: true,
-            })
-            .returning();
-          exercise = newExercise;
-        }
+            }))
+          )
+          .returning();
 
-        // Add to workout plan
-        await db.insert(workoutPlanExercises).values({
+        // Add newly created exercises to the map
+        for (const ex of newExercises) {
+          exerciseMap.set(ex.name, ex);
+        }
+      }
+
+      // Batch insert all workout plan exercises
+      const planExerciseValues = exerciseList.map(
+        (ex: { name: string; sets?: number; reps?: number; restSeconds?: number; notes?: string }, i: number) => ({
           planId: workoutPlan.id,
-          exerciseId: exercise.id,
+          exerciseId: exerciseMap.get(ex.name)!.id,
           order: i + 1,
           sets: ex.sets || 3,
           reps: String(ex.reps || 10),
           restBetweenSets: ex.restSeconds || 60,
           notes: ex.notes,
-        });
-      }
+        })
+      );
+
+      await db.insert(workoutPlanExercises).values(planExerciseValues);
     }
 
     // If visibility is not private, create a shared workout entry

@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { applyRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
+import {
+  checkAIPersonalizationConsent,
+  createConsentRequiredResponse,
+} from "@/lib/consent";
 import {
   circleMembers,
   memberEmbeddings,
@@ -11,6 +16,7 @@ import {
   memberLimitations,
   memberSkills,
   contextNotes,
+  userProfiles,
 } from "@/lib/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { openai } from "@ai-sdk/openai";
@@ -27,6 +33,15 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Rate limit embedding generation (expensive operation, 5 embeddings generated per call)
+    const rateLimitResult = applyRateLimit(
+      `embeddings:${session.user.id}`,
+      { limit: 5, windowSeconds: 60 } // 5 requests per minute per user
+    );
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
     const { id: memberId } = await params;
 
     // Verify member belongs to this circle
@@ -41,8 +56,14 @@ export async function POST(
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
+    // GDPR Article 9: Check consent before processing health data via AI
+    const consent = await checkAIPersonalizationConsent(session.user.id);
+    if (!consent.hasConsent) {
+      return createConsentRequiredResponse();
+    }
+
     // Gather all member data for embedding generation
-    const [metrics, memberGoals, workouts, prs, limitations, skills, notes] = await Promise.all([
+    const [metrics, memberGoals, workouts, prs, limitations, skills, notes, profile] = await Promise.all([
       db.query.memberMetrics.findMany({
         where: eq(memberMetrics.memberId, memberId),
         orderBy: [desc(memberMetrics.date)],
@@ -71,13 +92,19 @@ export async function POST(
         orderBy: [desc(contextNotes.createdAt)],
         limit: 30,
       }),
+      // Fetch user profile if member has userId
+      member.userId
+        ? db.query.userProfiles.findFirst({
+            where: eq(userProfiles.userId, member.userId),
+          })
+        : Promise.resolve(null),
     ]);
 
     // Build embedding content for different aspects
     const embeddingsToCreate: { type: string; content: string; metadata: Record<string, unknown> }[] = [];
 
     // 1. Profile embedding
-    const profileContent = buildProfileContent(member, metrics[0]);
+    const profileContent = buildProfileContent(member, metrics[0], profile);
     embeddingsToCreate.push({
       type: "profile",
       content: profileContent,
@@ -216,14 +243,31 @@ export async function GET(
 }
 
 // Helper functions to build embedding content
-function buildProfileContent(member: typeof circleMembers.$inferSelect, metrics?: typeof memberMetrics.$inferSelect): string {
+function buildProfileContent(
+  member: typeof circleMembers.$inferSelect,
+  metrics?: typeof memberMetrics.$inferSelect,
+  profile?: typeof userProfiles.$inferSelect | null
+): string {
   let content = `Member Profile: ${member.name}`;
 
-  if (member.dateOfBirth) {
-    const age = Math.floor((Date.now() - new Date(member.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+  // Calculate age from userProfile (birthMonth/birthYear) or fallback to member.dateOfBirth
+  let age: number | null = null;
+  if (profile?.birthMonth && profile?.birthYear) {
+    const today = new Date();
+    age = today.getFullYear() - profile.birthYear;
+    if (today.getMonth() + 1 < profile.birthMonth) {
+      age--;
+    }
+  } else if (member.dateOfBirth) {
+    age = Math.floor((Date.now() - new Date(member.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+  }
+
+  if (age) {
     content += `, ${age} years old`;
   }
-  if (member.gender) content += `, ${member.gender}`;
+
+  const gender = profile?.gender || member.gender;
+  if (gender) content += `, ${gender}`;
 
   if (metrics) {
     if (metrics.weight) content += `. Weight: ${metrics.weight} lbs`;

@@ -410,7 +410,7 @@ function AMRAPTimer({
             >
               {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
             </Button>
-            <Button variant="outline" size="icon" onClick={reset}>
+            <Button variant="outline" size="icon" onClick={reset} aria-label="Reset timer">
               <RotateCcw className="h-4 w-4" />
             </Button>
             <Button
@@ -518,7 +518,7 @@ function ForTimeTimer({
 
           {/* Controls */}
           <div className="flex items-center justify-center gap-3">
-            <Button variant="outline" size="icon" onClick={reset}>
+            <Button variant="outline" size="icon" onClick={reset} aria-label="Reset timer">
               <RotateCcw className="h-4 w-4" />
             </Button>
             <Button
@@ -838,7 +838,7 @@ function TabataTimer({
             >
               {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
             </Button>
-            <Button variant="outline" size="icon" onClick={reset}>
+            <Button variant="outline" size="icon" onClick={reset} aria-label="Reset timer">
               <RotateCcw className="h-4 w-4" />
             </Button>
             <Button
