@@ -10,6 +10,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
+// Force dynamic to prevent static generation issues with useSearchParams
+export const dynamic = "force-dynamic";
+
 export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center mesh-gradient p-4">

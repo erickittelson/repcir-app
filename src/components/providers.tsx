@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { NeonAuthUIProvider } from "@neondatabase/auth/react/ui";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
@@ -11,17 +11,12 @@ import Link from "next/link";
 import { registerServiceWorker } from "@/lib/pwa";
 import { PostHogProvider, trackPageView } from "@/lib/posthog/client";
 
-export function Providers({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
+// Separate component for page view tracking that uses useSearchParams
+// Must be wrapped in Suspense for Next.js static generation
+function PageViewTracker() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // Register service worker for PWA support
-  useEffect(() => {
-    registerServiceWorker();
-  }, []);
-
-  // Track page views on route change
   useEffect(() => {
     if (pathname) {
       const url = searchParams?.toString()
@@ -30,6 +25,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
       trackPageView(url);
     }
   }, [pathname, searchParams]);
+
+  return null;
+}
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+
+  // Register service worker for PWA support
+  useEffect(() => {
+    registerServiceWorker();
+  }, []);
 
   return (
     <PostHogProvider>
@@ -61,6 +67,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
           PASSWORDS_DO_NOT_MATCH: "Passwords do not match",
         }}
       >
+        <Suspense fallback={null}>
+          <PageViewTracker />
+        </Suspense>
         {children}
         <CookieBanner />
         <Toaster />
