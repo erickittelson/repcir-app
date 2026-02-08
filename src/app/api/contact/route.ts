@@ -2,7 +2,13 @@ import { Resend } from "resend";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/neon-auth";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function getResend() {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    return null;
+  }
+  return new Resend(apiKey);
+}
 
 interface FeedbackFormData {
   type: "feedback" | "bug" | "feature" | "support";
@@ -13,6 +19,15 @@ interface FeedbackFormData {
 
 export async function POST(request: Request) {
   try {
+    const resend = getResend();
+    if (!resend) {
+      console.warn("RESEND_API_KEY not configured - email not sent");
+      return NextResponse.json(
+        { error: "Email service not configured. Set RESEND_API_KEY in environment." },
+        { status: 503 }
+      );
+    }
+
     const session = await getSession();
     const body: FeedbackFormData = await request.json();
     const { type, subject, message, email: providedEmail } = body;
