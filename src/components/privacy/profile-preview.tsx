@@ -195,8 +195,8 @@ export function ProfilePreviewDialog({
             </p>
             <p className="text-muted-foreground">
               {viewMode === "public"
-                ? "This is how strangers and non-rally members see your profile."
-                : "This is how members of your rallies see your profile."}
+                ? "This is how strangers and non-circle members see your profile."
+                : "This is how members of your circles see your profile."}
             </p>
           </div>
         </div>

@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 
 /**
  * GET /api/circles/discover
- * Discover public rallies/circles to join
+ * Discover public circles/circles to join
  * Query params:
  *   - q: Search query (optional)
  *   - focusArea: Filter by focus area (optional)
@@ -85,6 +85,7 @@ export async function GET(request: Request) {
         visibility: circles.visibility,
         createdAt: circles.createdAt,
         category: circles.category,
+        joinType: circles.joinType,
       })
       .from(circles)
       .where(and(...conditions))
@@ -116,7 +117,7 @@ export async function GET(request: Request) {
       )
       .groupBy(circles.focusArea);
 
-    // Get trending rallies (most popular public rallies)
+    // Get trending circles (most popular public circles)
     const trending = await db
       .select({
         id: circles.id,
@@ -124,6 +125,7 @@ export async function GET(request: Request) {
         imageUrl: circles.imageUrl,
         memberCount: circles.memberCount,
         focusArea: circles.focusArea,
+        joinType: circles.joinType,
       })
       .from(circles)
       .where(

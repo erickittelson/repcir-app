@@ -96,7 +96,7 @@ const VISIBILITY_OPTIONS: {
   {
     value: "circle",
     label: "Rally Only",
-    description: "Only rally members",
+    description: "Only circle members",
     icon: <Users className="h-4 w-4" />,
     color: "text-brand",
   },
@@ -242,7 +242,7 @@ const PRESETS = [
   },
   {
     name: "Rally Only",
-    description: "Share with rally members",
+    description: "Share with circle members",
     settings: {
       nameVisibility: "public" as const,
       profilePictureVisibility: "public" as const,

@@ -1,7 +1,7 @@
 /**
  * Circle Components - February 2026
  *
- * Components for managing circles/rallies.
+ * Components for managing circles/circles.
  */
 
 export {

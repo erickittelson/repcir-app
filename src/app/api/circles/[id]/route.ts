@@ -233,7 +233,7 @@ export async function PATCH(
 
     if (!membership || (membership.role !== "admin" && membership.role !== "owner")) {
       return NextResponse.json(
-        { error: "Only admins and owners can edit this rally" },
+        { error: "Only admins and owners can edit this circle" },
         { status: 403 }
       );
     }
@@ -405,7 +405,7 @@ export async function PATCH(
 
       if (existing) {
         return NextResponse.json(
-          { error: "A rally with this name already exists" },
+          { error: "A circle with this name already exists" },
           { status: 400 }
         );
       }
@@ -478,7 +478,7 @@ export async function DELETE(
 
     if (!membership || membership.role !== "owner") {
       return NextResponse.json(
-        { error: "Only the owner can delete this rally" },
+        { error: "Only the owner can delete this circle" },
         { status: 403 }
       );
     }

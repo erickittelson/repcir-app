@@ -17,7 +17,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CreateRallyExperience } from "@/components/rally";
+import { CreateCircleExperience } from "@/components/circle";
 
 interface CircleData {
   id: string;
@@ -94,7 +94,7 @@ export function CirclesClient({ circles, userId }: CirclesClientProps) {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search your rallies..."
+            placeholder="Search your circles..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
@@ -132,13 +132,13 @@ export function CirclesClient({ circles, userId }: CirclesClientProps) {
           <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
           {circles.length === 0 ? (
             <>
-              <p className="font-medium">No rallies yet</p>
+              <p className="font-medium">No circles yet</p>
               <p className="text-sm mt-1">
-                Create your own rally or discover communities to join
+                Create your own circle or discover communities to join
               </p>
             </>
           ) : (
-            <p>No rallies match your search</p>
+            <p>No circles match your search</p>
           )}
         </div>
       ) : (
@@ -219,7 +219,7 @@ export function CirclesClient({ circles, userId }: CirclesClientProps) {
       )}
 
       {/* Create Rally Experience */}
-      <CreateRallyExperience
+      <CreateCircleExperience
         open={showCreateCircle}
         onOpenChange={setShowCreateCircle}
         onComplete={() => {

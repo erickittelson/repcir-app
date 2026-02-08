@@ -84,7 +84,7 @@ interface Workout {
   difficulty?: string;
   estimatedDuration?: number;
   exerciseCount: number;
-  visibility?: "private" | "rally" | "public";
+  visibility?: "private" | "circle" | "public";
   createdAt?: string;
   useCount?: number;
   saveCount?: number;
@@ -96,7 +96,7 @@ interface WorkoutPlan {
   description?: string;
   workoutCount: number;
   duration?: string; // e.g., "4 weeks"
-  visibility?: "private" | "rally" | "public";
+  visibility?: "private" | "circle" | "public";
   createdAt?: string;
 }
 
@@ -108,10 +108,10 @@ const VISIBILITY_OPTIONS = [
     description: "Only you can see this",
   },
   {
-    value: "rally",
+    value: "circle",
     label: "Rally Only",
     icon: Users,
-    description: "Share with your rally members",
+    description: "Share with your circle members",
   },
   {
     value: "public",
@@ -149,7 +149,7 @@ export function WorkoutsHub() {
 
   // Publish dialog state
   const [publishWorkout, setPublishWorkout] = useState<Workout | null>(null);
-  const [publishVisibility, setPublishVisibility] = useState<"private" | "rally" | "public">("private");
+  const [publishVisibility, setPublishVisibility] = useState<"private" | "circle" | "public">("private");
   const [isPublishing, setIsPublishing] = useState(false);
 
   // Delete confirmation
@@ -221,8 +221,8 @@ export function WorkoutsHub() {
         toast.success(
           publishVisibility === "public"
             ? "Workout published publicly!"
-            : publishVisibility === "rally"
-            ? "Workout shared with your rally!"
+            : publishVisibility === "circle"
+            ? "Workout shared with your circle!"
             : "Workout set to private"
         );
         fetchWorkouts();
@@ -281,7 +281,7 @@ export function WorkoutsHub() {
     switch (visibility) {
       case "public":
         return <Globe className="h-3.5 w-3.5" />;
-      case "rally":
+      case "circle":
         return <Users className="h-3.5 w-3.5" />;
       default:
         return <Lock className="h-3.5 w-3.5" />;
@@ -292,7 +292,7 @@ export function WorkoutsHub() {
     switch (visibility) {
       case "public":
         return "Public";
-      case "rally":
+      case "circle":
         return "Rally";
       default:
         return "Private";
@@ -917,7 +917,7 @@ function CreatePlanSheet({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [duration, setDuration] = useState("4");
-  const [visibility, setVisibility] = useState<"private" | "rally" | "public">("private");
+  const [visibility, setVisibility] = useState<"private" | "circle" | "public">("private");
   const [selectedWorkouts, setSelectedWorkouts] = useState<string[]>([]);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -1019,7 +1019,7 @@ function CreatePlanSheet({
                           Private
                         </span>
                       </SelectItem>
-                      <SelectItem value="rally">
+                      <SelectItem value="circle">
                         <span className="flex items-center gap-2">
                           <Users className="h-3.5 w-3.5" />
                           Rally

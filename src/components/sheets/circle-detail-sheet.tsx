@@ -108,7 +108,7 @@ export function CircleDetailSheet({
       fetch(`/api/circles/${circleId}`)
         .then((res) => res.json())
         .then((data) => setCircle(data))
-        .catch(() => toast.error("Failed to load rally"))
+        .catch(() => toast.error("Failed to load circle"))
         .finally(() => setLoading(false));
     }
   }, [open, circleId]);
@@ -131,15 +131,15 @@ export function CircleDetailSheet({
           setCircle((prev) =>
             prev ? { ...prev, isMember: true, userRole: "member" } : prev
           );
-          toast.success("Welcome to the rally!");
+          toast.success("Welcome to the circle!");
         }
         if (onJoin) onJoin(circleId);
       } else {
         const data = await res.json();
-        toast.error(data.error || "Failed to join rally");
+        toast.error(data.error || "Failed to join circle");
       }
     } catch {
-      toast.error("Failed to join rally");
+      toast.error("Failed to join circle");
     } finally {
       setJoining(false);
     }

@@ -1,5 +1,5 @@
 /**
- * RALLYPROOF Difficulty Branding
+ * REPCIR Difficulty Branding
  *
  * Premium, earned, meritocratic difficulty labels.
  * No emojis. No fluff. Earned respect.
@@ -84,7 +84,7 @@ export const DIFFICULTY_BRANDS: Record<string, DifficultyBrand> = {
 };
 
 /**
- * Get the Rallyproof difficulty branding for a given difficulty level
+ * Get the Repcir difficulty branding for a given difficulty level
  */
 export function getDifficultyBrand(
   difficulty: string | null | undefined
@@ -98,7 +98,7 @@ export function getDifficultyBrand(
 }
 
 /**
- * Get the branded label (no emoji - per Rallyproof brand guidelines)
+ * Get the branded label (no emoji - per Repcir brand guidelines)
  */
 export function getDifficultyLabel(
   difficulty: string | null | undefined
@@ -133,7 +133,7 @@ export function getCustomOrDefaultLabel(
 
 /**
  * Theme-specific styling helpers
- * Rallyproof palette: Gold (earned), Stone (foundation), Red (accountability)
+ * Repcir palette: Gold (earned), Stone (foundation), Red (accountability)
  */
 export function getThemeStyles(theme: DifficultyBrand["theme"]) {
   switch (theme) {

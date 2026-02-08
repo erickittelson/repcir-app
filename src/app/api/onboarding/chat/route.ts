@@ -1086,7 +1086,7 @@ ${justCollectedStr}
   <instruction>
     IMPORTANT: The user's last message provided data for the "${transitionContext.fromPhase}" phase.
     You MUST first acknowledge what they provided (e.g., "Nice to meet you, ${name}!" for a name),
-    then naturally transition to the "${transitionContext.toPhase}" phase and ask about its first field.
+    then natucircle transition to the "${transitionContext.toPhase}" phase and ask about its first field.
     Do NOT skip the acknowledgment - the user needs to know their input was received.
   </instruction>
 </phase_transition>
@@ -1632,7 +1632,7 @@ export async function GET() {
 
     // New user - create progress record and send welcome
     const welcomePhase = schema.onboarding.phases.welcome;
-    const welcomeMessage = welcomePhase.opening_message || `I'm your AI coach at Rallyproof.
+    const welcomeMessage = welcomePhase.opening_message || `I'm your AI coach at Repcir.
 
 Before we build your training program, I need to know who I'm working with.
 

@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Users, Loader2, CheckCircle2, XCircle } from "lucide-react";
-import { RallyproofLogo } from "@/components/ui/rallyproof-logo";
+import { RepcirLogo } from "@/components/ui/repcir-logo";
 import { authClient } from "@/lib/neon-auth/client";
 
 interface InvitationDetails {
@@ -91,7 +91,7 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || "Failed to join rally");
+        setError(data.error || "Failed to join circle");
         return;
       }
 
@@ -102,7 +102,7 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
         router.refresh();
       }, 2000);
     } catch {
-      setError("Failed to join rally");
+      setError("Failed to join circle");
     } finally {
       setAccepting(false);
     }
@@ -169,11 +169,11 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center">
-            <RallyproofLogo variant="icon" size="lg" />
+            <RepcirLogo variant="icon" size="lg" />
           </div>
           <CardTitle className="font-display tracking-wider">YOU&apos;RE INVITED</CardTitle>
           <CardDescription>
-            Join <span className="font-semibold text-brand">{invitation?.circleName}</span> on Rallyproof
+            Join <span className="font-semibold text-brand">{invitation?.circleName}</span> on Repcir
           </CardDescription>
         </CardHeader>
 
@@ -233,7 +233,7 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
           ) : (
             <div className="space-y-4">
               <p className="text-sm text-center text-muted-foreground">
-                Sign in or create an account to join this rally
+                Sign in or create an account to join this circle
               </p>
               <Button onClick={handleSignIn} className="w-full">
                 Sign In to Join

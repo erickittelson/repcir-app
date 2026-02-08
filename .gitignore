@@ -44,3 +44,6 @@ next-env.d.ts
 
 # semantic layer build output
 /.semantic-build
+
+# Sentry Config File
+.env.sentry-build-plugin

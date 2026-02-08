@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Check,
   Clock,
@@ -17,8 +18,13 @@ import {
   ChevronRight,
   Trophy,
   AlertCircle,
+  Send,
+  Loader2,
+  Image as ImageIcon,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface MemberStatus {
   id: string;
@@ -33,6 +39,7 @@ interface MemberStatus {
 
 interface CircleFeedProps {
   user: {
+    id: string;
     name: string;
     image?: string | null;
     memberId: string;
@@ -67,13 +74,19 @@ export function CircleFeed({
   user,
   circle,
   accountability,
-  posts,
+  posts: initialPosts,
 }: CircleFeedProps) {
   const router = useRouter();
   const { trainedTodayCount, totalMembers, currentUserTrained, memberStatuses } = accountability;
+  const [posts, setPosts] = useState(initialPosts);
 
   // Get members who haven't trained today
   const notTrainedYet = memberStatuses.filter((m) => !m.trainedToday && !m.isCurrentUser);
+
+  // Handle new post creation
+  const handleNewPost = (newPost: CircleFeedProps["posts"][0]) => {
+    setPosts((prev) => [newPost, ...prev]);
+  };
 
   return (
     <div className="space-y-6 px-4 py-6">
@@ -121,12 +134,12 @@ export function CircleFeed({
         </Card>
       )}
 
-      {/* Rallyproof Completion - when everyone trained */}
+      {/* Repcir Completion - when everyone trained */}
       {trainedTodayCount === totalMembers && totalMembers > 1 && (
         <Card className="border-success/50 bg-success/5">
           <CardContent className="p-4 text-center">
             <Trophy className="h-8 w-8 text-success mx-auto mb-2" />
-            <p className="font-display tracking-wider text-success">RALLYPROOF COMPLETE</p>
+            <p className="font-display tracking-wider text-success">REPCIR COMPLETE</p>
             <p className="text-sm text-muted-foreground">
               Everyone trained today. This is what a unit looks like.
             </p>
@@ -263,6 +276,14 @@ export function CircleFeed({
           Activity
         </h2>
 
+        {/* Post Composer */}
+        <PostComposer
+          user={user}
+          circleId={circle.id}
+          onPost={handleNewPost}
+          memberStatuses={memberStatuses}
+        />
+
         {posts.length > 0 ? (
           <div className="space-y-3">
             {posts.map((post) => (
@@ -274,13 +295,221 @@ export function CircleFeed({
             <CardContent className="py-8 text-center">
               <MessageCircle className="mx-auto h-10 w-10 text-muted-foreground/50" />
               <p className="mt-3 text-muted-foreground">
-                No posts yet. Complete a workout to share with your rally.
+                No posts yet. Complete a workout to share with your circle.
               </p>
             </CardContent>
           </Card>
         )}
       </section>
     </div>
+  );
+}
+
+function PostComposer({
+  user,
+  circleId,
+  onPost,
+  memberStatuses,
+}: {
+  user: CircleFeedProps["user"];
+  circleId: string;
+  onPost: (post: CircleFeedProps["posts"][0]) => void;
+  memberStatuses: MemberStatus[];
+}) {
+  const [content, setContent] = useState("");
+  const [isPosting, setIsPosting] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be less than 5MB");
+      return;
+    }
+
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setImagePreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const clearImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+  };
+
+  const handlePost = async () => {
+    if (!content.trim() && !imageFile) {
+      toast.error("Please add some content or an image");
+      return;
+    }
+
+    setIsPosting(true);
+    try {
+      let imageUrl: string | null = null;
+
+      // Upload image first if we have one
+      if (imageFile) {
+        const formData = new FormData();
+        formData.append("file", imageFile);
+
+        const uploadRes = await fetch(`/api/circles/${circleId}/posts/upload-image`, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!uploadRes.ok) {
+          throw new Error("Failed to upload image");
+        }
+
+        const uploadData = await uploadRes.json();
+        imageUrl = uploadData.url;
+      }
+
+      // Create the post
+      const res = await fetch(`/api/circles/${circleId}/posts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          postType: imageUrl ? "image" : "text",
+          content: content.trim() || null,
+          imageUrl,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to create post");
+      }
+
+      const newPost = await res.json();
+
+      // Add to feed
+      onPost({
+        id: newPost.id,
+        authorName: user.name,
+        authorImage: user.image,
+        authorId: user.id,
+        content: newPost.content,
+        type: newPost.postType,
+        workoutId: null,
+        likesCount: 0,
+        commentsCount: 0,
+        isLiked: false,
+        createdAt: new Date().toISOString(),
+      });
+
+      // Reset form
+      setContent("");
+      clearImage();
+      setIsExpanded(false);
+      toast.success("Posted!");
+    } catch (error) {
+      console.error("Failed to post:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to create post");
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
+  return (
+    <Card className="mb-4">
+      <CardContent className="p-4">
+        <div className="flex gap-3">
+          <Avatar className="h-10 w-10">
+            <AvatarImage src={user.image || undefined} />
+            <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+          </Avatar>
+
+          <div className="flex-1">
+            {!isExpanded ? (
+              <button
+                onClick={() => setIsExpanded(true)}
+                className="w-full text-left px-4 py-3 bg-muted/50 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+              >
+                Share something with your circle...
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <Textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="What's on your mind? Use @name to mention someone..."
+                  className="min-h-[80px] resize-none"
+                  autoFocus
+                />
+
+                {/* Image Preview */}
+                {imagePreview && (
+                  <div className="relative inline-block">
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="max-h-40 rounded-lg"
+                    />
+                    <button
+                      onClick={clearImage}
+                      className="absolute -top-2 -right-2 p-1 bg-destructive text-destructive-foreground rounded-full"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <label className="cursor-pointer p-2 rounded-lg hover:bg-muted transition-colors">
+                      <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageSelect}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setIsExpanded(false);
+                        setContent("");
+                        clearImage();
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handlePost}
+                      disabled={isPosting || (!content.trim() && !imageFile)}
+                      className="bg-brand-gradient"
+                    >
+                      {isPosting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Send className="h-4 w-4 mr-1" />
+                          Post
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -351,8 +580,8 @@ function PostCard({ post, circleId }: { post: CircleFeedProps["posts"][0]; circl
     setLikesCount((prev) => prev + (newLiked ? 1 : -1));
 
     try {
-      await fetch(`/api/circles/posts/${post.id}/like`, {
-        method: newLiked ? "POST" : "DELETE",
+      await fetch(`/api/circles/${circleId}/posts/${post.id}/like`, {
+        method: "POST", // Toggle endpoint, always POST
       });
     } catch {
       // Revert on error
@@ -497,7 +726,7 @@ function getAccountabilityMessage(
   const percent = Math.round((trained / total) * 100);
 
   if (trained === total) {
-    return "Everyone showed up. Rallyproof complete.";
+    return "Everyone showed up. Repcir complete.";
   }
 
   if (trained === 0) {

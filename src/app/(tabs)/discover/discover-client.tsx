@@ -44,7 +44,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getDifficultyBrand, getDifficultyLabel } from "@/lib/difficulty-branding";
-import { CreateRallyExperience } from "@/components/rally";
+import { CreateCircleExperience } from "@/components/circle";
 import {
   WorkoutDetailSheet,
   ChallengeDetailSheet,
@@ -513,9 +513,9 @@ export function DiscoverPage({
     setJoiningCircles((prev) => new Set(prev).add(circleId));
     try {
       await fetch(`/api/circles/${circleId}/join`, { method: "POST" });
-      toast.success("Joined rally!");
+      toast.success("Joined circle!");
     } catch {
-      toast.error("Failed to join rally");
+      toast.error("Failed to join circle");
     } finally {
       setJoiningCircles((prev) => {
         const next = new Set(prev);
@@ -1342,11 +1342,11 @@ export function DiscoverPage({
               </CardContent>
             </Card>
 
-            {/* Info about finding rallies */}
+            {/* Info about finding circles */}
             <div className="bg-muted/50 rounded-lg p-3 text-sm">
               <p className="text-muted-foreground">
-                <span className="font-medium text-foreground">Find rallies</span> by searching their name or handle.
-                Share your rally link on Instagram, TikTok, or Linktree to grow your community.
+                <span className="font-medium text-foreground">Find circles</span> by searching their name or handle.
+                Share your circle link on Instagram, TikTok, or Linktree to grow your community.
               </p>
             </div>
 
@@ -1462,7 +1462,7 @@ export function DiscoverPage({
       </div>
 
       {/* Create Rally Experience */}
-      <CreateRallyExperience open={showCreateCircle} onOpenChange={setShowCreateCircle} />
+      <CreateCircleExperience open={showCreateCircle} onOpenChange={setShowCreateCircle} />
       
       {/* Detail Sheets */}
       <WorkoutDetailSheet

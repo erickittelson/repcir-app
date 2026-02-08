@@ -935,7 +935,7 @@ export function DashboardTabs({
                   <div className="text-center py-6">
                     <Users className="mx-auto h-10 w-10 text-muted-foreground/50" />
                     <p className="text-sm text-muted-foreground mt-2">
-                      No rallies yet
+                      No circles yet
                     </p>
                     <Button asChild size="sm" className="mt-3">
                       <Link href="/discover">Join Rally</Link>

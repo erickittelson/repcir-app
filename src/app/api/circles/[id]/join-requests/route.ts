@@ -8,6 +8,7 @@ import {
   userProfiles,
 } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { createNotification } from "@/lib/notifications";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -190,6 +191,32 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         respondedAt: new Date(),
       })
       .where(eq(circleJoinRequests.id, requestId));
+
+    // Notify the user who requested to join
+    const circle = await db.query.circles.findFirst({
+      where: eq(circles.id, circleId),
+    });
+    const circleName = circle?.name || "the circle";
+
+    if (action === "approve") {
+      createNotification({
+        userId: joinRequest.userId,
+        type: "circle_request",
+        title: `You've been approved to join ${circleName}!`,
+        body: "Welcome to the circle. Tap to check it out.",
+        data: { circleId },
+        actionUrl: `/circle/${circleId}`,
+      }).catch((err) => console.error("Failed to notify user of approval:", err));
+    } else {
+      createNotification({
+        userId: joinRequest.userId,
+        type: "circle_request",
+        title: `Your request to join ${circleName} was not approved`,
+        body: "You can explore other circles to join.",
+        data: { circleId },
+        actionUrl: `/discover`,
+      }).catch((err) => console.error("Failed to notify user of rejection:", err));
+    }
 
     return NextResponse.json({
       success: true,

@@ -24,32 +24,33 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Rallyproof",
-    template: "%s | Rallyproof",
+    default: "Repcir",
+    template: "%s | Repcir",
   },
   description: "We show up. Built by those who do.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Rallyproof",
+    title: "Repcir",
   },
   formatDetection: {
     telephone: false,
   },
   openGraph: {
     type: "website",
-    siteName: "Rallyproof",
-    title: "Rallyproof",
+    siteName: "Repcir",
+    title: "Repcir",
     description: "We show up. Built by those who do.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Rallyproof",
+    title: "Repcir",
     description: "We show up. Built by those who do.",
   },
   icons: {
     icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
       { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
       { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
@@ -61,7 +62,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  // Rallyproof Black theme color
+  // Repcir Black theme color
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#1A1A2E" },
     { media: "(prefers-color-scheme: dark)", color: "#1A1A2E" },

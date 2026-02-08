@@ -15,7 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ChevronDown, Check, Plus, Settings, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CreateRallyExperience } from "@/components/rally";
+import { CreateCircleExperience } from "@/components/circle";
 
 interface Circle {
   id: string;
@@ -92,7 +92,7 @@ export function CircleSwitcher({
           <Plus className="h-4 w-4" />
           Create Rally
         </Button>
-        <CreateRallyExperience
+        <CreateCircleExperience
           open={showCreateRally}
           onOpenChange={setShowCreateRally}
           onComplete={() => {
@@ -176,7 +176,7 @@ export function CircleSwitcher({
           Create New Rally
         </DropdownMenuItem>
       </DropdownMenuContent>
-      <CreateRallyExperience
+      <CreateCircleExperience
         open={showCreateRally}
         onOpenChange={setShowCreateRally}
         onComplete={() => {

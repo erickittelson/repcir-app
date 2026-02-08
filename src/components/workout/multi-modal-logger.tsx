@@ -47,7 +47,7 @@ type LoggingMode = "quick" | "voice" | "detailed";
 
 const MODES: { id: LoggingMode; label: string; icon: React.ElementType; description: string }[] = [
   { id: "quick", label: "Quick", icon: Zap, description: "Fast logging" },
-  { id: "voice", label: "Voice", icon: Mic, description: "Speak naturally" },
+  { id: "voice", label: "Voice", icon: Mic, description: "Speak natucircle" },
   { id: "detailed", label: "Detailed", icon: ClipboardList, description: "Full control" },
 ];
 

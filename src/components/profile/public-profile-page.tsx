@@ -162,18 +162,11 @@ export function PublicProfilePage({ identifier, initialData }: PublicProfilePage
   // Private profile view
   if (profile.isPrivate) {
     return (
-      <div className="min-h-screen bg-background">
-        {/* Header */}
-        <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border">
-          <div className="max-w-2xl mx-auto px-4 h-14 flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => router.back()} aria-label="Go back">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <h1 className="font-semibold">Profile</h1>
-          </div>
-        </header>
-
-        <main className="max-w-2xl mx-auto px-4 py-8">
+      <div className="max-w-2xl mx-auto px-4 py-6">
+        {/* Page title */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">Profile</h1>
+        </div>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -214,37 +207,27 @@ export function PublicProfilePage({ identifier, initialData }: PublicProfilePage
               )}
             </div>
           </motion.div>
-        </main>
       </div>
     );
   }
 
   // Public profile view
   return (
-    <div className="min-h-screen bg-background pb-20">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border">
-        <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => router.back()} aria-label="Go back">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <h1 className="font-semibold">
-              {profile.handle ? `@${profile.handle}` : profile.displayName}
-            </h1>
-          </div>
-          
-          {isOwnProfile && (
-            <Link href="/you">
-              <Button variant="outline" size="sm">
-                Edit Profile
-              </Button>
-            </Link>
-          )}
-        </div>
-      </header>
+    <div className="max-w-2xl mx-auto px-4 py-6">
+      {/* Page title with edit button */}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">
+          {profile.handle ? `@${profile.handle}` : profile.displayName}
+        </h1>
 
-      <main className="max-w-2xl mx-auto px-4 py-6">
+        {isOwnProfile && (
+          <Link href="/you">
+            <Button variant="outline" size="sm">
+              Edit Profile
+            </Button>
+          </Link>
+        )}
+      </div>
         {/* Profile Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -527,7 +510,6 @@ export function PublicProfilePage({ identifier, initialData }: PublicProfilePage
             </motion.div>
           )}
         </div>
-      </main>
     </div>
   );
 }

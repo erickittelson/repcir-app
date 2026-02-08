@@ -47,7 +47,7 @@
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
 
-  /* Rallyproof Brand Colors */
+  /* Repcir Brand Colors */
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
   --color-brand-muted: var(--brand-muted);
@@ -68,7 +68,7 @@
 :root {
   --radius: 0.625rem;
 
-  /* Core backgrounds - Rallyproof Black base (#1A1A2E) */
+  /* Core backgrounds - Repcir Black base (#1A1A2E) */
   --background: oklch(0.15 0.025 275);
   --foreground: oklch(0.97 0.008 90);
 
@@ -119,14 +119,14 @@
   --input: oklch(0.22 0.018 275);
   --ring: oklch(0.73 0.155 85);
 
-  /* Charts - Rallyproof palette */
+  /* Charts - Repcir palette */
   --chart-1: oklch(0.73 0.155 85);
   --chart-2: oklch(0.53 0.10 70);
   --chart-3: oklch(0.42 0.10 160);
   --chart-4: oklch(0.76 0.155 85);
   --chart-5: oklch(0.40 0.18 25);
 
-  /* Sidebar - Deepest Rallyproof Black */
+  /* Sidebar - Deepest Repcir Black */
   --sidebar: oklch(0.12 0.028 275);
   --sidebar-foreground: oklch(0.92 0.008 90);
   --sidebar-primary: oklch(0.73 0.155 85);
@@ -153,7 +153,7 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
-  /* Custom scrollbar for Rallyproof dark theme */
+  /* Custom scrollbar for Repcir dark theme */
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -180,7 +180,7 @@
 }
 
 @layer utilities {
-  /* Rallyproof Brand gradient backgrounds - Earned Gold to Bronze */
+  /* Repcir Brand gradient backgrounds - Earned Gold to Bronze */
   .bg-brand-gradient {
     background: linear-gradient(135deg,
       oklch(0.73 0.155 85) 0%,
@@ -220,7 +220,7 @@
     );
   }
 
-  /* Glow effects - Rallyproof Gold */
+  /* Glow effects - Repcir Gold */
   .glow-brand {
     box-shadow: 0 0 40px -10px oklch(0.73 0.155 85 / 0.5);
   }
@@ -237,7 +237,7 @@
     box-shadow: 0 0 60px -15px oklch(0.73 0.155 85 / 0.6);
   }
 
-  /* Glass effect for elevated surfaces - Rallyproof themed */
+  /* Glass effect for elevated surfaces - Repcir themed */
   .glass {
     background: oklch(0.17 0.022 275 / 0.8);
     backdrop-filter: blur(20px);
@@ -262,7 +262,7 @@
     background-clip: text;
   }
 
-  /* Mesh background for special sections - Rallyproof themed */
+  /* Mesh background for special sections - Repcir themed */
   .mesh-gradient {
     background-color: oklch(0.15 0.025 275);
     background-image:
@@ -271,7 +271,7 @@
       radial-gradient(at 50% 50%, oklch(0.42 0.10 160 / 0.04) 0px, transparent 50%);
   }
 
-  /* Animated gradient border - Rallyproof Gold to Bronze */
+  /* Animated gradient border - Repcir Gold to Bronze */
   .border-gradient {
     position: relative;
     background: var(--background);

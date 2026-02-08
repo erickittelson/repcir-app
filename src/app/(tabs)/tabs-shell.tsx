@@ -10,9 +10,9 @@ import {
   CreateActionSheet,
 } from "@/components/navigation";
 import { PostLoginExperience } from "@/components/onboarding/post-login-experience";
-import { RallyproofLogo } from "@/components/ui/rallyproof-logo";
+import { RepcirLogo } from "@/components/ui/repcir-logo";
 import { NotificationsBell } from "@/components/notifications-bell";
-import type { RallyMember } from "@/components/social/rally-member-selector";
+import type { CircleMember } from "@/components/social/circle-member-selector";
 
 interface UserData {
   name: string;
@@ -63,7 +63,7 @@ interface TabsShellProps {
 export function TabsShell({ session, children }: TabsShellProps) {
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const [quickLogOpen, setQuickLogOpen] = useState(false);
-  const [preSelectedMembers, setPreSelectedMembers] = useState<RallyMember[]>([]);
+  const [preSelectedMembers, setPreSelectedMembers] = useState<CircleMember[]>([]);
   const [showPostLogin, setShowPostLogin] = useState(false);
   const [postLoginData, setPostLoginData] = useState<UserData | null>(null);
 
@@ -104,13 +104,13 @@ export function TabsShell({ session, children }: TabsShellProps) {
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur-lg supports-[backdrop-filter]:bg-background/80">
         {/* Left: Logo + App Name (links to home) */}
         <Link href="/dashboard" className="flex items-center gap-2">
-          <RallyproofLogo variant="icon" size="sm" />
+          <RepcirLogo variant="icon" size="sm" />
           <span className="font-display text-lg tracking-wider text-brand">
-            RALLYPROOF
+            REPCIR
           </span>
         </Link>
 
-        {/* Right: Notifications + Rally Switcher */}
+        {/* Right: Notifications + Circle Switcher */}
         <div className="flex items-center gap-1">
           <NotificationsBell />
           <CircleSwitcher

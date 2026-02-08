@@ -17,14 +17,14 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  RallyMemberSelector,
-  type RallyMember,
-} from "@/components/social/rally-member-selector";
+  CircleMemberSelector,
+  type CircleMember,
+} from "@/components/social/circle-member-selector";
 
 interface CreateActionSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onLogWorkout: (preSelectedMembers?: RallyMember[]) => void;
+  onLogWorkout: (preSelectedMembers?: CircleMember[]) => void;
 }
 
 const ACTIONS = [
@@ -69,7 +69,7 @@ export function CreateActionSheet({
   onLogWorkout,
 }: CreateActionSheetProps) {
   const router = useRouter();
-  const [selectedMembers, setSelectedMembers] = useState<RallyMember[]>([]);
+  const [selectedMembers, setSelectedMembers] = useState<CircleMember[]>([]);
 
   const handleAction = (action: string) => {
     const memberIds = selectedMembers.map((m) => m.memberId).join(",");
@@ -124,7 +124,7 @@ export function CreateActionSheet({
               <Users className="h-4 w-4 text-brand" />
               <span className="text-sm font-medium">Train together?</span>
             </div>
-            <RallyMemberSelector
+            <CircleMemberSelector
               selectedMembers={selectedMembers}
               onSelectionChange={setSelectedMembers}
               maxSelections={5}

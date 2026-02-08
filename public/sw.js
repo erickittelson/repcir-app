@@ -1,5 +1,5 @@
 // Service Worker for Rallyproof PWA
-const CACHE_NAME = "rallyproof-v1";
+const CACHE_NAME = "repcir-v1";
 
 // Assets to cache immediately on install
 const PRECACHE_ASSETS = [

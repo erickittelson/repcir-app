@@ -2,7 +2,7 @@
 
 import { AuthView } from "@neondatabase/auth/react/ui";
 import { Users, Target, TrendingUp } from "lucide-react";
-import { RallyproofLogo } from "@/components/ui/rallyproof-logo";
+import { RepcirLogo } from "@/components/ui/repcir-logo";
 import {
   Card,
   CardContent,
@@ -14,7 +14,7 @@ import {
 const features = [
   {
     icon: Users,
-    title: "Build Your Rallyproof",
+    title: "Build Your Repcir",
     description: "Train with family and friends who hold you accountable",
   },
   {
@@ -36,14 +36,14 @@ export default function SignUpPage() {
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-center p-12">
         <div className="max-w-md">
           <div className="flex items-center gap-3 mb-8">
-            <RallyproofLogo variant="full" size="lg" />
+            <RepcirLogo variant="full" size="lg" />
           </div>
 
           <h2 className="text-2xl font-display tracking-wide text-white mb-4">
             EARN YOUR CIRCLE
           </h2>
           <p className="text-muted-foreground mb-8">
-            This isn&apos;t for everyone. Rallyproof is for families and friends who believe
+            This isn&apos;t for everyone. Repcir is for families and friends who believe
             fitness is earned through discipline and accountability. Effort is the standard.
           </p>
 
@@ -68,9 +68,9 @@ export default function SignUpPage() {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <div className="flex justify-center mb-4 lg:hidden">
-              <RallyproofLogo variant="icon" size="lg" />
+              <RepcirLogo variant="icon" size="lg" />
             </div>
-            <CardTitle className="text-2xl font-display tracking-wider">JOIN RALLYPROOF</CardTitle>
+            <CardTitle className="text-2xl font-display tracking-wider">JOIN REPCIR</CardTitle>
             <CardDescription>
               Create your account. The work starts now.
             </CardDescription>

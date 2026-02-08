@@ -40,9 +40,9 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
-  RallyMemberSelector,
-  type RallyMember,
-} from "@/components/social/rally-member-selector";
+  CircleMemberSelector,
+  type CircleMember,
+} from "@/components/social/circle-member-selector";
 import { PhotoEditor } from "@/components/media/photo-editor";
 import { InlineVoiceInput } from "@/components/voice/inline-voice-input";
 import { haptics } from "@/lib/haptics";
@@ -50,7 +50,7 @@ import { haptics } from "@/lib/haptics";
 interface QuickLogSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  preSelectedMembers?: RallyMember[];
+  preSelectedMembers?: CircleMember[];
 }
 
 const WORKOUT_TYPES = [
@@ -93,7 +93,7 @@ export function QuickLogSheet({ open, onOpenChange, preSelectedMembers }: QuickL
   const [photo, setPhoto] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [tone, setTone] = useState("motivational");
-  const [taggedMembers, setTaggedMembers] = useState<RallyMember[]>([]);
+  const [taggedMembers, setTaggedMembers] = useState<CircleMember[]>([]);
 
   // Loading states
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -287,7 +287,7 @@ export function QuickLogSheet({ open, onOpenChange, preSelectedMembers }: QuickL
 
   const handleShareToSocial = async (platform: string) => {
     const text = caption || `Just finished a ${duration} min ${workoutType || "workout"}! 💪`;
-    const hashtags = "Rallyproof,Fitness,WorkoutComplete";
+    const hashtags = "Repcir,Fitness,WorkoutComplete";
 
     const shareUrls: Record<string, string> = {
       instagram: `instagram://camera`, // Opens Instagram camera (user pastes caption)
@@ -312,7 +312,7 @@ export function QuickLogSheet({ open, onOpenChange, preSelectedMembers }: QuickL
     const text = caption || `Just finished a ${duration} min ${workoutType || "workout"}! 💪`;
 
     const shareData: ShareData = {
-      title: "My Rallyproof Workout",
+      title: "My Repcir Workout",
       text,
     };
 
@@ -412,8 +412,8 @@ export function QuickLogSheet({ open, onOpenChange, preSelectedMembers }: QuickL
             <p className="text-lg font-medium">Posted!</p>
             <p className="text-sm text-muted-foreground">
               {successTaggedCount > 0
-                ? `Shared with ${successTaggedCount} rally member${successTaggedCount > 1 ? "s" : ""}`
-                : "Your rally can see it"}
+                ? `Shared with ${successTaggedCount} circle member${successTaggedCount > 1 ? "s" : ""}`
+                : "Your circle can see it"}
             </p>
           </div>
         </SheetContent>
@@ -575,12 +575,12 @@ export function QuickLogSheet({ open, onOpenChange, preSelectedMembers }: QuickL
 
         {/* Tag Rally Members */}
         <div className="mb-5">
-          <RallyMemberSelector
+          <CircleMemberSelector
             selectedMembers={taggedMembers}
             onSelectionChange={setTaggedMembers}
             maxSelections={10}
             label="Train Together"
-            description="Tag rally members - they'll see it on their feed"
+            description="Tag circle members - they'll see it on their feed"
           />
         </div>
 
@@ -663,7 +663,7 @@ export function QuickLogSheet({ open, onOpenChange, preSelectedMembers }: QuickL
           </Button>
 
           <p className="text-center text-xs text-muted-foreground">
-            Your workout will be shared with your rallies
+            Your workout will be shared with your circles
           </p>
         </div>
       </SheetContent>

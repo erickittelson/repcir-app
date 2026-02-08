@@ -1,4 +1,4 @@
-# Rallyproof Product Vision: Social Accountability Transformation
+# Repcir Product Vision: Social Accountability Transformation
 
 **Version:** 1.0
 **Date:** February 2026
@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-Rallyproof is transforming from a content-centered fitness app (workout libraries, pre-built plans, browse workouts) into a **social accountability platform** where fitness happens through human connection, not content consumption.
+Repcir is transforming from a content-centered fitness app (workout libraries, pre-built plans, browse workouts) into a **social accountability platform** where fitness happens through human connection, not content consumption.
 
 **The core insight:** People don't fail at fitness because they lack workout content. They fail because they lack accountability. The gym has infinite content. What's missing is someone who notices when you don't show up.
 
@@ -16,11 +16,11 @@ Rallyproof is transforming from a content-centered fitness app (workout librarie
 
 ## Part 1: Core User Journey
 
-### The New Rallyproof Experience
+### The New Repcir Experience
 
-**Old Rallyproof:** Open app -> Browse workouts -> Pick one -> Maybe do it -> Repeat tomorrow (or not)
+**Old Repcir:** Open app -> Browse workouts -> Pick one -> Maybe do it -> Repeat tomorrow (or not)
 
-**New Rallyproof:** Open app -> See your Circle's activity -> Feel the pull of accountability -> Log your workout -> Get recognized -> Come back tomorrow
+**New Repcir:** Open app -> See your Circle's activity -> Feel the pull of accountability -> Log your workout -> Get recognized -> Come back tomorrow
 
 ### The Daily Loop
 
@@ -354,7 +354,7 @@ Evening: See encouragement from Circle
 ### Step-by-Step New User Journey
 
 #### Step 1: Welcome & Identity (30 seconds)
-- "Welcome to Rallyproof"
+- "Welcome to Repcir"
 - Name, profile photo
 - Brief context: "Fitness through accountability"
 
@@ -699,7 +699,7 @@ Evening: See encouragement from Circle
 - Performance optimization
 - Circle discovery for new users
 - Advanced accountability features
-- Rallyproof-wide challenges
+- Repcir-wide challenges
 
 ---
 
@@ -725,10 +725,10 @@ Evening: See encouragement from Circle
 
 ## Final Note
 
-This transformation is not about removing features. It's about changing what Rallyproof fundamentally is.
+This transformation is not about removing features. It's about changing what Repcir fundamentally is.
 
-**Old Rallyproof:** "Here are workouts. Pick one."
-**New Rallyproof:** "Here are your people. Don't let them down."
+**Old Repcir:** "Here are workouts. Pick one."
+**New Repcir:** "Here are your people. Don't let them down."
 
 The app becomes simpler on the surface but more powerful underneath. Users don't need to think about what workout to do. They need to show up because their Circle is watching, their streak is on the line, and their AI Coach has their back.
 

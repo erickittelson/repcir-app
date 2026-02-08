@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { RallyproofLogo } from "@/components/ui/rallyproof-logo";
+import { RepcirLogo } from "@/components/ui/repcir-logo";
 import type { SectionProps } from "./types";
 
 export function WelcomeSection({ data, onUpdate, onNext }: SectionProps) {
@@ -47,7 +47,7 @@ export function WelcomeSection({ data, onUpdate, onNext }: SectionProps) {
           className="mb-8"
         >
           <div className="w-20 h-20 mx-auto rounded-2xl bg-card flex items-center justify-center shadow-xl glow-earned border border-brand/20">
-            <RallyproofLogo variant="icon" size="xl" />
+            <RepcirLogo variant="icon" size="xl" />
           </div>
         </motion.div>
 
@@ -58,7 +58,7 @@ export function WelcomeSection({ data, onUpdate, onNext }: SectionProps) {
           transition={{ delay: 0.3, duration: 0.5 }}
           className="text-3xl md:text-4xl font-display tracking-wider mb-3"
         >
-          <span className="text-brand-gradient">RALLYPROOF</span>
+          <span className="text-brand-gradient">REPCIR</span>
         </motion.h1>
 
         <motion.p

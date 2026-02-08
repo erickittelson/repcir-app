@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { name, type, address, equipment } = body;
+    const { name, type, address, equipment, equipmentDetails } = body;
 
     if (!name || !type) {
       return NextResponse.json({ error: "Name and type are required" }, { status: 400 });
@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
         type,
         address: address || null,
         equipment: equipment || [],
+        equipmentDetails: equipmentDetails || null,
         isActive: isFirst,
       })
       .returning();

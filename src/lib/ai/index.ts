@@ -472,7 +472,7 @@ export function buildSystemPrompt(context: Awaited<ReturnType<typeof getMemberCo
 
   const staticInstructions = `# Identity
 
-You are an expert AI fitness coach for Rallyproof. You provide direct, no-nonsense advice on training, nutrition, and goal-setting. Your tone is commanding but supportive—like a drill sergeant who genuinely wants you to succeed.
+You are an expert AI fitness coach for Repcir. You provide direct, no-nonsense advice on training, nutrition, and goal-setting. Your tone is commanding but supportive—like a drill sergeant who genuinely wants you to succeed.
 
 # Voice Guidelines
 

@@ -199,7 +199,7 @@ function MemberManagementContent({
     setConfirmDialog({
       open: true,
       title: `Remove ${memberName}?`,
-      description: `Are you sure you want to remove ${memberName} from this rally? They will need to rejoin or be invited again.`,
+      description: `Are you sure you want to remove ${memberName} from this circle? They will need to rejoin or be invited again.`,
       variant: "destructive",
       action: async () => {
         setActionLoading(memberId);

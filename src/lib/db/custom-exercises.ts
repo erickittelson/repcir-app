@@ -252,7 +252,7 @@ export const plyometricExercises: CustomExercise[] = [
   {
     name: "Lateral Bounds",
     description: "Explosive side-to-side jumping for lateral power.",
-    instructions: "1. Stand on one leg\n2. Push off laterally\n3. Land on opposite leg\n4. Absorb and immediately push back\n5. Minimize ground contact time",
+    instructions: "1. Stand on one leg\n2. Push off latecircle\n3. Land on opposite leg\n4. Absorb and immediately push back\n5. Minimize ground contact time",
     category: "plyometric",
     muscleGroups: ["glutes", "quadriceps", "adductors"],
     secondaryMuscles: ["abductors", "calves", "core"],

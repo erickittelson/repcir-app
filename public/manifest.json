@@ -1,6 +1,6 @@
 {
-  "name": "Rallyproof",
-  "short_name": "Rallyproof",
+  "name": "Repcir",
+  "short_name": "Repcir",
   "description": "Earn your circle. Built by those who show up.",
   "start_url": "/dashboard",
   "display": "standalone",
@@ -10,13 +10,13 @@
   "scope": "/",
   "icons": [
     {
-      "src": "/rallyproof-logo.svg",
+      "src": "/repcir-logo.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/rallyproof-logo.svg",
+      "src": "/repcir-logo.svg",
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "maskable"

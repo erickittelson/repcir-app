@@ -1060,7 +1060,7 @@ export function VoiceWorkoutForm({ onSubmit, onCancel, className }: VoiceWorkout
             <div className="text-center space-y-2">
               <h2 className="text-xl font-semibold">Tell me about your workout</h2>
               <p className="text-sm text-muted-foreground">
-                Speak naturally - I&apos;ll extract the details
+                Speak natucircle - I&apos;ll extract the details
               </p>
             </div>
 

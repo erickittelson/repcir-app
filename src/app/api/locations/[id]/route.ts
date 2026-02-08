@@ -47,7 +47,7 @@ export async function PUT(
 
   try {
     const body = await request.json();
-    const { name, type, address, equipment } = body;
+    const { name, type, address, equipment, equipmentDetails } = body;
 
     // Check if location exists and belongs to user
     const existingLocation = await db.query.userLocations.findFirst({
@@ -68,6 +68,7 @@ export async function PUT(
         type: type ?? existingLocation.type,
         address: address !== undefined ? address : existingLocation.address,
         equipment: equipment ?? existingLocation.equipment,
+        equipmentDetails: equipmentDetails !== undefined ? equipmentDetails : existingLocation.equipmentDetails,
         updatedAt: new Date(),
       })
       .where(eq(userLocations.id, id))

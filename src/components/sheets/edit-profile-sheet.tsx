@@ -86,7 +86,7 @@ interface EditProfileSheetProps {
 
 const VISIBILITY_OPTIONS = [
   { value: "public", label: "Public", icon: Globe, description: "Everyone can see" },
-  { value: "circles", label: "Rallies", icon: Users, description: "Selected rallies" },
+  { value: "circles", label: "Rallies", icon: Users, description: "Selected circles" },
   { value: "private", label: "Private", icon: Lock, description: "Only you" },
 ];
 

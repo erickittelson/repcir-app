@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * @deprecated Use CreateRallyExperience from @/components/rally instead.
- * This component is kept for backward compatibility and for editing existing rallies.
- * For creating new rallies, the CreateRallyExperience provides a better UX with
+ * @deprecated Use CreateCircleExperience from @/components/circle instead.
+ * This component is kept for backward compatibility and for editing existing circles.
+ * For creating new circles, the CreateCircleExperience provides a better UX with
  * wizard, celebration, and member invitation flows.
  *
- * @see {@link @/components/rally/create-rally-experience.tsx}
+ * @see {@link @/components/circle/create-circle-experience.tsx}
  */
 
 import { useState } from "react";
@@ -226,7 +226,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
     e.preventDefault();
 
     if (!formData.name.trim()) {
-      toast.error("Please enter a rally name");
+      toast.error("Please enter a circle name");
       return;
     }
 
@@ -260,7 +260,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Failed to save rally");
+        throw new Error(error.error || "Failed to save circle");
       }
 
       const circle = await response.json();
@@ -273,7 +273,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
       }
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to save rally");
+      toast.error(error instanceof Error ? error.message : "Failed to save circle");
     } finally {
       setIsSubmitting(false);
     }
@@ -297,8 +297,8 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
               </SheetTitle>
               <SheetDescription>
                 {editData?.id
-                  ? "Update your rally's settings and information"
-                  : "Create a fitness rally to workout with others who share your goals"}
+                  ? "Update your circle's settings and information"
+                  : "Create a fitness circle to workout with others who share your goals"}
               </SheetDescription>
             </SheetHeader>
           </div>
@@ -341,7 +341,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
                     id="description"
                     value={formData.description}
                     onChange={(e) => updateField("description", e.target.value)}
-                    placeholder="What's this rally about? What can members expect?"
+                    placeholder="What's this circle about? What can members expect?"
                     rows={3}
                     maxLength={500}
                   />
@@ -470,7 +470,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
                       <Label>Target Demographic</Label>
                       <Select value={formData.targetDemographic} onValueChange={(v) => updateField("targetDemographic", v)}>
                         <SelectTrigger>
-                          <SelectValue placeholder="Who is this rally for?" />
+                          <SelectValue placeholder="Who is this circle for?" />
                         </SelectTrigger>
                         <SelectContent>
                           {TARGET_DEMOGRAPHICS.map((demo) => (
@@ -531,7 +531,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
                   </AccordionTrigger>
                   <AccordionContent className="space-y-4 pt-4">
                     <p className="text-sm text-muted-foreground">
-                      Set expectations for your rally members (max 10 rules)
+                      Set expectations for your circle members (max 10 rules)
                     </p>
                     
                     {formData.rules.map((rule, index) => (
@@ -573,7 +573,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
                   </AccordionTrigger>
                   <AccordionContent className="space-y-4 pt-4">
                     <p className="text-sm text-muted-foreground">
-                      Add tags to help people find your rally (max 10)
+                      Add tags to help people find your circle (max 10)
                     </p>
 
                     <div className="flex flex-wrap gap-1">

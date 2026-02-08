@@ -1,7 +1,7 @@
 "use client";
 
 import { AuthView } from "@neondatabase/auth/react/ui";
-import { RallyproofLogo } from "@/components/ui/rallyproof-logo";
+import { RepcirLogo } from "@/components/ui/repcir-logo";
 import {
   Card,
   CardContent,
@@ -16,9 +16,9 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <RallyproofLogo variant="icon" size="lg" />
+            <RepcirLogo variant="icon" size="lg" />
           </div>
-          <CardTitle className="text-2xl font-display tracking-wider">RALLYPROOF</CardTitle>
+          <CardTitle className="text-2xl font-display tracking-wider">REPCIR</CardTitle>
           <CardDescription>
             Effort is the standard. Sign in to continue.
           </CardDescription>

@@ -53,6 +53,21 @@ export interface Location {
   address?: string;
   isActive: boolean;
   equipment: string[];
+  equipmentDetails?: {
+    dumbbells?: {
+      available: boolean;
+      type?: "fixed" | "adjustable" | "both";
+      maxWeight?: number;
+      weights?: number[];
+    };
+    barbell?: {
+      available: boolean;
+      type?: "standard" | "olympic";
+      barWeight?: number;
+      plates?: number[];
+      totalPlateWeight?: number;
+    };
+  } | null;
   createdAt: string;
 }
 

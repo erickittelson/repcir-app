@@ -144,6 +144,7 @@ export default async function HomePage() {
   return (
     <CircleFeed
       user={{
+        id: userId,
         name: userProfile?.displayName || session.user.name,
         image: session.user.image,
         memberId,
@@ -168,8 +169,8 @@ export default async function HomePage() {
           content: post.content,
           type: post.postType,
           workoutId: post.workoutPlanId,
-          likesCount: post.likes?.length || 0,
-          commentsCount: post.comments?.length || 0,
+          likesCount: post.likeCount || 0, // Use denormalized count
+          commentsCount: post.commentCount || 0, // Use denormalized count (not limited relation)
           isLiked: post.likes?.some((l) => l.userId === userId) || false,
           createdAt: post.createdAt.toISOString(),
           metadata: undefined, // Posts don't have metadata in this schema

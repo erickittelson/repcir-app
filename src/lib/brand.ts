@@ -1,14 +1,14 @@
 /**
- * RALLYPROOF Brand Constants
+ * REPCIR Brand Constants
  *
  * "Earn Your Circle. Effort is the standard."
  *
  * Premium, earned, meritocratic fitness aesthetic.
- * This file contains all brand constants for the Rallyproof app.
+ * This file contains all brand constants for the Repcir app.
  */
 
 export const BRAND = {
-  name: "Rallyproof",
+  name: "Repcir",
   tagline: "Earn Your Circle",
   philosophy: "Effort is the standard.",
   description: "Earn your circle. Built by those who show up.",
@@ -16,7 +16,7 @@ export const BRAND = {
   // Brand colors (hex values)
   colors: {
     // Primary
-    rallyproofBlack: "#1A1A2E",
+    repcirBlack: "#1A1A2E",
     earnedGold: "#C9A227",
     legionWhite: "#F5F5F0",
 
@@ -43,7 +43,7 @@ export const BRAND = {
     weAre: [
       "A drill sergeant who genuinely wants you to succeed",
       "The friend who tells you what you need to hear",
-      "A Roman centurion addressing their rallyproof before battle",
+      "A Roman centurion addressing their circle before battle",
     ],
     weAreNot: [
       "A cheerleader with empty enthusiasm",
@@ -59,20 +59,20 @@ export const BRAND = {
     streakAchieved: (days: number) =>
       `${days} days. Most quit by day 7. You're still here.`,
     prAchieved: "New standard. The bar moves when you do.",
-    rallyproofComplete: "Every member. Every rep. Today. This is what a unit looks like.",
+    circleComplete: "Every member. Every rep. Today. This is what a unit looks like.",
 
     // Accountability
     othersFinished: (count: number, total: number) =>
       `${count} of ${total} finished today. The gap is showing.`,
-    youAreLast: "You closed the gap. Rallyproof complete.",
-    youAreFirst: "First in. Your rallyproof is watching.",
+    youAreLast: "You closed the gap. Circle complete.",
+    youAreFirst: "First in. Your circle is watching.",
     streakAtRisk: "The streak survives or dies today. Your call.",
     streakBroken: "Broken. Rebuild starts now.",
 
     // Motivation (use sparingly)
     morningPrompt: "The day waits for no one.",
     weekend: "Weekends aren't rest days. They're unscheduled days.",
-    afterAbsence: "The rallyproof kept moving. Time to close the distance.",
+    afterAbsence: "The circle kept moving. Time to close the distance.",
 
     // Onboarding
     welcome: "You showed up. That's step one.",
@@ -90,9 +90,8 @@ export const BRAND = {
       "train",
       "build",
       "forge",
-      "rallyproof",
-      "unit",
       "circle",
+      "unit",
       "pack",
       "formation",
       "standard",
@@ -142,7 +141,7 @@ export function getAccountabilityMessage(
   totalMembers: number
 ): string {
   if (othersCompleted === 0) {
-    return "Your rallyproof is still. Who moves first?";
+    return "Your circle is still. Who moves first?";
   }
   if (othersCompleted === totalMembers - 1) {
     return `${othersCompleted} of ${totalMembers} finished today. Don't be the gap.`;
@@ -154,7 +153,7 @@ export function getAccountabilityMessage(
  * Get a celebration message based on achievement type
  */
 export function getCelebrationMessage(
-  type: "workout" | "streak" | "pr" | "rallyproof",
+  type: "workout" | "streak" | "pr" | "circle",
   value?: number
 ): string {
   switch (type) {
@@ -164,7 +163,7 @@ export function getCelebrationMessage(
       return value ? BRAND.messages.streakAchieved(value) : "The standard is set.";
     case "pr":
       return BRAND.messages.prAchieved;
-    case "rallyproof":
-      return BRAND.messages.rallyproofComplete;
+    case "circle":
+      return BRAND.messages.circleComplete;
   }
 }

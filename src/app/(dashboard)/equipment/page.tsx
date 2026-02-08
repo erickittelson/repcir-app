@@ -53,6 +53,11 @@ import {
   TemplateSelector,
   type EquipmentItem,
 } from "@/components/equipment/equipment-selector";
+import {
+  HomeGymSetup,
+  HOME_EQUIPMENT_TO_CATALOG,
+  type EquipmentDetails,
+} from "@/components/equipment/home-gym-setup";
 
 const LOCATION_ICONS: Record<LocationType, React.ComponentType<{ className?: string }>> = {
   home: Home,
@@ -93,6 +98,8 @@ export default function EquipmentPage() {
   const [formAddress, setFormAddress] = useState("");
   const [formEquipment, setFormEquipment] = useState<string[]>([]);
   const [hasAppliedTemplate, setHasAppliedTemplate] = useState(false);
+  const [homeEquipmentDetails, setHomeEquipmentDetails] = useState<EquipmentDetails>({});
+  const [showHomeGymSetup, setShowHomeGymSetup] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -122,6 +129,34 @@ export default function EquipmentPage() {
     if (!editingLocation) {
       applyTemplateForType(type);
     }
+    // Reset home gym setup when type changes
+    if (type !== "home") {
+      setShowHomeGymSetup(false);
+      setHomeEquipmentDetails({});
+    }
+  };
+
+  // Handle home gym setup completion
+  const handleHomeGymComplete = (homeEquipment: string[], details: EquipmentDetails) => {
+    // Map home equipment IDs to catalog equipment names
+    const catalogEquipmentNames: string[] = [];
+    homeEquipment.forEach((id) => {
+      const names = HOME_EQUIPMENT_TO_CATALOG[id] || [];
+      catalogEquipmentNames.push(...names);
+    });
+
+    // Find matching catalog IDs
+    const catalogIds = catalog
+      .filter((item) =>
+        catalogEquipmentNames.some(
+          (name) => name.toLowerCase() === item.name.toLowerCase()
+        )
+      )
+      .map((item) => item.id);
+
+    setFormEquipment(catalogIds);
+    setHomeEquipmentDetails(details);
+    setShowHomeGymSetup(false);
   };
 
   const fetchData = async () => {
@@ -161,6 +196,8 @@ export default function EquipmentPage() {
     setFormEquipment([]);
     setEditingLocation(null);
     setHasAppliedTemplate(false);
+    setHomeEquipmentDetails({});
+    setShowHomeGymSetup(false);
   };
 
   const openEditDialog = (location: Location) => {
@@ -169,6 +206,8 @@ export default function EquipmentPage() {
     setFormType(location.type);
     setFormAddress(location.address || "");
     setFormEquipment(location.equipment);
+    setHomeEquipmentDetails(location.equipmentDetails || {});
+    setShowHomeGymSetup(false);
     setDialogOpen(true);
   };
 
@@ -195,6 +234,7 @@ export default function EquipmentPage() {
           type: formType,
           address: formAddress || null,
           equipment: formEquipment,
+          equipmentDetails: formType === "home" ? homeEquipmentDetails : null,
         }),
       });
 
@@ -420,22 +460,98 @@ export default function EquipmentPage() {
                 </div>
               </div>
 
-              {/* Equipment Selection */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label>Available Equipment</Label>
-                  <TemplateSelector
-                    locationType={formType}
+              {/* Equipment Selection - Show HomeGymSetup for home type */}
+              {formType === "home" ? (
+                <div className="space-y-3">
+                  <Label>Home Gym Equipment</Label>
+                  {showHomeGymSetup ? (
+                    <div className="border rounded-lg p-4">
+                      <HomeGymSetup
+                        initialEquipment={[]}
+                        initialDetails={homeEquipmentDetails}
+                        onComplete={handleHomeGymComplete}
+                        onCancel={() => setShowHomeGymSetup(false)}
+                        compact
+                      />
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full h-auto py-4"
+                        onClick={() => setShowHomeGymSetup(true)}
+                      >
+                        <div className="flex flex-col items-center gap-2">
+                          <Home className="h-6 w-6 text-brand" />
+                          <span className="font-medium">Set Up Home Gym Equipment</span>
+                          <span className="text-xs text-muted-foreground">
+                            Select equipment and specify weight ranges
+                          </span>
+                        </div>
+                      </Button>
+
+                      {/* Show summary if equipment has been selected */}
+                      {formEquipment.length > 0 && (
+                        <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">
+                              {formEquipment.length} items selected
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setShowHomeGymSetup(true)}
+                            >
+                              Edit
+                            </Button>
+                          </div>
+                          {homeEquipmentDetails.dumbbells && (
+                            <p className="text-xs text-muted-foreground">
+                              Dumbbells: up to {homeEquipmentDetails.dumbbells.maxWeight} lbs
+                              {homeEquipmentDetails.dumbbells.type === "adjustable" && " (adjustable)"}
+                            </p>
+                          )}
+                          {homeEquipmentDetails.barbell && (
+                            <p className="text-xs text-muted-foreground">
+                              Barbell: up to {(homeEquipmentDetails.barbell.totalPlateWeight || 0) + 45} lbs total
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Still allow manual equipment selection */}
+                      <div className="pt-3 border-t">
+                        <p className="text-xs text-muted-foreground mb-2">
+                          Or select equipment manually:
+                        </p>
+                        <EquipmentSelector
+                          catalog={catalog}
+                          selected={formEquipment}
+                          onChange={setFormEquipment}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label>Available Equipment</Label>
+                    <TemplateSelector
+                      locationType={formType}
+                      catalog={catalog}
+                      onApply={setFormEquipment}
+                    />
+                  </div>
+                  <EquipmentSelector
                     catalog={catalog}
-                    onApply={setFormEquipment}
+                    selected={formEquipment}
+                    onChange={setFormEquipment}
                   />
                 </div>
-                <EquipmentSelector
-                  catalog={catalog}
-                  selected={formEquipment}
-                  onChange={setFormEquipment}
-                />
-              </div>
+              )}
             </form>
           </div>
 

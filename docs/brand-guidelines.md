@@ -1,11 +1,11 @@
-# Rallyproof Brand Guidelines
+# Repcir Brand Guidelines
 ## Family Fitness App | Brand Strategy Package
 
 ---
 
 ## 1. Brand Positioning Statement
 
-**For families and close friends who believe fitness is earned through discipline and accountability**, Rallyproof is the premium family fitness app **that transforms your inner circle into a high-performance unit**. Unlike casual fitness apps that reward participation trophies and streaks of mediocrity, **Rallyproof is built on the principle that effort is the standard**—creating a space where effort is the only currency, accountability is mutual, and excellence is the standard.
+**For families and close friends who believe fitness is earned through discipline and accountability**, Repcir is the premium family fitness app **that transforms your inner circle into a high-performance unit**. Unlike casual fitness apps that reward participation trophies and streaks of mediocrity, **Repcir is built on the principle that effort is the standard**—creating a space where effort is the only currency, accountability is mutual, and excellence is the standard.
 
 **We exist for the families who understand:** the dinner table is earned, not given.
 
@@ -60,7 +60,7 @@
 ### Tone Spectrum
 
 ```
-SOFT ←————————————————[RALLYPROOF]——————→ AGGRESSIVE
+SOFT ←————————————————[REPCIR]——————→ AGGRESSIVE
                            ↑
                     Firm but not harsh
                     Demanding but not demeaning
@@ -117,7 +117,7 @@ SOFT ←————————————————[RALLYPROOF]————
 
 | Color | Name | Hex Code | RGB | Usage |
 |-------|------|----------|-----|-------|
-| ![#1A1A2E](https://via.placeholder.com/20/1A1A2E/1A1A2E) | **Rallyproof Black** | `#1A1A2E` | 26, 26, 46 | Primary background, headers, authority |
+| ![#1A1A2E](https://via.placeholder.com/20/1A1A2E/1A1A2E) | **Repcir Black** | `#1A1A2E` | 26, 26, 46 | Primary background, headers, authority |
 | ![#C9A227](https://via.placeholder.com/20/C9A227/C9A227) | **Earned Gold** | `#C9A227` | 201, 162, 39 | Achievement, premium elements, CTAs |
 | ![#F5F5F0](https://via.placeholder.com/20/F5F5F0/F5F5F0) | **Legion White** | `#F5F5F0` | 245, 245, 240 | Text, clean space, contrast |
 
@@ -159,7 +159,7 @@ Not Aggressive ✓ (Muted saturation, warm undertones)
 ### Color Usage Rules
 
 1. **Gold is earned** — Never use Earned Gold for default states; only for achievements and premium elements
-2. **Black is authority** — Use Rallyproof Black for statements of importance
+2. **Black is authority** — Use Repcir Black for statements of importance
 3. **White space is respect** — Don't crowd the interface; earned minimalism
 4. **Red is reserved** — Blood Oath appears only for accountability moments
 
@@ -180,7 +180,7 @@ Not Aggressive ✓ (Muted saturation, warm undertones)
 **Usage:**
 ```
 EARN YOUR CIRCLE
-Your Rallyproof Awaits
+Your Repcir Awaits
 THE STANDARD
 ```
 
@@ -210,7 +210,7 @@ THE STANDARD
 **Usage:**
 ```
 "Effort is the standard."
-— Rallyproof Philosophy
+— Repcir Philosophy
 ```
 
 ### Typography Hierarchy
@@ -245,7 +245,7 @@ A minimalist, geometric mark representing the Roman testudo (shield wall) format
 
 **Key Visual Elements:**
 - 4-6 interlocking shapes representing cohort members
-- Negative space creates a subtle "C" for Rallyproof
+- Negative space creates a subtle "C" for Repcir
 - Shapes touch but don't overlap completely (individual strength within unity)
 - One shape subtly differentiated (leadership/accountability)
 
@@ -263,7 +263,7 @@ A single, incomplete circle with a gap—representing that the circle must be ac
 ### Alternative Concept: "The Roman Numeral"
 
 **Description:**
-A stylized arrangement that subtly references Roman numerals, nodding to the Latin/military origin of "Rallyproof." Abstract enough for modern use, meaningful enough for those who understand.
+A stylized arrangement that subtly references Roman numerals, nodding to the Latin/military origin of "Repcir." Abstract enough for modern use, meaningful enough for those who understand.
 
 ### Logo Style Guidelines
 
@@ -286,7 +286,7 @@ A stylized arrangement that subtly references Roman numerals, nodding to the Lat
 
 ### Wordmark Guidelines
 
-**"RALLYPROOF"** in all caps, Bebas Neue or custom geometric sans-serif
+**"REPCIR"** in all caps, Bebas Neue or custom geometric sans-serif
 
 - Letterspacing: Slightly tracked out (+2-5%)
 - Optional: Subtle modification to the "O" to echo the icon
@@ -306,17 +306,17 @@ A stylized arrangement that subtly references Roman numerals, nodding to the Lat
 ### Elevator Pitch
 
 **10-Second Version:**
-> "Rallyproof turns your family and close friends into an accountability unit. It's a premium fitness app built on one belief: effort is the standard. If you're ready to earn your results alongside the people who matter most, this is your app."
+> "Repcir turns your family and close friends into an accountability unit. It's a premium fitness app built on one belief: effort is the standard. If you're ready to earn your results alongside the people who matter most, this is your app."
 
 **30-Second Version:**
-> "Most fitness apps treat you like an individual island—tracking your steps, celebrating your streaks, letting you quit in private. Rallyproof is different. We're built for families and close friend groups who believe excellence is earned, not given. Your cohort sees when you train. They see when you don't. The accountability is real, the standards are high, and the results are shared. This isn't for everyone. That's exactly the point."
+> "Most fitness apps treat you like an individual island—tracking your steps, celebrating your streaks, letting you quit in private. Repcir is different. We're built for families and close friend groups who believe excellence is earned, not given. Your cohort sees when you train. They see when you don't. The accountability is real, the standards are high, and the results are shared. This isn't for everyone. That's exactly the point."
 
 ### Key Messages by Audience
 
 #### For Parents
 
 **Primary Message:**
-> "Raise hunters, not passengers. Rallyproof helps your family build the discipline that lasts longer than any youth sports season."
+> "Raise hunters, not passengers. Repcir helps your family build the discipline that lasts longer than any youth sports season."
 
 **Supporting Messages:**
 - Your kids will learn that consistency beats motivation
@@ -328,7 +328,7 @@ A stylized arrangement that subtly references Roman numerals, nodding to the Lat
 #### For Fitness Enthusiasts
 
 **Primary Message:**
-> "Your circle should match your standards. Rallyproof lets you train with people who won't let you quit."
+> "Your circle should match your standards. Repcir lets you train with people who won't let you quit."
 
 **Supporting Messages:**
 - Stop training alone surrounded by people who don't get it
@@ -340,7 +340,7 @@ A stylized arrangement that subtly references Roman numerals, nodding to the Lat
 #### For Families (General)
 
 **Primary Message:**
-> "The family that earns together, grows together. Rallyproof turns fitness into your shared standard."
+> "The family that earns together, grows together. Repcir turns fitness into your shared standard."
 
 **Supporting Messages:**
 - Replace "family fun time" with family earned time
@@ -380,7 +380,7 @@ A stylized arrangement that subtly references Roman numerals, nodding to the Lat
 
 | Claim | Proof |
 |-------|-------|
-| "Accountability works" | Rallyproof members are 3x more likely to complete workouts (hypothetical—validate with data) |
+| "Accountability works" | Repcir members are 3x more likely to complete workouts (hypothetical—validate with data) |
 | "Built for families" | Designed for mixed fitness levels, ages 8-80 |
 | "Premium, not casual" | No gamification gimmicks, no participation trophies |
 | "Earned membership" | Invite-only cohorts, must be added by existing member |
@@ -393,7 +393,7 @@ A stylized arrangement that subtly references Roman numerals, nodding to the Lat
 
 **Screen 1: First Open**
 ```
-RALLYPROOF
+REPCIR
 
 Effort is the standard.
 You showed up.
@@ -434,9 +434,9 @@ If you're ready to earn your circle—
 [ENTER]
 ```
 
-**Screen 4: Rallyproof Creation/Join**
+**Screen 4: Repcir Creation/Join**
 ```
-BUILD YOUR RALLYPROOF
+BUILD YOUR REPCIR
 
 A cohort is small by design.
 4-8 people maximum.
@@ -444,8 +444,8 @@ Every member is accountable to every other.
 
 Choose wisely. No passengers.
 
-[Create a Rallyproof]
-[Join Existing Rallyproof]
+[Create a Repcir]
+[Join Existing Repcir]
 ```
 
 ---
@@ -458,7 +458,7 @@ Choose wisely. No passengers.
 |----------|--------------|
 | Others completed, user hasn't | "3 of 4 finished today. The gap is showing." |
 | No one has started | "Your cohort is still. Who moves first?" |
-| User is last to complete | "You closed the gap. Rallyproof complete." |
+| User is last to complete | "You closed the gap. Repcir complete." |
 | User completed first | "First in. Your cohort is watching." |
 
 #### Streak & Consistency
@@ -468,7 +468,7 @@ Choose wisely. No passengers.
 | 7-day streak | "7 days. The standard is set." |
 | Streak at risk | "The streak survives or dies today. Your call." |
 | Streak broken | "Broken. Rebuild starts now." |
-| Rallyproof full completion | "Full cohort, full effort. Respect." |
+| Repcir full completion | "Full cohort, full effort. Respect." |
 
 #### Motivational (Sparingly)
 
@@ -484,7 +484,7 @@ Choose wisely. No passengers.
 |----------|--------------|
 | PR achieved | "New standard. Your cohort sees the work." |
 | 30-day consistency | "30 days. Few make it this far." |
-| Rallyproof milestone | "Your cohort hit [X]. This is what earning looks like." |
+| Repcir milestone | "Your cohort hit [X]. This is what earning looks like." |
 
 ---
 
@@ -536,17 +536,17 @@ because you refused to stop.
 Respect. Earned.
 ```
 
-#### Rallyproof Achievements
+#### Repcir Achievements
 
-**Full Rallyproof Completion (Day):**
+**Full Repcir Completion (Day):**
 ```
-RALLYPROOF COMPLETE
+REPCIR COMPLETE
 
 Every member. Every rep. Today.
 This is what a unit looks like.
 ```
 
-**Rallyproof Streak (7 Days):**
+**Repcir Streak (7 Days):**
 ```
 7-DAY UNIT
 
@@ -557,9 +557,9 @@ No one made excuses.
 Your cohort held the line.
 ```
 
-**Rallyproof Streak (30 Days):**
+**Repcir Streak (30 Days):**
 ```
-30 DAYS. FULL RALLYPROOF.
+30 DAYS. FULL REPCIR.
 
 Do you understand how rare this is?
 
@@ -568,7 +568,7 @@ Yours did it for 30 days straight.
 
 This is legacy.
 This is earned.
-This is Rallyproof.
+This is Repcir.
 ```
 
 #### Milestone Messages
@@ -584,9 +584,9 @@ You decided. You did it.
 Now do it again.
 ```
 
-**Invited Someone to Rallyproof:**
+**Invited Someone to Repcir:**
 ```
-Rallyproof grows by invitation.
+Repcir grows by invitation.
 Not by accident.
 
 You chose [Name].
@@ -616,7 +616,7 @@ Just work.
 | Category | Words |
 |----------|-------|
 | **Effort** | Earn, hunt, work, train, build, forge |
-| **Community** | Rallyproof, unit, circle, pack, formation |
+| **Community** | Repcir, unit, circle, pack, formation |
 | **Standards** | Standard, expectation, line, bar, level |
 | **Character** | Discipline, consistency, accountability, commitment |
 | **Achievement** | Earned, proven, built, forged, achieved |
@@ -663,4 +663,4 @@ Just work.
 
 *"Effort is the standard. We're for the few."*
 
-**RALLYPROOF**
+**REPCIR**
