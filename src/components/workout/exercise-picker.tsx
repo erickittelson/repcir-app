@@ -334,7 +334,7 @@ function ExerciseSearchResult({
             "absolute bottom-3 right-3 h-6 w-6 rounded-full",
             "flex items-center justify-center",
             "bg-zinc-700/50 text-zinc-400 hover:bg-zinc-600 hover:text-zinc-200",
-            "opacity-0 group-hover:opacity-100 transition-opacity"
+            "opacity-60 hover:opacity-100 transition-opacity"
           )}
         >
           <Info className="h-3.5 w-3.5" />

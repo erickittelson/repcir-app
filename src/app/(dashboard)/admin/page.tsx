@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-interface FamilyStats {
+interface CircleStats {
   members: number;
   exercises: number;
   workoutPlans: number;
@@ -29,17 +29,17 @@ interface FamilyStats {
 }
 
 export default function AdminPage() {
-  const [stats, setStats] = useState<FamilyStats | null>(null);
+  const [stats, setStats] = useState<CircleStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
-  const [familyName, setFamilyName] = useState("");
+  const [circleName, setCircleName] = useState("");
   const [newPasskey, setNewPasskey] = useState("");
   const [confirmPasskey, setConfirmPasskey] = useState("");
   const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
     fetchStats();
-    fetchFamilyInfo();
+    fetchCircleInfo();
   }, []);
 
   const fetchStats = async () => {
@@ -56,15 +56,15 @@ export default function AdminPage() {
     }
   };
 
-  const fetchFamilyInfo = async () => {
+  const fetchCircleInfo = async () => {
     try {
       const response = await fetch("/api/admin/family");
       if (response.ok) {
         const data = await response.json();
-        setFamilyName(data.name);
+        setCircleName(data.name);
       }
     } catch (error) {
-      console.error("Failed to fetch family info:", error);
+      console.error("Failed to fetch circle info:", error);
     }
   };
 
@@ -88,7 +88,7 @@ export default function AdminPage() {
     }
   };
 
-  const updateFamilyInfo = async () => {
+  const updateCircleInfo = async () => {
     if (newPasskey && newPasskey !== confirmPasskey) {
       toast.error("Passkeys do not match");
       return;
@@ -100,13 +100,13 @@ export default function AdminPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: familyName,
+          name: circleName,
           passkey: newPasskey || undefined,
         }),
       });
 
       if (response.ok) {
-        toast.success("Family settings updated");
+        toast.success("Circle settings updated");
         setNewPasskey("");
         setConfirmPasskey("");
       } else {
@@ -114,7 +114,7 @@ export default function AdminPage() {
         toast.error(data.error || "Failed to update settings");
       }
     } catch (error) {
-      console.error("Failed to update family info:", error);
+      console.error("Failed to update circle info:", error);
       toast.error("Failed to update settings");
     } finally {
       setUpdating(false);
@@ -137,7 +137,7 @@ export default function AdminPage() {
           Admin Panel
         </h1>
         <p className="text-muted-foreground">
-          Manage your family&apos;s settings and data
+          Manage your circle&apos;s settings and data
         </p>
       </div>
 
@@ -196,22 +196,22 @@ export default function AdminPage() {
 
       <Tabs defaultValue="settings">
         <TabsList>
-          <TabsTrigger value="settings">Family Settings</TabsTrigger>
+          <TabsTrigger value="settings">Circle Settings</TabsTrigger>
           <TabsTrigger value="database">Database</TabsTrigger>
         </TabsList>
 
         <TabsContent value="settings" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Family Information</CardTitle>
+              <CardTitle>Circle Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="familyName">Family Name</Label>
+                <Label htmlFor="circleName">Circle Name</Label>
                 <Input
-                  id="familyName"
-                  value={familyName}
-                  onChange={(e) => setFamilyName(e.target.value)}
+                  id="circleName"
+                  value={circleName}
+                  onChange={(e) => setCircleName(e.target.value)}
                 />
               </div>
 
@@ -241,7 +241,7 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              <Button onClick={updateFamilyInfo} disabled={updating}>
+              <Button onClick={updateCircleInfo} disabled={updating}>
                 {updating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Save Changes
               </Button>

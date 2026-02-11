@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit";
+import { applyDistributedRateLimit as applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit-redis";
 import {
   checkAIPersonalizationConsent,
   createConsentRequiredResponse,
@@ -18,11 +18,15 @@ import {
   getConversationState,
 } from "@/lib/ai/conversation-state";
 import { aiChatSchema, validateBody } from "@/lib/validations";
+import { checkAIQuota, createQuotaExceededResponse } from "@/lib/ai/quota-check";
+import { trackAIUsage } from "@/lib/ai/usage-tracking";
+import { triggerCoachingMemoryExtraction } from "@/inngest";
 import {
   getCoachingModeForPrompt,
   getProgrammingRulesForPrompt,
 } from "@/lib/ai/schemas/loader";
 import { moderateText } from "@/lib/moderation";
+import * as Sentry from "@sentry/nextjs";
 // Agent-based orchestration imports
 import {
   runCoachAgent,
@@ -35,6 +39,7 @@ import {
 import {
   createClarificationResponse,
   createWorkoutResponse,
+  createWorkoutConfigResponse,
   DEFAULT_WORKOUT_ACTIONS,
   INITIAL_CONVERSATION_STATE,
   type ConversationState,
@@ -234,12 +239,18 @@ export async function POST(request: Request) {
     }
 
     // Apply rate limiting
-    const rateLimitResult = applyRateLimit(
+    const rateLimitResult = await applyRateLimit(
       `ai-chat:${session.user.id}`,
       RATE_LIMITS.aiChat
     );
     if (!rateLimitResult.success) {
       return createRateLimitResponse(rateLimitResult);
+    }
+
+    // Check AI quota
+    const quotaResult = await checkAIQuota(session.user.id, "chat");
+    if (!quotaResult.allowed) {
+      return createQuotaExceededResponse(quotaResult, "chat");
     }
 
     const validation = await validateBody(request, aiChatSchema);
@@ -353,6 +364,25 @@ export async function POST(request: Request) {
 
         // Handle agent decision
         switch (agentDecision.action) {
+          case "show_config_form": {
+            const defaults = agentDecision.configFormDefaults || {};
+            return Response.json(
+              createWorkoutConfigResponse(
+                agentDecision.reasoning,
+                {
+                  defaultDuration: defaults.suggestedDuration || 30,
+                  defaultIntensity: defaults.suggestedIntensity || "moderate",
+                  suggestedWorkoutType: defaults.suggestedWorkoutType || "standard",
+                  suggestedWorkoutSections: defaults.suggestedWorkoutSections,
+                  aiStructureHint: defaults.aiStructureHint,
+                  defaultFocus: defaults.suggestedFocus || undefined,
+                  contextMessage: agentDecision.reasoning,
+                }
+              ),
+              { status: 200, headers: { "Content-Type": "application/json" } }
+            );
+          }
+
           case "ask_clarification": {
             if (agentDecision.clarification) {
               const clarification: ClarificationData = {
@@ -387,6 +417,32 @@ export async function POST(request: Request) {
           }
 
           case "generate_workout": {
+            // Safety net: if this is an initial workout request (no prior workout in conversation),
+            // redirect to show_config_form instead of generating directly
+            const hasExistingWorkout = messages.some(
+              (m: { role: string; content?: string }) =>
+                m.role === "assistant" && m.content?.includes("workout")
+            ) && clarificationState.active;
+
+            if (!hasExistingWorkout && agentDecision.workoutParams) {
+              // Redirect to config form with the agent's params as defaults
+              console.log("[Coach Agent] Redirecting generate_workout -> show_config_form for initial request");
+              const params = agentDecision.workoutParams;
+              return Response.json(
+                createWorkoutConfigResponse(
+                  agentDecision.reasoning,
+                  {
+                    defaultDuration: params.duration || 30,
+                    defaultIntensity: params.intensity || "moderate",
+                    suggestedWorkoutType: "standard",
+                    defaultFocus: params.focus || undefined,
+                    contextMessage: agentDecision.reasoning,
+                  }
+                ),
+                { status: 200, headers: { "Content-Type": "application/json" } }
+              );
+            }
+
             if (agentDecision.workoutParams) {
               try {
                 const workout = await generateWorkoutFromAgentParams(
@@ -418,7 +474,26 @@ export async function POST(request: Request) {
         }
       } catch (error) {
         console.error("[Coach Agent] Error:", error);
-        // Fall through to normal chat on agent error
+        // On agent error during a workout request, show the config form as fallback
+        // rather than falling through to plain text streaming
+        if (detectWorkoutRequest(latestMessageContent)) {
+          console.log("[Coach Agent] Agent error during workout request — returning config form fallback");
+          const extractedCtx = extractImplicitContext(latestMessageContent);
+          return Response.json(
+            createWorkoutConfigResponse(
+              "Let's set up your workout! Configure the options below.",
+              {
+                defaultDuration: extractedCtx.duration || 30,
+                defaultIntensity: (extractedCtx.intensity as string) || "moderate",
+                suggestedWorkoutType: "standard",
+                defaultFocus: extractedCtx.focus || undefined,
+                contextMessage: "Let's set up your workout! Configure the options below.",
+              }
+            ),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        }
+        // Fall through to normal chat on agent error for non-workout requests
       }
     }
 
@@ -537,7 +612,7 @@ Remember to:
       // Pass OpenAI conversation state for persistent context
       openaiConversationId: openaiConversationId || undefined,
       previousResponseId: previousResponseId || undefined,
-      onFinish: async ({ text, response }) => {
+      onFinish: async ({ text, response, usage }) => {
         // Extract response ID for chaining
         const responseId = response?.id;
 
@@ -559,6 +634,25 @@ Remember to:
           .update(coachConversations)
           .set({ lastMessageAt: new Date(), updatedAt: new Date() })
           .where(eq(coachConversations.id, activeConversation!.id));
+
+        // Track AI usage
+        trackAIUsage({
+          userId: session.user.id,
+          memberId,
+          endpoint: "ai/chat",
+          modelUsed: deepThinking || mode !== "general" ? "gpt-5.2" : "gpt-5.2-chat-latest",
+          reasoningLevel: deepThinking ? "standard" : "none",
+          inputTokens: usage?.promptTokens ?? 0,
+          outputTokens: usage?.completionTokens ?? 0,
+        }).catch(() => {});
+
+        // Trigger coaching memory extraction in background (every 5th message)
+        const messageCount = await db.query.coachMessages.findMany({
+          where: eq(coachMessages.conversationId, activeConversation!.id),
+        }).then(msgs => msgs.length);
+        if (messageCount >= 4 && messageCount % 4 === 0) {
+          triggerCoachingMemoryExtraction(activeConversation!.id, memberId).catch(() => {});
+        }
       },
     });
 
@@ -569,26 +663,27 @@ Remember to:
     return response;
   } catch (error) {
     console.error("Error in AI chat:", error);
-    
+    Sentry.captureException(error, { tags: { endpoint: "ai/chat" } });
+
     // Handle specific OpenAI error types
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    
+
     if (errorMessage.includes("rate limit")) {
-      return new Response("AI service is busy. Please try again in a moment.", { 
+      return new Response("AI service is busy. Please try again in a moment.", {
         status: 429,
         headers: { "Retry-After": "30" }
       });
     }
-    
+
     if (errorMessage.includes("timeout") || errorMessage.includes("ETIMEDOUT")) {
       return new Response("Request timed out. Please try again.", { status: 504 });
     }
-    
+
     if (errorMessage.includes("invalid_api_key") || errorMessage.includes("authentication")) {
       // Don't expose internal error details
       return new Response("Service configuration error", { status: 503 });
     }
-    
+
     return new Response("Failed to process request", { status: 500 });
   }
 }

@@ -85,19 +85,49 @@ const TOTAL_TIERS = [
   { value: 2000, name: "2000lb Club", tier: "platinum" },
 ];
 
-// Helper to find next tier based on current PR
+// Time-based tiers (value in seconds, lower is better)
+const MILE_TIERS = [
+  { value: 600, name: "Sub-10 Minute Mile", tier: "bronze" },
+  { value: 480, name: "Sub-8 Minute Mile", tier: "silver" },
+  { value: 420, name: "Sub-7 Minute Mile", tier: "gold" },
+  { value: 360, name: "Sub-6 Minute Mile", tier: "platinum" },
+];
+
+const SPRINT_400M_TIERS = [
+  { value: 75, name: "Sub-75s 400m", tier: "bronze" },
+  { value: 60, name: "Sub-60s 400m", tier: "silver" },
+  { value: 55, name: "Sub-55s 400m", tier: "gold" },
+  { value: 50, name: "Sub-50s 400m", tier: "platinum" },
+];
+
+// Helper to find next tier based on current PR (higher is better)
 function getNextTier(
   currentValue: number | undefined,
   tiers: Array<{ value: number; name: string; tier: string }>
 ): { value: number; name: string; tier: string } | null {
   if (!currentValue) return tiers[0];
-  
+
   for (const tier of tiers) {
     if (currentValue < tier.value) {
       return tier;
     }
   }
   return null; // Already at max tier
+}
+
+// Helper to find next time tier (lower is better)
+function getNextTimeTier(
+  currentSeconds: number | undefined,
+  tiers: Array<{ value: number; name: string; tier: string }>
+): { value: number; name: string; tier: string } | null {
+  if (!currentSeconds) return tiers[0]; // Recommend easiest (highest time)
+
+  for (const tier of tiers) {
+    if (currentSeconds > tier.value) {
+      return tier; // First tier they haven't beaten yet
+    }
+  }
+  return null; // Already beaten all tiers
 }
 
 type Step = 
@@ -149,8 +179,8 @@ const FEATURE_STEPS: Array<{
     id: "circles-feature",
     icon: Users,
     title: "Circles",
-    description: "Create or join workout groups with friends, family, or training partners. Share progress and stay accountable.",
-    tip: "Invite your workout buddy to a circle to see each other's workouts!",
+    description: "Create or join workout groups with your crew — gym partners, coworkers, or anyone serious about showing up.",
+    tip: "Invite your training partner to a circle to see each other's workouts!",
     gradient: "from-green-500 to-emerald-400",
   },
   {
@@ -244,13 +274,24 @@ function getRecommendedBadges(userData: UserData): RecommendedBadge[] {
       tier: "gold",
       howToUnlock: "Keep showing up! Log 100 total workouts",
     });
-    recommendations.push({
-      name: "Sub-8 Minute Mile",
-      description: "Run a mile in under 8 minutes",
-      icon: "🏃",
-      tier: "bronze",
-      howToUnlock: "Log your mile time as a PR",
-    });
+
+    // Smart mile recommendation based on existing PR
+    const milePR = getPRValue("mile");
+    const nextMile = getNextTimeTier(milePR, MILE_TIERS);
+    if (nextMile) {
+      const mins = Math.floor(nextMile.value / 60);
+      const secs = nextMile.value % 60;
+      const timeStr = secs > 0 ? `${mins}:${secs.toString().padStart(2, "0")}` : `${mins}:00`;
+      recommendations.push({
+        name: nextMile.name,
+        description: `Run a mile in under ${timeStr}`,
+        icon: "🏃",
+        tier: nextMile.tier,
+        howToUnlock: milePR
+          ? `Current: ${Math.floor(milePR / 60)}:${(milePR % 60).toString().padStart(2, "0")} — keep pushing!`
+          : "Log your mile time as a PR",
+      });
+    }
   }
 
   if (goal.includes("skill") || goal.includes("learn")) {
@@ -270,14 +311,40 @@ function getRecommendedBadges(userData: UserData): RecommendedBadge[] {
     });
   }
 
+  if (goal.includes("cardio") || goal.includes("endurance")) {
+    const milePR = getPRValue("mile");
+    const nextMile = getNextTimeTier(milePR, MILE_TIERS);
+    if (nextMile) {
+      const mins = Math.floor(nextMile.value / 60);
+      const secs = nextMile.value % 60;
+      const timeStr = secs > 0 ? `${mins}:${secs.toString().padStart(2, "0")}` : `${mins}:00`;
+      recommendations.push({
+        name: nextMile.name,
+        description: `Run a mile in under ${timeStr}`,
+        icon: "🏃",
+        tier: nextMile.tier,
+        howToUnlock: milePR
+          ? `Current: ${Math.floor(milePR / 60)}:${(milePR % 60).toString().padStart(2, "0")} — keep pushing!`
+          : "Log your mile time as a PR",
+      });
+    }
+  }
+
   if (goal.includes("sport") || goal.includes("athletic")) {
-    recommendations.push({
-      name: "Sub-60 400m",
-      description: "Run 400m in under 60 seconds",
-      icon: "🏃",
-      tier: "silver",
-      howToUnlock: "Log your 400m time",
-    });
+    // Smart 400m recommendation based on existing PR
+    const sprintPR = getPRValue("400");
+    const nextSprint = getNextTimeTier(sprintPR, SPRINT_400M_TIERS);
+    if (nextSprint) {
+      recommendations.push({
+        name: nextSprint.name,
+        description: `Run 400m in under ${nextSprint.value} seconds`,
+        icon: "🏃",
+        tier: nextSprint.tier,
+        howToUnlock: sprintPR
+          ? `Current: ${sprintPR}s — you're close!`
+          : "Log your 400m time",
+      });
+    }
   }
 
   // Limit to 4 recommendations

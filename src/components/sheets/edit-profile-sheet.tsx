@@ -86,7 +86,7 @@ interface EditProfileSheetProps {
 
 const VISIBILITY_OPTIONS = [
   { value: "public", label: "Public", icon: Globe, description: "Everyone can see" },
-  { value: "circles", label: "Rallies", icon: Users, description: "Selected circles" },
+  { value: "circles", label: "Circles", icon: Users, description: "Selected circles" },
   { value: "private", label: "Private", icon: Lock, description: "Only you" },
 ];
 
@@ -516,7 +516,7 @@ export function EditProfileSheet({
                         </Button>
                       </div>
                       
-                      {/* Rally selection when visibility is "circles" */}
+                      {/* Circle selection when visibility is "circles" */}
                       {photo.visibility === "circles" && (
                         <div className="space-y-2">
                           {loadingCircles ? (

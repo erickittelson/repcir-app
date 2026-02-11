@@ -32,7 +32,7 @@ import { toast } from "sonner";
 import { CreateCircleExperience } from "@/components/circle";
 import { CircleDetailSheet } from "@/components/sheets";
 
-interface RallyData {
+interface CircleData {
   id: string;
   name: string;
   description: string | null;
@@ -49,8 +49,8 @@ interface RallyData {
 }
 
 interface DiscoverResponse {
-  circles: RallyData[];
-  trending: RallyData[];
+  circles: CircleData[];
+  trending: CircleData[];
   filters: {
     focusAreas: Array<{ focusArea: string | null; count: number }>;
   };
@@ -69,7 +69,7 @@ const FOCUS_AREA_CONFIG: Record<
   general: { icon: Heart, color: "text-brand", label: "General Fitness" },
 };
 
-function RallySkeleton() {
+function CircleSkeleton() {
   return (
     <Card>
       <CardContent className="p-4">
@@ -87,7 +87,7 @@ function RallySkeleton() {
   );
 }
 
-function TrendingRallySkeleton() {
+function TrendingCircleSkeleton() {
   return (
     <div className="flex-shrink-0 w-[160px]">
       <Card className="h-full">
@@ -101,7 +101,7 @@ function TrendingRallySkeleton() {
   );
 }
 
-export function DiscoverRallies() {
+export function DiscoverCircles() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -110,12 +110,12 @@ export function DiscoverRallies() {
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
   const [selectedFocus, setSelectedFocus] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"popular" | "newest" | "active">("popular");
-  const [joiningRally, setJoiningRally] = useState<string | null>(null);
-  const [showCreateRally, setShowCreateRally] = useState(false);
-  const [selectedRallyId, setSelectedRallyId] = useState<string | null>(null);
+  const [joiningCircle, setJoiningRally] = useState<string | null>(null);
+  const [showCreateCircle, setShowCreateRally] = useState(false);
+  const [selectedCircleId, setSelectedRallyId] = useState<string | null>(null);
 
   // Fetch circles
-  const fetchRallies = useCallback(async () => {
+  const fetchCircles = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -141,13 +141,13 @@ export function DiscoverRallies() {
   // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchRallies();
+      fetchCircles();
     }, searchQuery ? 300 : 0);
     return () => clearTimeout(timer);
-  }, [fetchRallies]);
+  }, [fetchCircles]);
 
   // Join circle
-  const handleJoinRally = async (circleId: string, e: React.MouseEvent) => {
+  const handleJoinCircle = async (circleId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setJoiningRally(circleId);
     try {
@@ -207,7 +207,7 @@ export function DiscoverRallies() {
   };
 
   // Get join button config based on joinType and state
-  const getJoinButtonConfig = (circle: RallyData) => {
+  const getJoinButtonConfig = (circle: CircleData) => {
     if (circle.isMember) {
       return { show: false };
     }
@@ -236,7 +236,7 @@ export function DiscoverRallies() {
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="px-4 py-4 space-y-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold">Discover Rallies</h1>
+            <h1 className="text-2xl font-bold">Discover Circles</h1>
             <Button size="sm" onClick={() => setShowCreateRally(true)}>
               <Plus className="h-4 w-4 mr-1" />
               Create
@@ -319,7 +319,7 @@ export function DiscoverRallies() {
                 {loading
                   ? Array(4)
                       .fill(0)
-                      .map((_, i) => <TrendingRallySkeleton key={i} />)
+                      .map((_, i) => <TrendingCircleSkeleton key={i} />)
                   : data.trending.map((circle) => {
                       const focus = getFocusConfig(circle.focusArea);
                       const Icon = focus.icon;
@@ -367,10 +367,10 @@ export function DiscoverRallies() {
                                     size="sm"
                                     variant={btnConfig.variant || "outline"}
                                     className={cn("mt-2 h-7 text-xs w-full", btnConfig.disabled && "opacity-60")}
-                                    onClick={(e) => !btnConfig.disabled && handleJoinRally(circle.id, e)}
-                                    disabled={joiningRally === circle.id || btnConfig.disabled}
+                                    onClick={(e) => !btnConfig.disabled && handleJoinCircle(circle.id, e)}
+                                    disabled={joiningCircle === circle.id || btnConfig.disabled}
                                   >
-                                    {joiningRally === circle.id ? (
+                                    {joiningCircle === circle.id ? (
                                       <Loader2 className="h-3 w-3 animate-spin" />
                                     ) : (
                                       <>
@@ -392,7 +392,7 @@ export function DiscoverRallies() {
           </section>
         )}
 
-        {/* All Rallies */}
+        {/* All Circles */}
         <section>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -401,8 +401,8 @@ export function DiscoverRallies() {
                 {searchQuery
                   ? `Results for "${searchQuery}"`
                   : selectedFocus !== "all"
-                  ? FOCUS_AREA_CONFIG[selectedFocus]?.label || "Rallies"
-                  : "All Rallies"}
+                  ? FOCUS_AREA_CONFIG[selectedFocus]?.label || "Circles"
+                  : "All Circles"}
               </h2>
             </div>
             <div className="flex gap-1">
@@ -425,7 +425,7 @@ export function DiscoverRallies() {
               {Array(5)
                 .fill(0)
                 .map((_, i) => (
-                  <RallySkeleton key={i} />
+                  <CircleSkeleton key={i} />
                 ))}
             </div>
           ) : !data?.circles || data.circles.length === 0 ? (
@@ -444,7 +444,7 @@ export function DiscoverRallies() {
                 onClick={() => setShowCreateRally(true)}
               >
                 <Plus className="h-4 w-4 mr-1" />
-                Create Rally
+                Create Circle
               </Button>
             </div>
           ) : (
@@ -541,11 +541,11 @@ export function DiscoverRallies() {
                             <Button
                               size="sm"
                               variant={btnConfig.variant}
-                              onClick={(e) => !btnConfig.disabled && handleJoinRally(circle.id, e)}
-                              disabled={joiningRally === circle.id || btnConfig.disabled}
+                              onClick={(e) => !btnConfig.disabled && handleJoinCircle(circle.id, e)}
+                              disabled={joiningCircle === circle.id || btnConfig.disabled}
                               className={btnConfig.disabled ? "opacity-60" : ""}
                             >
-                              {joiningRally === circle.id ? (
+                              {joiningCircle === circle.id ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                               ) : (
                                 <>
@@ -570,21 +570,21 @@ export function DiscoverRallies() {
         </section>
       </div>
 
-      {/* Create Rally Experience */}
+      {/* Create Circle Experience */}
       <CreateCircleExperience
-        open={showCreateRally}
+        open={showCreateCircle}
         onOpenChange={setShowCreateRally}
         onComplete={() => {
-          fetchRallies();
+          fetchCircles();
         }}
       />
 
       {/* Circle Detail Sheet */}
       <CircleDetailSheet
-        circleId={selectedRallyId}
-        open={!!selectedRallyId}
+        circleId={selectedCircleId}
+        open={!!selectedCircleId}
         onOpenChange={(open) => !open && setSelectedRallyId(null)}
-        onJoin={(circleId) => handleJoinRally(circleId, { stopPropagation: () => {} } as React.MouseEvent)}
+        onJoin={(circleId) => handleJoinCircle(circleId, { stopPropagation: () => {} } as React.MouseEvent)}
       />
     </div>
   );

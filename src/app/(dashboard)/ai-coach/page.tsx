@@ -38,6 +38,7 @@ import {
   History,
   Plus,
 } from "lucide-react";
+import { AIUsageDashboard } from "@/components/ai/usage-dashboard";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -623,6 +624,8 @@ export default function AICoachPage() {
           </SelectContent>
         </Select>
       </div>
+
+      <AIUsageDashboard />
 
       {!selectedMember ? (
         <Card className="border-dashed">

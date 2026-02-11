@@ -172,8 +172,9 @@ export async function POST() {
         if (exercisePatterns.length > 0 && targetTime > 0) {
           const matchingPr = prs.find((p) => {
             const exerciseName = p.exercise?.name?.toLowerCase() || "";
-            return (p.unit === "seconds" || p.unit === "min:sec") && 
-                   exercisePatterns.some((pattern) => 
+            const isTimeUnit = ["seconds", "min:sec", "mm:ss", "hh:mm:ss"].includes(p.unit);
+            return isTimeUnit &&
+                   exercisePatterns.some((pattern) =>
                      exerciseName.includes(pattern.toLowerCase())
                    );
           });

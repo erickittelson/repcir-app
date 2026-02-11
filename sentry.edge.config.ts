@@ -6,7 +6,12 @@
 import * as Sentry from "@sentry/nextjs";
 
 Sentry.init({
-  dsn: "https://dc90a04b4506dea52132d9f5f46a637f@o4510845224157184.ingest.us.sentry.io/4510845227565056",
+  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+
+  // Tag this app so errors can be filtered in the shared Sentry project
+  initialScope: {
+    tags: { app: "repcir-app" },
+  },
 
   // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
   tracesSampleRate: 1,

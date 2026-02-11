@@ -1,5 +1,5 @@
 /**
- * Neon Auth - January 2026
+ * Neon Auth - February 2026
  *
  * Unified exports for Neon Auth utilities.
  */
@@ -8,7 +8,7 @@
 export { authClient, useSession } from "./client";
 
 // Server-side exports (use in Server Components and API routes)
-export { authServer, neonAuth } from "./server";
+export { auth } from "./server";
 
 // Session helpers
 export {

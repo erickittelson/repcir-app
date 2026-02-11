@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Calendar, Ruler, Scale, Percent } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Calendar, Ruler, Scale, Percent } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BodyFatSelector } from "@/components/body-fat-selector";
+import { OnboardingActions } from "./onboarding-actions";
 import type { SectionProps } from "./types";
 
 const MONTHS = [
@@ -16,7 +16,7 @@ const MONTHS = [
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 80 }, (_, i) => CURRENT_YEAR - 13 - i);
 
-export function BasicsSection({ data, onUpdate, onNext }: SectionProps) {
+export function BasicsSection({ data, onUpdate, onNext, onBack }: SectionProps) {
   const [step, setStep] = useState<"birthday" | "gender" | "height" | "weight" | "bodyfat">("birthday");
   
   // Birthday
@@ -75,7 +75,7 @@ export function BasicsSection({ data, onUpdate, onNext }: SectionProps) {
   };
 
   return (
-    <div className="h-full flex flex-col items-center justify-center p-6">
+    <div className="min-h-full flex flex-col items-center justify-start py-6 px-6">
       <div className="max-w-md mx-auto w-full">
         {/* Birthday */}
         {step === "birthday" && (
@@ -117,14 +117,11 @@ export function BasicsSection({ data, onUpdate, onNext }: SectionProps) {
               </select>
             </div>
 
-            <Button
-              onClick={handleBirthdayNext}
-              disabled={!birthMonth || !birthYear}
-              className="w-full h-14 text-lg bg-energy-gradient hover:opacity-90 rounded-xl group"
-            >
-              Continue
-              <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-            </Button>
+            <OnboardingActions
+              onNext={handleBirthdayNext}
+              onBack={onBack}
+              nextDisabled={!birthMonth || !birthYear}
+            />
           </motion.div>
         )}
 
@@ -163,14 +160,11 @@ export function BasicsSection({ data, onUpdate, onNext }: SectionProps) {
               ))}
             </div>
 
-            <Button
-              onClick={handleGenderNext}
-              disabled={!gender}
-              className="w-full h-14 text-lg bg-energy-gradient hover:opacity-90 rounded-xl group"
-            >
-              Continue
-              <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-            </Button>
+            <OnboardingActions
+              onNext={handleGenderNext}
+              onBack={onBack}
+              nextDisabled={!gender}
+            />
           </motion.div>
         )}
 
@@ -233,13 +227,10 @@ export function BasicsSection({ data, onUpdate, onNext }: SectionProps) {
               </div>
             </div>
 
-            <Button
-              onClick={handleHeightNext}
-              className="w-full h-14 text-lg bg-energy-gradient hover:opacity-90 rounded-xl group"
-            >
-              Continue
-              <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-            </Button>
+            <OnboardingActions
+              onNext={handleHeightNext}
+              onBack={onBack}
+            />
           </motion.div>
         )}
 
@@ -294,13 +285,10 @@ export function BasicsSection({ data, onUpdate, onNext }: SectionProps) {
               </button>
             </div>
 
-            <Button
-              onClick={handleWeightNext}
-              className="w-full h-14 text-lg bg-energy-gradient hover:opacity-90 rounded-xl group"
-            >
-              Continue
-              <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-            </Button>
+            <OnboardingActions
+              onNext={handleWeightNext}
+              onBack={onBack}
+            />
           </motion.div>
         )}
 

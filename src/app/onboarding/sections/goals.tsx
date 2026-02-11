@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Target, Check } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Target, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { OnboardingActions } from "./onboarding-actions";
 import type { SectionProps } from "./types";
 
 const GOALS = [
@@ -20,7 +20,7 @@ const GOALS = [
   { id: "stress", label: "Stress relief", description: "Mental wellness", icon: "🧠" },
 ];
 
-export function GoalsSection({ data, onUpdate, onNext }: SectionProps) {
+export function GoalsSection({ data, onUpdate, onNext, onBack }: SectionProps) {
   // Combine motivation and goals into one
   const initialGoals = [
     ...(data.primaryMotivation || []),
@@ -49,7 +49,7 @@ export function GoalsSection({ data, onUpdate, onNext }: SectionProps) {
   };
 
   return (
-    <div className="h-full flex flex-col items-center justify-center p-6">
+    <div className="min-h-full flex flex-col items-center justify-start py-6 px-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -108,14 +108,11 @@ export function GoalsSection({ data, onUpdate, onNext }: SectionProps) {
           ))}
         </div>
 
-        <Button
-          onClick={handleContinue}
-          disabled={selectedGoals.length === 0}
-          className="w-full h-14 text-lg bg-energy-gradient hover:opacity-90 rounded-xl group"
-        >
-          Continue
-          <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-        </Button>
+        <OnboardingActions
+          onNext={handleContinue}
+          onBack={onBack}
+          nextDisabled={selectedGoals.length === 0}
+        />
       </motion.div>
     </div>
   );

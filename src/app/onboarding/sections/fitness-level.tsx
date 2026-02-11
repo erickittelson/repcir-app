@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Check } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { OnboardingActions } from "./onboarding-actions";
 import type { SectionProps } from "./types";
 
 const LEVELS = [
@@ -38,7 +38,7 @@ const LEVELS = [
   },
 ];
 
-export function FitnessLevelSection({ data, onUpdate, onNext }: SectionProps) {
+export function FitnessLevelSection({ data, onUpdate, onNext, onBack }: SectionProps) {
   const [selected, setSelected] = useState(data.fitnessLevel || "");
 
   const handleSelect = (level: string) => {
@@ -51,7 +51,7 @@ export function FitnessLevelSection({ data, onUpdate, onNext }: SectionProps) {
   };
 
   return (
-    <div className="h-full flex flex-col items-center justify-center p-6">
+    <div className="min-h-full flex flex-col items-center justify-start py-6 px-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -102,14 +102,11 @@ export function FitnessLevelSection({ data, onUpdate, onNext }: SectionProps) {
           ))}
         </div>
 
-        <Button
-          onClick={handleContinue}
-          disabled={!selected}
-          className="w-full h-14 text-lg bg-energy-gradient hover:opacity-90 rounded-xl group"
-        >
-          Continue
-          <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-        </Button>
+        <OnboardingActions
+          onNext={handleContinue}
+          onBack={onBack}
+          nextDisabled={!selected}
+        />
       </motion.div>
     </div>
   );

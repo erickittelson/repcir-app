@@ -9,7 +9,7 @@ import {
   exercises,
 } from "@/lib/db/schema";
 import { eq, and, desc } from "drizzle-orm";
-import { applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit";
+import { applyDistributedRateLimit as applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit-redis";
 import { z } from "zod";
 
 // Input validation schema
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Apply rate limiting
-  const rateLimitResult = applyRateLimit(
+  const rateLimitResult = await applyRateLimit(
     `ai-weight-suggestion:${session.user.id}`,
     RATE_LIMITS.aiGeneration
   );

@@ -9,7 +9,25 @@ import { authClient } from "@/lib/neon-auth/client";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { registerServiceWorker } from "@/lib/pwa";
-import { PostHogProvider, trackPageView } from "@/lib/posthog/client";
+import { PostHogProvider, trackPageView, identifyUser, resetUser } from "@/lib/posthog/client";
+import { useSession } from "@/lib/neon-auth/client";
+
+// Identify user in PostHog when authenticated
+function PostHogIdentifier() {
+  const { data } = useSession();
+  const user = data?.user;
+
+  useEffect(() => {
+    if (user?.id) {
+      identifyUser(user.id, {
+        email: user.email,
+        name: user.name,
+      });
+    }
+  }, [user?.id, user?.email, user?.name]);
+
+  return null;
+}
 
 // Separate component for page view tracking that uses useSearchParams
 // Must be wrapped in Suspense for Next.js static generation
@@ -53,6 +71,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         redirectTo="/"
         Link={Link}
         social={{ providers: ["google"] }}
+        emailVerification={true}
         localization={{
           SIGN_IN: "Sign In",
           SIGN_UP: "Create Account",
@@ -70,6 +89,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <Suspense fallback={null}>
           <PageViewTracker />
         </Suspense>
+        <PostHogIdentifier />
         {children}
         <CookieBanner />
         <Toaster />

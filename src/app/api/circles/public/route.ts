@@ -11,9 +11,12 @@ export async function GET() {
   }
 
   try {
-    // Get public circles
+    // Get public circles (excluding system/personal circles)
     const publicCircles = await db.query.circles.findMany({
-      where: eq(circles.visibility, "public"),
+      where: and(
+        eq(circles.visibility, "public"),
+        eq(circles.isSystemCircle, false),
+      ),
       orderBy: [desc(circles.memberCount), desc(circles.createdAt)],
       limit: 20,
     });

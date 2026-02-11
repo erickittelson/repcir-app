@@ -46,6 +46,7 @@ import {
 import { PhotoEditor } from "@/components/media/photo-editor";
 import { InlineVoiceInput } from "@/components/voice/inline-voice-input";
 import { haptics } from "@/lib/haptics";
+import { compressImage } from "@/lib/image-compress";
 
 interface QuickLogSheetProps {
   open: boolean;
@@ -134,11 +135,12 @@ export function QuickLogSheet({ open, onOpenChange, preSelectedMembers }: QuickL
     haptics.success();
   };
 
-  // Handle photo editor skip (use original)
-  const handlePhotoEditorSkip = () => {
+  // Handle photo editor skip (use original, but compress)
+  const handlePhotoEditorSkip = async () => {
     if (pendingPhotoFile) {
-      setPhotoFile(pendingPhotoFile);
-      setPhoto(URL.createObjectURL(pendingPhotoFile));
+      const compressed = await compressImage(pendingPhotoFile);
+      setPhotoFile(compressed);
+      setPhoto(URL.createObjectURL(compressed));
     }
     setPendingPhotoFile(null);
   };
@@ -573,7 +575,7 @@ export function QuickLogSheet({ open, onOpenChange, preSelectedMembers }: QuickL
           </Button>
         </div>
 
-        {/* Tag Rally Members */}
+        {/* Tag Circle Members */}
         <div className="mb-5">
           <CircleMemberSelector
             selectedMembers={taggedMembers}

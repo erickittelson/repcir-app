@@ -49,6 +49,11 @@ export const workoutExerciseSchema = z.object({
   })).optional(),
   supersetGroup: z.number().nullable().optional(),
   circuitGroup: z.number().nullable().optional(),
+  rxWeights: z.object({
+    rxMen: z.string().optional(),
+    rxWomen: z.string().optional(),
+    calculation: z.string().optional(),
+  }).optional(),
 });
 
 export type WorkoutExercise = z.infer<typeof workoutExerciseSchema>;
@@ -92,12 +97,40 @@ export const conversationStateSchema = z.object({
 
 export type ConversationState = z.infer<typeof conversationStateSchema>;
 
+// Workout config form data schema (AI pre-fills defaults from conversation context)
+export const workoutConfigDataSchema = z.object({
+  defaultMemberIds: z.array(z.string()).optional(),
+  defaultDuration: z.number().optional(),
+  defaultIntensity: z.string().optional(),
+  defaultFocus: z.string().optional(),
+  defaultLocation: z.string().optional(),
+  suggestedWorkoutType: z.string().optional(),
+  suggestedWorkoutSections: z.array(z.object({
+    workoutType: z.string(),
+    label: z.string().optional(),
+  })).optional(),
+  aiStructureHint: z.string().optional(), // e.g., "Standard + AMRAP finisher recommended for your strength goals"
+  contextMessage: z.string().optional(),
+});
+
+export type WorkoutConfigData = z.infer<typeof workoutConfigDataSchema>;
+
+// Generation job schema (for tracking background Inngest job)
+export const generationJobSchema = z.object({
+  jobId: z.string(),
+  estimatedSeconds: z.number(),
+});
+
+export type GenerationJobData = z.infer<typeof generationJobSchema>;
+
 // Full structured chat response schema
 export const structuredChatResponseSchema = z.object({
-  type: z.enum(["text", "clarification", "workout", "mixed"]),
+  type: z.enum(["text", "clarification", "workout", "mixed", "workout_config", "generation_pending"]),
   textContent: z.string().optional(),
   clarification: clarificationSchema.optional(),
   workout: workoutDataSchema.optional(),
+  workoutConfig: workoutConfigDataSchema.optional(),
+  generationJob: generationJobSchema.optional(),
   actions: z.array(actionSchema).optional(),
   conversationState: conversationStateSchema.optional(),
 });
@@ -138,11 +171,36 @@ export function createWorkoutResponse(
   };
 }
 
+// Helper to create a workout config response
+export function createWorkoutConfigResponse(
+  textContent: string,
+  workoutConfig: WorkoutConfigData
+): StructuredChatResponse {
+  return {
+    type: "workout_config",
+    textContent,
+    workoutConfig,
+  };
+}
+
+// Helper to create a generation pending response
+export function createGenerationPendingResponse(
+  textContent: string,
+  generationJob: GenerationJobData
+): StructuredChatResponse {
+  return {
+    type: "generation_pending",
+    textContent,
+    generationJob,
+  };
+}
+
 // Default actions for workout responses
 export const DEFAULT_WORKOUT_ACTIONS: ActionData[] = [
-  { id: "start", label: "Start Workout", action: "start_workout", variant: "primary" },
-  { id: "save", label: "Save to Profile", action: "save_plan", variant: "secondary" },
+  { id: "start", label: "Start Now", action: "start_workout", variant: "primary" },
+  { id: "save", label: "Save as Plan", action: "save_plan", variant: "primary" },
   { id: "modify", label: "Modify", action: "modify", variant: "outline" },
+  { id: "regenerate", label: "Regenerate", action: "regenerate", variant: "outline" },
 ];
 
 // Initial conversation state

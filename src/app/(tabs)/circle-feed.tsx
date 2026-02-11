@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { compressImage } from "@/lib/image-compress";
 
 interface MemberStatus {
   id: string;
@@ -61,6 +62,7 @@ interface CircleFeedProps {
     authorId?: string;
     content: string | null;
     type: string;
+    imageUrl?: string | null;
     workoutId?: string | null;
     likesCount: number;
     commentsCount: number;
@@ -270,7 +272,7 @@ export function CircleFeed({
         </Card>
       </section>
 
-      {/* Rally Activity Feed */}
+      {/* Circle Activity Feed */}
       <section>
         <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
           Activity
@@ -322,20 +324,20 @@ function PostComposer({
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image must be less than 5MB");
+    // Check file size (max 10MB before compression)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Image must be less than 10MB");
       return;
     }
 
-    setImageFile(file);
-    const reader = new FileReader();
-    reader.onload = () => setImagePreview(reader.result as string);
-    reader.readAsDataURL(file);
+    const compressed = await compressImage(file);
+    setImageFile(compressed);
+    const preview = URL.createObjectURL(compressed);
+    setImagePreview(preview);
   };
 
   const clearImage = () => {
@@ -450,7 +452,7 @@ function PostComposer({
                     <img
                       src={imagePreview}
                       alt="Preview"
-                      className="max-h-40 rounded-lg"
+                      className="max-h-40 max-w-full rounded-lg object-contain"
                     />
                     <button
                       onClick={clearImage}
@@ -616,6 +618,19 @@ function PostCard({ post, circleId }: { post: CircleFeedProps["posts"][0]; circl
 
             {post.content && (
               <p className="mt-2 text-sm">{post.content}</p>
+            )}
+
+            {/* Post Image */}
+            {post.imageUrl && (
+              <div className="mt-2 rounded-lg overflow-hidden bg-muted/30">
+                <img
+                  src={post.imageUrl}
+                  alt="Post image"
+                  loading="lazy"
+                  decoding="async"
+                  className="w-full max-h-[480px] object-contain"
+                />
+              </div>
             )}
 
             {/* Workout metadata */}

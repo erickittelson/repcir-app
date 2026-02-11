@@ -42,6 +42,7 @@ import { formatDistanceToNow } from "date-fns";
 import { DeleteConfirmDialog } from "@/components/ui/confirm-dialog";
 import { VoiceInputWithTranscription } from "@/components/voice-input";
 import { haptics } from "@/lib/haptics";
+import { compressImage } from "@/lib/image-compress";
 
 interface CirclePost {
   id: string;
@@ -68,6 +69,8 @@ interface CircleFeedProps {
   circleId: string;
   userId: string;
   userRole: string | null;
+  userName?: string;
+  userImage?: string;
 }
 
 interface WorkoutPlan {
@@ -99,7 +102,7 @@ interface PostAttachment {
   challenge?: Challenge;
 }
 
-export function CircleFeed({ circleId, userId, userRole }: CircleFeedProps) {
+export function CircleFeed({ circleId, userId, userRole, userName, userImage }: CircleFeedProps) {
   const router = useRouter();
   const [posts, setPosts] = useState<CirclePost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -166,8 +169,11 @@ export function CircleFeed({ circleId, userId, userRole }: CircleFeedProps) {
       return;
     }
 
+    // Compress before preview/upload
+    const compressed = await compressImage(file);
+
     // Create preview
-    const previewUrl = URL.createObjectURL(file);
+    const previewUrl = URL.createObjectURL(compressed);
     setAttachment({
       type: "image",
       imagePreview: previewUrl,
@@ -177,7 +183,7 @@ export function CircleFeed({ circleId, userId, userRole }: CircleFeedProps) {
     setIsUploading(true);
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", compressed);
 
       const res = await fetch(`/api/circles/${circleId}/posts/upload-image`, {
         method: "POST",
@@ -443,7 +449,10 @@ export function CircleFeed({ circleId, userId, userRole }: CircleFeedProps) {
         <CardContent className="pt-4">
           <div className="flex gap-3">
             <Avatar className="h-10 w-10 flex-shrink-0">
-              <AvatarFallback className="bg-brand/20 text-brand">U</AvatarFallback>
+              {userImage && <AvatarImage src={userImage} />}
+              <AvatarFallback className="bg-brand/20 text-brand">
+                {userName?.charAt(0)?.toUpperCase() || "U"}
+              </AvatarFallback>
             </Avatar>
             <div className="flex-1">
               <div className="relative">
@@ -567,27 +576,25 @@ export function CircleFeed({ circleId, userId, userRole }: CircleFeedProps) {
                       <ImageIcon className="h-4 w-4" />
                     )}
                   </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleWorkoutClick}
+                    disabled={!!attachment}
+                    className={cn(attachment?.type === "workout" && "text-brand")}
+                  >
+                    <Dumbbell className="h-4 w-4" />
+                  </Button>
                   {isAdmin && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleWorkoutClick}
-                        disabled={!!attachment}
-                        className={cn(attachment?.type === "workout" && "text-brand")}
-                      >
-                        <Dumbbell className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleChallengeClick}
-                        disabled={!!attachment}
-                        className={cn(attachment?.type === "challenge" && "text-energy")}
-                      >
-                        <Trophy className="h-4 w-4" />
-                      </Button>
-                    </>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleChallengeClick}
+                      disabled={!!attachment}
+                      className={cn(attachment?.type === "challenge" && "text-energy")}
+                    >
+                      <Trophy className="h-4 w-4" />
+                    </Button>
                   )}
                 </div>
                 <Button
@@ -697,11 +704,13 @@ export function CircleFeed({ circleId, userId, userRole }: CircleFeedProps) {
 
               {/* Post Image */}
               {post.imageUrl && (
-                <div className="mt-3 rounded-lg overflow-hidden">
+                <div className="mt-3 rounded-lg overflow-hidden bg-muted/30">
                   <img
                     src={post.imageUrl}
                     alt="Post image"
-                    className="w-full object-cover max-h-80"
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full max-h-[480px] object-contain"
                   />
                 </div>
               )}
@@ -1154,6 +1163,9 @@ function PostComments({
       id: string;
       authorId: string;
       content: string;
+      imageUrl?: string | null;
+      workoutPlanId?: string | null;
+      workoutName?: string | null;
       createdAt: Date;
       authorName: string | null;
       authorImage: string | null;
@@ -1162,6 +1174,13 @@ function PostComments({
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState("");
   const [isPosting, setIsPosting] = useState(false);
+  const [commentImage, setCommentImage] = useState<{ file: File; preview: string } | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [commentWorkout, setCommentWorkout] = useState<{ id: string; name: string } | null>(null);
+  const [showWorkoutPicker, setShowWorkoutPicker] = useState(false);
+  const [pickerWorkouts, setPickerWorkouts] = useState<WorkoutPlan[]>([]);
+  const [loadingPickerWorkouts, setLoadingPickerWorkouts] = useState(false);
+  const commentImageRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchComments();
@@ -1181,24 +1200,74 @@ function PostComments({
     }
   };
 
+  const handleCommentImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Image must be less than 10MB");
+      return;
+    }
+    const compressed = await compressImage(file, { maxDimension: 1200 });
+    const preview = URL.createObjectURL(compressed);
+    setCommentImage({ file: compressed, preview });
+  };
+
+  const fetchPickerWorkouts = async () => {
+    setLoadingPickerWorkouts(true);
+    try {
+      const res = await fetch(`/api/circles/${circleId}/workouts`);
+      if (res.ok) {
+        const data = await res.json();
+        setPickerWorkouts(data.workouts || data || []);
+      }
+    } catch {
+      console.error("Failed to fetch workouts");
+    } finally {
+      setLoadingPickerWorkouts(false);
+    }
+  };
+
   const handlePostComment = async () => {
-    if (!newComment.trim()) return;
+    if (!newComment.trim() && !commentImage) return;
 
     setIsPosting(true);
     try {
+      // Upload image if present
+      let imageUrl: string | undefined;
+      if (commentImage) {
+        setIsUploadingImage(true);
+        const formData = new FormData();
+        formData.append("file", commentImage.file);
+        const uploadRes = await fetch(`/api/circles/${circleId}/posts/upload-image`, {
+          method: "POST",
+          body: formData,
+        });
+        if (!uploadRes.ok) throw new Error("Failed to upload image");
+        const uploadData = await uploadRes.json();
+        imageUrl = uploadData.url;
+        setIsUploadingImage(false);
+      }
+
       const res = await fetch(`/api/circles/${circleId}/posts/${postId}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newComment.trim() }),
+        body: JSON.stringify({
+          content: newComment.trim() || (imageUrl ? "📷" : "💪"),
+          imageUrl,
+          workoutPlanId: commentWorkout?.id,
+        }),
       });
 
       if (res.ok) {
         const comment = await res.json();
         setComments((prev) => [comment, ...prev]);
         setNewComment("");
+        setCommentImage(null);
+        setCommentWorkout(null);
       }
     } catch {
       toast.error("Failed to post comment");
+      setIsUploadingImage(false);
     } finally {
       setIsPosting(false);
     }
@@ -1207,27 +1276,118 @@ function PostComments({
   return (
     <div className="mt-4 pt-3 border-t space-y-3">
       {/* Comment Input */}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          placeholder="Write a comment..."
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handlePostComment()}
-          className="flex-1 text-sm bg-muted/50 rounded-full px-4 py-2 outline-none focus:ring-2 focus:ring-brand"
-        />
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={handlePostComment}
-          disabled={!newComment.trim() || isPosting}
-        >
-          {isPosting ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Send className="h-4 w-4" />
-          )}
-        </Button>
+      <div className="space-y-2">
+        {/* Attachment Previews */}
+        {(commentImage || commentWorkout) && (
+          <div className="flex gap-2 flex-wrap">
+            {commentImage && (
+              <div className="relative inline-block">
+                <img
+                  src={commentImage.preview}
+                  alt="Preview"
+                  className="h-16 w-16 object-cover rounded-lg border"
+                />
+                <button
+                  onClick={() => setCommentImage(null)}
+                  className="absolute -top-1 -right-1 p-0.5 bg-destructive text-destructive-foreground rounded-full"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+            {commentWorkout && (
+              <div className="flex items-center gap-1.5 px-2 py-1 bg-brand/10 rounded-lg border border-brand/20 text-xs">
+                <Dumbbell className="h-3 w-3 text-brand" />
+                <span className="font-medium">{commentWorkout.name}</span>
+                <button onClick={() => setCommentWorkout(null)}>
+                  <X className="h-3 w-3 text-muted-foreground" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex gap-2 items-end">
+          <div className="flex-1 flex items-center gap-1 bg-muted/50 rounded-2xl px-3 py-1.5">
+            <input
+              ref={commentImageRef}
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              className="hidden"
+              onChange={handleCommentImageSelect}
+            />
+            <button
+              onClick={() => commentImageRef.current?.click()}
+              disabled={!!commentImage || isPosting}
+              className="p-1 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+            >
+              <ImageIcon className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => {
+                setShowWorkoutPicker(!showWorkoutPicker);
+                if (pickerWorkouts.length === 0) fetchPickerWorkouts();
+              }}
+              disabled={!!commentWorkout || isPosting}
+              className="p-1 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+            >
+              <Dumbbell className="h-4 w-4" />
+            </button>
+            <input
+              type="text"
+              placeholder="Write a comment... Use @ to mention"
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handlePostComment()}
+              className="flex-1 text-sm bg-transparent py-1 outline-none min-w-0"
+              disabled={isPosting}
+            />
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handlePostComment}
+            disabled={(!newComment.trim() && !commentImage && !commentWorkout) || isPosting}
+            className="shrink-0"
+          >
+            {isPosting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+
+        {/* Inline Workout Picker */}
+        {showWorkoutPicker && (
+          <div className="bg-muted/50 rounded-lg border p-2 max-h-40 overflow-y-auto space-y-1">
+            {loadingPickerWorkouts ? (
+              <div className="flex items-center justify-center py-3">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : pickerWorkouts.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-2">
+                No workouts in this circle yet
+              </p>
+            ) : (
+              pickerWorkouts.map((w) => (
+                <button
+                  key={w.id}
+                  onClick={() => {
+                    setCommentWorkout({ id: w.id, name: w.name });
+                    setShowWorkoutPicker(false);
+                  }}
+                  className="w-full text-left px-2 py-1.5 rounded hover:bg-muted text-xs transition-colors"
+                >
+                  <span className="font-medium">{w.name}</span>
+                  {w.difficulty && (
+                    <span className="text-muted-foreground ml-2 capitalize">{w.difficulty}</span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        )}
       </div>
 
       {/* Comments List */}
@@ -1245,6 +1405,7 @@ function PostComments({
           {comments.map((comment) => (
             <div key={comment.id} className="flex gap-2">
               <Avatar className="h-7 w-7">
+                {comment.authorImage && <AvatarImage src={comment.authorImage} />}
                 <AvatarFallback className="text-xs bg-muted">
                   {comment.authorName?.charAt(0) || "?"}
                 </AvatarFallback>
@@ -1261,6 +1422,21 @@ function PostComments({
                   </span>
                 </div>
                 <p className="text-sm mt-0.5">{comment.content}</p>
+                {comment.imageUrl && (
+                  <img
+                    src={comment.imageUrl}
+                    alt="Comment image"
+                    loading="lazy"
+                    decoding="async"
+                    className="mt-1.5 rounded-lg max-h-48 max-w-full object-contain"
+                  />
+                )}
+                {comment.workoutPlanId && comment.workoutName && (
+                  <div className="mt-1.5 flex items-center gap-1.5 px-2 py-1 bg-brand/10 rounded border border-brand/20 text-xs w-fit">
+                    <Dumbbell className="h-3 w-3 text-brand" />
+                    <span className="font-medium">{comment.workoutName}</span>
+                  </div>
+                )}
               </div>
             </div>
           ))}

@@ -58,7 +58,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { QuickFeedback } from "@/components/quick-feedback";
 
-interface FamilyMember {
+interface CircleMember {
   id: string;
   name: string;
 }
@@ -102,7 +102,7 @@ const categories = [
 
 export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([]);
-  const [members, setMembers] = useState<FamilyMember[]>([]);
+  const [members, setMembers] = useState<CircleMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -445,7 +445,7 @@ export default function GoalsPage() {
         <div>
           <h1 className="text-3xl font-bold">Goals & Milestones</h1>
           <p className="text-muted-foreground">
-            Track fitness goals for your family members
+            Track fitness goals for your circle
           </p>
         </div>
         <Dialog
@@ -467,7 +467,7 @@ export default function GoalsPage() {
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label>Family Member *</Label>
+                <Label>Circle Member *</Label>
                 <Select
                   value={formData.memberId}
                   onValueChange={(value) =>
@@ -611,7 +611,7 @@ export default function GoalsPage() {
               <Target className="h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold">No active goals</h3>
               <p className="text-muted-foreground mb-4">
-                Set goals to track your family&apos;s fitness progress
+                Set goals to track your circle&apos;s fitness progress
               </p>
               <Button onClick={() => setDialogOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
@@ -930,7 +930,7 @@ export default function GoalsPage() {
                       {goal.milestones.length} milestones completed
                     </p>
                   )}
-                  <div className="flex gap-2 pt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex gap-2 pt-2">
                     <Button
                       size="sm"
                       variant="outline"

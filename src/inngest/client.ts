@@ -176,6 +176,7 @@ type Events = {
       userId: string;
       circleId: string;
       memberIds: string[];
+      jobId?: string; // Reference to aiGenerationJobs row for status tracking
       options: {
         focus?: string;
         customFocus?: string;
@@ -192,6 +193,16 @@ type Events = {
         volumeGoal?: string;
         periodizationPhase?: string;
         saveAsPlan?: boolean;
+        // Enhanced options for chat-triggered generation
+        targetType?: "individual" | "circle" | "selected_members";
+        workoutType?: string;
+        workoutSections?: Array<{ workoutType: string; label?: string; order: number }>;
+        goalIds?: string[];
+        circleGoalIds?: string[];
+        locationId?: string;
+        chatTriggered?: boolean;
+        conversationId?: string;
+        memberGenders?: Record<string, string>;
       };
     };
   };
@@ -277,6 +288,25 @@ type Events = {
     };
   };
 
+  // Post-workout AI analysis
+  "ai/analyze-workout": {
+    data: {
+      sessionId: string;
+      memberId: string;
+    };
+  };
+  // Coaching memory extraction
+  "ai/extract-coaching-memory": {
+    data: {
+      conversationId: string;
+      memberId: string;
+    };
+  };
+  // Weekly progress report generation
+  "cron/weekly-progress-reports": Record<string, never>;
+  // Quota reset
+  "cron/reset-ai-quotas": Record<string, never>;
+
   // Admin/system events
   "admin/migration": {
     data: {
@@ -301,7 +331,7 @@ type Events = {
  * - Create functions: inngest.createFunction(...)
  */
 export const inngest = new Inngest({
-  id: "family-workout-app",
+  id: "repcir-app",
   schemas: new EventSchemas().fromRecord<Events>(),
 });
 

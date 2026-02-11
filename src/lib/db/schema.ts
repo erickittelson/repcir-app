@@ -175,6 +175,35 @@ export const circleEquipment = pgTable(
 );
 
 // ============================================================================
+// CIRCLE GOALS (proper relational table for AI-weighted circle-level goals)
+// ============================================================================
+
+export const circleGoals = pgTable(
+  "circle_goals",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    circleId: uuid("circle_id")
+      .notNull()
+      .references(() => circles.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    category: text("category").notNull(), // strength, endurance, flexibility, weight_loss, skill, custom
+    targetValue: real("target_value"),
+    targetUnit: text("target_unit"), // lbs, seconds, reps, miles, %, etc.
+    description: text("description"),
+    priority: integer("priority").default(0).notNull(), // higher = more weight for AI
+    createdBy: text("created_by"), // Neon Auth userId
+    status: text("status").default("active").notNull(), // active, archived
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (goal) => [
+    index("circle_goals_circle_idx").on(goal.circleId),
+    index("circle_goals_status_idx").on(goal.circleId, goal.status),
+    index("circle_goals_priority_idx").on(goal.circleId, goal.priority),
+  ]
+);
+
+// ============================================================================
 // MEMBER METRICS (tracked over time)
 // ============================================================================
 
@@ -400,6 +429,12 @@ export const workoutPlanExercises = pgTable(
     groupId: text("group_id"), // e.g., "A1", "A2" for supersets, "circuit1" for circuits
     groupType: text("group_type"), // superset, circuit, triset, giant_set, drop_set
     notes: text("notes"),
+    // Gender-based Rx weights for groups >3 members
+    rxWeights: jsonb("rx_weights").$type<{
+      rxMen?: string;
+      rxWomen?: string;
+      calculation?: string;
+    }>(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (exercise) => [index("workout_plan_exercises_plan_idx").on(exercise.planId)]
@@ -763,6 +798,35 @@ export const aiResponseCache = pgTable(
     uniqueIndex("ai_cache_key_idx").on(table.cacheKey),
     index("ai_cache_type_idx").on(table.cacheType),
     index("ai_cache_expires_idx").on(table.expiresAt),
+  ]
+);
+
+// ============================================================================
+// AI GENERATION JOBS (tracks background Inngest AI jobs for polling)
+// ============================================================================
+
+export const aiGenerationJobs = pgTable(
+  "ai_generation_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull(),
+    circleId: uuid("circle_id").references(() => circles.id, { onDelete: "set null" }),
+    jobType: text("job_type").notNull(), // workout, program, analysis
+    status: text("status").default("pending").notNull(), // pending, generating, complete, error
+    input: jsonb("input").$type<Record<string, unknown>>().notNull(),
+    resultPlanId: uuid("result_plan_id").references(() => workoutPlans.id, { onDelete: "set null" }),
+    resultData: jsonb("result_data").$type<Record<string, unknown>>(),
+    error: text("error"),
+    inngestRunId: text("inngest_run_id"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    conversationId: uuid("conversation_id").references(() => coachConversations.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (job) => [
+    index("ai_generation_jobs_user_idx").on(job.userId),
+    index("ai_generation_jobs_status_idx").on(job.status),
+    index("ai_generation_jobs_conversation_idx").on(job.conversationId),
   ]
 );
 
@@ -1713,6 +1777,7 @@ export const userLocations = pgTable(
     type: text("type").notNull(), // home, commercial, school, outdoor, travel
     address: text("address"),
     isActive: boolean("is_active").default(false).notNull(), // Currently selected location
+    visibility: text("visibility").default("private").notNull(), // "public" | "private"
     equipment: jsonb("equipment").$type<string[]>().default([]).notNull(), // Array of equipment IDs
     // Detailed equipment specs for home gyms
     equipmentDetails: jsonb("equipment_details")
@@ -1825,6 +1890,29 @@ export const circlesRelations = relations(circles, ({ many }) => ({
   invitations: many(circleInvitations),
   messages: many(messages),
   circleRequests: many(circleRequests),
+  goals: many(circleGoals),
+}));
+
+export const circleGoalsRelations = relations(circleGoals, ({ one }) => ({
+  circle: one(circles, {
+    fields: [circleGoals.circleId],
+    references: [circles.id],
+  }),
+}));
+
+export const aiGenerationJobsRelations = relations(aiGenerationJobs, ({ one }) => ({
+  circle: one(circles, {
+    fields: [aiGenerationJobs.circleId],
+    references: [circles.id],
+  }),
+  resultPlan: one(workoutPlans, {
+    fields: [aiGenerationJobs.resultPlanId],
+    references: [workoutPlans.id],
+  }),
+  conversation: one(coachConversations, {
+    fields: [aiGenerationJobs.conversationId],
+    references: [coachConversations.id],
+  }),
 }));
 
 export const circleInvitationsRelations = relations(circleInvitations, ({ one }) => ({
@@ -2649,6 +2737,8 @@ export const circlePostComments = pgTable(
       .references(() => circlePosts.id, { onDelete: "cascade" }),
     authorId: text("author_id").notNull(),
     content: text("content").notNull(),
+    imageUrl: text("image_url"),
+    workoutPlanId: uuid("workout_plan_id").references(() => workoutPlans.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -2886,6 +2976,190 @@ export const auditLogs = pgTable(
 );
 
 // ============================================================================
+// AI USAGE TRACKING
+// ============================================================================
+
+export const aiUsageTracking = pgTable(
+  "ai_usage_tracking",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull(),
+    memberId: text("member_id"),
+    endpoint: text("endpoint").notNull(), // e.g., "ai/chat", "ai/generate-workout"
+    modelUsed: text("model_used").notNull(),
+    reasoningLevel: text("reasoning_level"),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    cachedTokens: integer("cached_tokens").default(0),
+    totalCostUsd: decimal("total_cost_usd", { precision: 10, scale: 6 }).notNull().default("0"),
+    durationMs: integer("duration_ms"),
+    cacheHit: boolean("cache_hit").default(false),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("ai_usage_user_idx").on(table.userId),
+    index("ai_usage_endpoint_idx").on(table.endpoint),
+    index("ai_usage_created_at_idx").on(table.createdAt),
+    index("ai_usage_model_idx").on(table.modelUsed),
+  ]
+);
+
+// ============================================================================
+// AI QUOTAS (subscription-based limits)
+// ============================================================================
+
+export const aiQuotas = pgTable(
+  "ai_quotas",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull().unique(),
+    plan: text("plan").default("free").notNull(), // free, pro
+    monthlyWorkoutLimit: integer("monthly_workout_limit").default(5).notNull(),
+    monthlyChatLimit: integer("monthly_chat_limit").default(100).notNull(),
+    currentWorkoutCount: integer("current_workout_count").default(0).notNull(),
+    currentChatCount: integer("current_chat_count").default(0).notNull(),
+    currentTokensUsed: integer("current_tokens_used").default(0).notNull(),
+    periodStart: timestamp("period_start", { withTimezone: true }).defaultNow().notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("ai_quotas_user_idx").on(table.userId),
+    index("ai_quotas_plan_idx").on(table.plan),
+    index("ai_quotas_period_end_idx").on(table.periodEnd),
+  ]
+);
+
+// ============================================================================
+// COACHING MEMORY (long-term AI context from conversations)
+// ============================================================================
+
+export const coachingMemory = pgTable(
+  "coaching_memory",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    memberId: text("member_id").notNull(),
+    conversationId: uuid("conversation_id"),
+    category: text("category").notNull(), // insight, preference, pain_report, motivation, pr_mention, goal_update, behavioral_pattern
+    content: text("content").notNull(),
+    importance: integer("importance").default(5).notNull(), // 1-10 scale
+    tags: jsonb("tags").$type<string[]>().default([]),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }), // null = permanent
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("coaching_memory_member_idx").on(table.memberId),
+    index("coaching_memory_category_idx").on(table.category),
+    index("coaching_memory_importance_idx").on(table.importance),
+    index("coaching_memory_created_at_idx").on(table.createdAt),
+  ]
+);
+
+// ============================================================================
+// WORKOUT FEEDBACK (thumbs up/down on AI-generated workouts)
+// ============================================================================
+
+export const workoutFeedback = pgTable(
+  "workout_feedback",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull(),
+    memberId: text("member_id"),
+    workoutPlanId: uuid("workout_plan_id"),
+    sessionId: uuid("session_id"),
+    rating: integer("rating").notNull(), // -1 (thumbs down), 1 (thumbs up)
+    feedback: text("feedback"), // Optional text feedback
+    aspects: jsonb("aspects").$type<{
+      difficulty?: "too_easy" | "just_right" | "too_hard";
+      exerciseSelection?: "poor" | "okay" | "great";
+      duration?: "too_short" | "just_right" | "too_long";
+      variety?: "repetitive" | "good" | "too_varied";
+    }>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("workout_feedback_user_idx").on(table.userId),
+    index("workout_feedback_plan_idx").on(table.workoutPlanId),
+    index("workout_feedback_rating_idx").on(table.rating),
+  ]
+);
+
+// ============================================================================
+// PROGRESS REPORTS (AI-generated weekly/monthly reports)
+// ============================================================================
+
+export const progressReports = pgTable(
+  "progress_reports",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    memberId: text("member_id").notNull(),
+    reportType: text("report_type").notNull(), // weekly, monthly
+    periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+    summary: text("summary").notNull(),
+    metrics: jsonb("metrics").$type<{
+      workoutsCompleted: number;
+      totalSets: number;
+      totalVolume: number;
+      prsSet: number;
+      avgMood: string;
+      avgEnergy: number;
+      consistencyScore: number;
+      muscleGroupDistribution: Record<string, number>;
+    }>(),
+    insights: jsonb("insights").$type<string[]>().default([]),
+    recommendations: jsonb("recommendations").$type<string[]>().default([]),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("progress_reports_member_idx").on(table.memberId),
+    index("progress_reports_type_idx").on(table.reportType),
+    index("progress_reports_period_idx").on(table.periodStart),
+  ]
+);
+
+// ============================================================================
+// WORKOUT TEMPLATES (pre-built patterns to skip AI generation)
+// ============================================================================
+
+export const workoutTemplates = pgTable(
+  "workout_templates",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: text("name").notNull(),
+    category: text("category").notNull(), // ppl, upper_lower, full_body, bro_split, cardio, hiit
+    description: text("description"),
+    difficulty: text("difficulty").notNull(), // beginner, intermediate, advanced
+    estimatedDuration: integer("estimated_duration"), // minutes
+    equipment: jsonb("equipment").$type<string[]>().default([]),
+    muscleGroups: jsonb("muscle_groups").$type<string[]>().default([]),
+    exercises: jsonb("exercises").$type<Array<{
+      name: string;
+      sets: number;
+      reps: string;
+      restSeconds: number;
+      order: number;
+      notes?: string;
+      supersetGroup?: string;
+    }>>().notNull(),
+    isSystem: boolean("is_system").default(false).notNull(), // Built-in vs user-created
+    createdBy: text("created_by"), // null for system templates
+    useCount: integer("use_count").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("workout_templates_category_idx").on(table.category),
+    index("workout_templates_difficulty_idx").on(table.difficulty),
+    index("workout_templates_system_idx").on(table.isSystem),
+    index("workout_templates_use_count_idx").on(table.useCount),
+  ]
+);
+
+// ============================================================================
 // TYPE EXPORTS
 // ============================================================================
 
@@ -3009,3 +3283,17 @@ export type UserProgramSchedule = typeof userProgramSchedules.$inferSelect;
 export type NewUserProgramSchedule = typeof userProgramSchedules.$inferInsert;
 export type ScheduledWorkout = typeof scheduledWorkouts.$inferSelect;
 export type NewScheduledWorkout = typeof scheduledWorkouts.$inferInsert;
+
+// AI Usage & Quotas
+export type AiUsageTracking = typeof aiUsageTracking.$inferSelect;
+export type NewAiUsageTracking = typeof aiUsageTracking.$inferInsert;
+export type AiQuota = typeof aiQuotas.$inferSelect;
+export type NewAiQuota = typeof aiQuotas.$inferInsert;
+export type CoachingMemory = typeof coachingMemory.$inferSelect;
+export type NewCoachingMemory = typeof coachingMemory.$inferInsert;
+export type WorkoutFeedback = typeof workoutFeedback.$inferSelect;
+export type NewWorkoutFeedback = typeof workoutFeedback.$inferInsert;
+export type ProgressReport = typeof progressReports.$inferSelect;
+export type NewProgressReport = typeof progressReports.$inferInsert;
+export type WorkoutTemplate = typeof workoutTemplates.$inferSelect;
+export type NewWorkoutTemplate = typeof workoutTemplates.$inferInsert;

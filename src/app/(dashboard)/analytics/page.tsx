@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-interface FamilyMember {
+interface CircleMember {
   id: string;
   name: string;
 }
@@ -61,7 +61,7 @@ interface AnalyticsData {
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
 
 export default function AnalyticsPage() {
-  const [members, setMembers] = useState<FamilyMember[]>([]);
+  const [members, setMembers] = useState<CircleMember[]>([]);
   const [selectedMember, setSelectedMember] = useState<string>("all");
   const [timeRange, setTimeRange] = useState("30");
   const [loading, setLoading] = useState(true);

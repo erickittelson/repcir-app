@@ -73,8 +73,6 @@ export interface Location {
 
 interface LocationCardProps {
   location: Location;
-  isActive: boolean;
-  onSetActive: () => void;
   onEdit: () => void;
   onDelete: () => void;
   equipmentCount: number;
@@ -128,8 +126,6 @@ export const LOCATION_DESCRIPTIONS: Record<LocationType, string> = {
 
 export function LocationCard({
   location,
-  isActive,
-  onSetActive,
   onEdit,
   onDelete,
   equipmentCount,
@@ -137,26 +133,16 @@ export function LocationCard({
   const Icon = LOCATION_ICONS[location.type] || Dumbbell;
 
   return (
-    <Card className={isActive ? "border-primary" : ""}>
+    <Card>
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div
-              className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                isActive ? "bg-primary text-primary-foreground" : "bg-muted"
-              }`}
-            >
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-muted">
               <Icon className="w-5 h-5" />
             </div>
             <div>
-              <CardTitle className="text-base flex items-center gap-2">
+              <CardTitle className="text-base">
                 {location.name}
-                {isActive && (
-                  <Badge variant="default" className="gap-1">
-                    <Check className="h-3 w-3" />
-                    Active
-                  </Badge>
-                )}
               </CardTitle>
               <p className="text-xs text-muted-foreground">
                 {LOCATION_LABELS[location.type]}
@@ -170,12 +156,6 @@ export function LocationCard({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {!isActive && (
-                <DropdownMenuItem onClick={onSetActive}>
-                  <Check className="mr-2 h-4 w-4" />
-                  Set as Active
-                </DropdownMenuItem>
-              )}
               <DropdownMenuItem onClick={onEdit}>
                 <Edit className="mr-2 h-4 w-4" />
                 Edit Location
@@ -201,16 +181,6 @@ export function LocationCard({
             {equipmentCount} {equipmentCount === 1 ? "item" : "items"}
           </span>
         </div>
-        {!isActive && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full mt-3"
-            onClick={onSetActive}
-          >
-            Set as Active
-          </Button>
-        )}
       </CardContent>
     </Card>
   );

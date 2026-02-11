@@ -389,7 +389,7 @@ export function ProfileReviewModal({
                                         variant="ghost"
                                         size="icon"
                                         onClick={() => onEdit(field.key, value)}
-                                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                        className="text-muted-foreground"
                                         style={{ height: "1.75rem", width: "1.75rem" }}
                                       >
                                         <Pencil style={{ width: "0.875rem", height: "0.875rem" }} />

@@ -6,6 +6,7 @@ import {
   circlePostComments,
   circleMembers,
   userProfiles,
+  workoutPlans,
 } from "@/lib/db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { moderateText } from "@/lib/moderation";
@@ -17,7 +18,9 @@ const createCommentSchema = z.object({
     .min(1, "Comment is required")
     .max(2000, "Comment must be less than 2000 characters")
     .trim(),
-}).strict();
+  imageUrl: z.string().url().optional(),
+  workoutPlanId: z.string().uuid().optional(),
+});
 
 interface RouteParams {
   params: Promise<{ id: string; postId: string }>;
@@ -58,6 +61,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         postId: circlePostComments.postId,
         authorId: circlePostComments.authorId,
         content: circlePostComments.content,
+        imageUrl: circlePostComments.imageUrl,
+        workoutPlanId: circlePostComments.workoutPlanId,
         createdAt: circlePostComments.createdAt,
         authorName: userProfiles.displayName,
         authorImage: userProfiles.profilePicture,
@@ -68,7 +73,26 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .orderBy(desc(circlePostComments.createdAt))
       .limit(limit);
 
-    return NextResponse.json({ comments });
+    // Fetch linked workout names if any comments have workoutPlanId
+    const workoutIds = comments
+      .map((c) => c.workoutPlanId)
+      .filter((id): id is string => id !== null);
+
+    let workoutMap = new Map<string, string>();
+    if (workoutIds.length > 0) {
+      const plans = await db
+        .select({ id: workoutPlans.id, name: workoutPlans.name })
+        .from(workoutPlans)
+        .where(sql`${workoutPlans.id} IN ${workoutIds}`);
+      workoutMap = new Map(plans.map((p) => [p.id, p.name]));
+    }
+
+    const enrichedComments = comments.map((c) => ({
+      ...c,
+      workoutName: c.workoutPlanId ? workoutMap.get(c.workoutPlanId) || null : null,
+    }));
+
+    return NextResponse.json({ comments: enrichedComments });
   } catch (error) {
     console.error("Error fetching comments:", error);
     return NextResponse.json(
@@ -133,7 +157,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: errors }, { status: 400 });
     }
 
-    const { content } = validation.data;
+    const { content, imageUrl, workoutPlanId } = validation.data;
 
     // Moderate comment content
     const moderation = moderateText(content);
@@ -151,6 +175,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         postId,
         authorId: session.user.id,
         content,
+        imageUrl: imageUrl || null,
+        workoutPlanId: workoutPlanId || null,
       })
       .returning();
 
@@ -167,10 +193,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       where: eq(userProfiles.userId, session.user.id),
     });
 
+    // Get workout name if attached
+    let workoutName: string | null = null;
+    if (workoutPlanId) {
+      const plan = await db.query.workoutPlans.findFirst({
+        where: eq(workoutPlans.id, workoutPlanId),
+        columns: { name: true },
+      });
+      workoutName = plan?.name || null;
+    }
+
     return NextResponse.json({
       ...newComment,
       authorName: profile?.displayName || session.user.name,
       authorImage: profile?.profilePicture || session.user.image,
+      workoutName,
     });
   } catch (error) {
     console.error("Error creating comment:", error);

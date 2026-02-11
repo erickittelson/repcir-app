@@ -82,6 +82,9 @@ import { DeleteConfirmDialog } from "@/components/ui/confirm-dialog";
 import { AchievementModal } from "@/components/badges/achievement-modal";
 import { ConnectionsSheet } from "@/components/social/connections-sheet";
 import { toast } from "sonner";
+import { HomeGymSetup, HOME_EQUIPMENT_TO_CATALOG } from "@/components/equipment/home-gym-setup";
+import type { EquipmentDetails } from "@/lib/constants/equipment";
+import { LOCATION_TEMPLATES, HOME_EQUIPMENT } from "@/lib/constants/equipment";
 
 // Badge type for achievement modal
 interface EarnedBadge {
@@ -140,7 +143,27 @@ interface LocationData {
   id: string;
   name: string;
   type: string;
+  address?: string;
   isActive: boolean;
+  visibility: string;
+  lat?: number;
+  lng?: number;
+  equipment?: string[];
+  equipmentDetails?: {
+    dumbbells?: {
+      available: boolean;
+      type?: "fixed" | "adjustable" | "both";
+      maxWeight?: number;
+      weights?: number[];
+    };
+    barbell?: {
+      available: boolean;
+      type?: "standard" | "olympic" | "both";
+      barWeight?: number;
+      plates?: number[];
+      totalPlateWeight?: number;
+    };
+  } | null;
 }
 
 interface LimitationData {
@@ -219,6 +242,19 @@ interface ProfilePageProps {
       badges?: "public" | "circles" | "private";
       socialLinks?: "public" | "circles" | "private";
     };
+    workoutPreferences?: {
+      workoutDays?: string[];
+      workoutDuration?: number;
+      trainingFrequency?: number;
+      activityLevel?: { jobType: string; dailySteps?: number };
+    };
+    consentGiven?: boolean;
+    consentPreferences?: {
+      analytics?: boolean;
+      marketing?: boolean;
+      personalization?: boolean;
+      doNotSell?: boolean;
+    };
   } | null;
   metrics: MetricsData | null;
   limitations: LimitationData[];
@@ -265,6 +301,32 @@ const SKILL_STATUSES = [
   { value: "mastered", label: "Mastered" },
 ];
 const PR_UNITS = ["lbs", "kg", "reps", "seconds", "minutes", "miles", "km"];
+
+// Format PR value based on unit (handles time-based PRs stored as seconds)
+function formatPRDisplay(value: number, unit: string): string {
+  if (unit === "mm:ss" || unit === "min:sec") {
+    const mins = Math.floor(value / 60);
+    const secs = Math.round(value % 60);
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  }
+  if (unit === "hh:mm:ss") {
+    const hours = Math.floor(value / 3600);
+    const mins = Math.floor((value % 3600) / 60);
+    const secs = Math.round(value % 60);
+    return `${hours}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  }
+  if (unit === "lbs" || unit === "kg") return `${value} ${unit}`;
+  if (unit === "reps") return `${value} reps`;
+  if (unit === "seconds") {
+    if (value >= 60) {
+      const mins = Math.floor(value / 60);
+      const secs = Math.round(value % 60);
+      return `${mins}:${secs.toString().padStart(2, "0")}`;
+    }
+    return `${value}s`;
+  }
+  return `${value} ${unit}`;
+}
 
 // Comprehensive Skills Database
 const SKILLS_DATABASE: { name: string; category: string; difficulty: string }[] = [
@@ -640,7 +702,7 @@ function ItemCard({ children, onEdit, onDelete, itemName, itemType = "item", cla
     <>
       <div className={cn("flex items-center justify-between rounded-lg bg-muted p-3 group", className)}>
         <div className="flex-1 min-w-0">{children}</div>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1">
           {onEdit && (
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit}>
               <Pencil className="h-3.5 w-3.5" />
@@ -1104,33 +1166,347 @@ function PRModal({ open, onOpenChange, pr, onSave, onDelete }: { open: boolean; 
   );
 }
 
-function LocationModal({ open, onOpenChange, location, onSave, onDelete }: { open: boolean; onOpenChange: (open: boolean) => void; location?: LocationData | null; onSave: (data: Partial<LocationData>) => Promise<void>; onDelete?: (id: string) => Promise<void> }) {
+function HomeEquipmentInline({ location, onSave }: { location: LocationData; onSave: (id: string, equipment: string[], details: EquipmentDetails) => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [catalog, setCatalog] = useState<Array<{ id: string; name: string }>>([]);
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
+
+  // Fetch equipment catalog when editing starts
+  useEffect(() => {
+    if (editing && !catalogLoaded) {
+      fetch("/api/equipment/catalog")
+        .then(r => r.ok ? r.json() : [])
+        .then(data => { setCatalog(data); setCatalogLoaded(true); })
+        .catch(() => setCatalogLoaded(true));
+    }
+  }, [editing, catalogLoaded]);
+
+  // Convert catalog equipment IDs back to home equipment IDs for HomeGymSetup
+  const getInitialHomeEquipment = (): string[] => {
+    if (!location.equipment?.length || !catalog.length) return [];
+    const catalogNames = new Set(
+      catalog.filter(c => location.equipment!.includes(c.id)).map(c => c.name.toLowerCase())
+    );
+    return HOME_EQUIPMENT
+      .filter(he => {
+        const mappedNames = HOME_EQUIPMENT_TO_CATALOG[he.id] || [];
+        return mappedNames.some(n => catalogNames.has(n.toLowerCase()));
+      })
+      .map(he => he.id);
+  };
+
+  const handleComplete = async (homeEquipment: string[], details: EquipmentDetails) => {
+    // Convert home equipment IDs to catalog IDs
+    const catalogEquipmentNames: string[] = [];
+    homeEquipment.forEach(id => {
+      const names = HOME_EQUIPMENT_TO_CATALOG[id] || [];
+      catalogEquipmentNames.push(...names);
+    });
+    const catalogIds = catalog
+      .filter(item => catalogEquipmentNames.some(name => name.toLowerCase() === item.name.toLowerCase()))
+      .map(item => item.id);
+
+    await onSave(location.id, catalogIds, details);
+    setEditing(false);
+  };
+
+  // Build equipment summary
+  const equipmentCount = location.equipment?.length || 0;
+  const details = location.equipmentDetails;
+  const summaryParts: string[] = [];
+  if (equipmentCount > 0) summaryParts.push(`${equipmentCount} items`);
+  if (details?.dumbbells?.available && details.dumbbells.maxWeight) {
+    summaryParts.push(`DB up to ${details.dumbbells.maxWeight}lbs`);
+  }
+  if (details?.barbell?.available) {
+    const total = (details.barbell.barWeight || 45) + (details.barbell.totalPlateWeight || 0);
+    summaryParts.push(`Barbell up to ${total}lbs`);
+  }
+
+  if (editing) {
+    return (
+      <div className="mt-2 border rounded-lg p-3">
+        {catalogLoaded ? (
+          <HomeGymSetup
+            initialEquipment={getInitialHomeEquipment()}
+            initialDetails={details || {}}
+            onComplete={handleComplete}
+            onCancel={() => setEditing(false)}
+            compact
+          />
+        ) : (
+          <div className="flex items-center justify-center py-4">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      {summaryParts.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {summaryParts.join(" · ")}
+        </p>
+      )}
+      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setEditing(true)}>
+        <Dumbbell className="h-3 w-3 mr-1" />
+        {equipmentCount > 0 ? "Edit Equipment" : "Set Up Equipment"}
+      </Button>
+    </div>
+  );
+}
+
+function LocationModal({ open, onOpenChange, location, onSave, onDelete, userCity, userState }: { open: boolean; onOpenChange: (open: boolean) => void; location?: LocationData | null; onSave: (data: Partial<LocationData>) => Promise<void>; onDelete?: (id: string) => Promise<void>; userCity?: string; userState?: string }) {
   const [name, setName] = useState(location?.name || "");
   const [type, setType] = useState(location?.type || "commercial");
+  const [address, setAddress] = useState(location?.address || "");
   const [isActive, setIsActive] = useState(location?.isActive ?? true);
+  const [visibility, setVisibility] = useState(location?.visibility || "private");
+  const [lat, setLat] = useState<number | undefined>(location?.lat);
+  const [lng, setLng] = useState<number | undefined>(location?.lng);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { if (open) { setName(location?.name || ""); setType(location?.type || "commercial"); setIsActive(location?.isActive ?? true); } }, [open, location]);
+  // Home equipment state
+  const [showHomeSetup, setShowHomeSetup] = useState(false);
+  const [homeEquipment, setHomeEquipment] = useState<string[]>([]);
+  const [homeDetails, setHomeDetails] = useState<EquipmentDetails>({});
+  const [equipmentCatalog, setEquipmentCatalog] = useState<Array<{ id: string; name: string }>>([]);
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
+
+  // Place search state
+  const [placeSearch, setPlaceSearch] = useState("");
+  const [placeResults, setPlaceResults] = useState<PlaceSearchResult[]>([]);
+  const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
+  const [showPlaceResults, setShowPlaceResults] = useState(true);
+  const placeDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  const isHome = type === "home";
+
+  useEffect(() => {
+    if (open) {
+      setName(location?.name || "");
+      setType(location?.type || "commercial");
+      setAddress(location?.address || "");
+      setIsActive(location?.isActive ?? true);
+      setVisibility(location?.visibility || "private");
+      setLat(location?.lat);
+      setLng(location?.lng);
+      setPlaceSearch("");
+      setPlaceResults([]);
+      setShowHomeSetup(false);
+      setHomeEquipment([]);
+      setHomeDetails(location?.equipmentDetails || {});
+    }
+  }, [open, location]);
+
+  // Fetch equipment catalog when needed for home gym setup
+  useEffect(() => {
+    if (isHome && open && !catalogLoaded) {
+      fetch("/api/equipment/catalog")
+        .then(r => r.ok ? r.json() : [])
+        .then(data => { setEquipmentCatalog(data); setCatalogLoaded(true); })
+        .catch(() => setCatalogLoaded(true));
+    }
+  }, [isHome, open, catalogLoaded]);
+
+  // Debounced place search
+  useEffect(() => {
+    if (placeDebounceRef.current) clearTimeout(placeDebounceRef.current);
+    if (!placeSearch || placeSearch.length < 2 || !userCity) { setPlaceResults([]); return; }
+    placeDebounceRef.current = setTimeout(async () => {
+      setIsSearchingPlaces(true);
+      try {
+        const params = new URLSearchParams({ q: placeSearch, city: userCity });
+        if (userState) params.set("state", userState);
+        const res = await fetch(`/api/places/search?${params}`);
+        if (res.ok) { setPlaceResults(await res.json()); setShowPlaceResults(true); }
+      } catch { /* silent */ }
+      finally { setIsSearchingPlaces(false); }
+    }, 500);
+    return () => { if (placeDebounceRef.current) clearTimeout(placeDebounceRef.current); };
+  }, [placeSearch, userCity, userState]);
+
+  const handlePlaceSelect = (place: PlaceSearchResult) => {
+    setName(place.name);
+    setAddress(place.address);
+    setType(place.type === "crossfit" ? "crossfit" : place.type === "studio" ? "other" : "commercial");
+    setLat(place.lat);
+    setLng(place.lng);
+    setPlaceSearch("");
+    setPlaceResults([]);
+    setShowPlaceResults(false);
+  };
+
+  const handleHomeGymComplete = (equip: string[], details: EquipmentDetails) => {
+    setHomeEquipment(equip);
+    setHomeDetails(details);
+    setShowHomeSetup(false);
+  };
 
   const handleSave = async () => {
     if (!name.trim()) { toast.error("Please enter a location name"); return; }
     setSaving(true);
-    try { await onSave({ id: location?.id, name, type, isActive }); onOpenChange(false); toast.success(location ? "Location updated!" : "Location added!"); }
+    try {
+      // For home type, convert home equipment IDs to catalog IDs
+      let equipmentIds: string[] | undefined;
+      let equipmentDetailsPayload: EquipmentDetails | undefined;
+      if (isHome && homeEquipment.length > 0) {
+        const catalogEquipmentNames: string[] = [];
+        homeEquipment.forEach(id => {
+          const names = HOME_EQUIPMENT_TO_CATALOG[id] || [];
+          catalogEquipmentNames.push(...names);
+        });
+        equipmentIds = equipmentCatalog
+          .filter(item => catalogEquipmentNames.some(n => n.toLowerCase() === item.name.toLowerCase()))
+          .map(item => item.id);
+        equipmentDetailsPayload = homeDetails;
+      }
+
+      await onSave({
+        id: location?.id,
+        name,
+        type,
+        address: isHome ? undefined : address,
+        isActive,
+        visibility,
+        lat,
+        lng,
+        equipment: equipmentIds,
+        equipmentDetails: equipmentDetailsPayload,
+      });
+      onOpenChange(false);
+      toast.success(location ? "Location updated!" : "Location added!");
+    }
     catch { toast.error("Failed to save location"); }
     finally { setSaving(false); }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>{location ? "Edit Location" : "Add Location"}</DialogTitle><DialogDescription>Where do you work out?</DialogDescription></DialogHeader>
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{location ? "Edit Workout Spot" : "Add Workout Spot"}</DialogTitle>
+          <DialogDescription>Where do you train?</DialogDescription>
+        </DialogHeader>
         <div className="space-y-4 py-4">
-          <div className="space-y-2"><Label>Name</Label><Input placeholder="e.g., LA Fitness, Home Garage" value={name} onChange={(e) => setName(e.target.value)} /></div>
-          <div className="space-y-2"><Label>Type</Label><Select value={type} onValueChange={setType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{LOCATION_TYPES.map((t) => (<SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>))}</SelectContent></Select></div>
-          <div className="flex items-center justify-between"><Label>Active Location</Label><Switch checked={isActive} onCheckedChange={setIsActive} /></div>
+          {/* Name with place search */}
+          <div className="space-y-2 relative">
+            <Label>Name</Label>
+            <div className="relative">
+              <Input
+                value={name || placeSearch}
+                onChange={(e) => {
+                  if (name) { setName(""); setAddress(""); setLat(undefined); setLng(undefined); }
+                  setPlaceSearch(e.target.value);
+                  setShowPlaceResults(true);
+                }}
+                placeholder={userCity ? "Search gyms or type a name..." : "e.g., Planet Fitness, Home Garage"}
+              />
+              {isSearchingPlaces && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />}
+            </div>
+            {showPlaceResults && !name && placeResults.length > 0 && (
+              <div className="absolute z-50 mt-1 w-full rounded-lg border bg-popover shadow-md max-h-48 overflow-y-auto">
+                {placeResults.map((place, i) => (
+                  <button key={`${place.name}-${i}`} onClick={() => handlePlaceSelect(place)} className="w-full flex items-start gap-2 px-3 py-2 text-sm hover:bg-accent text-left">
+                    <Dumbbell className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <span className="font-medium block truncate">{place.name}</span>
+                      {place.address && <span className="text-xs text-muted-foreground block truncate">{place.address}</span>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Type */}
+          <div className="space-y-2">
+            <Label>Type</Label>
+            <Select value={type} onValueChange={setType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{LOCATION_TYPES.map((t) => (<SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>))}</SelectContent></Select>
+          </div>
+
+          {/* Address — hidden for home */}
+          {!isHome && (
+            <div className="space-y-2">
+              <Label>Address <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="123 Main St..." />
+            </div>
+          )}
+
+          {/* Per-location visibility */}
+          <div className="space-y-2">
+            <Label>Who can see this spot?</Label>
+            <div className="flex rounded-lg bg-muted p-1">
+              {(["private", "public"] as const).map((opt) => (
+                <button key={opt} onClick={() => setVisibility(opt)}
+                  className={cn("flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-sm font-medium transition-all",
+                    visibility === opt ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+                  {opt === "private" ? <><EyeOff className="h-3.5 w-3.5" />Private</> : <><Eye className="h-3.5 w-3.5" />Public</>}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {visibility === "public" ? "Anyone viewing your profile can see this location." : "Only you can see this location."}
+            </p>
+          </div>
+
+          {/* Safety note for non-home */}
+          {!isHome && visibility === "public" && (
+            <div className="flex gap-2 p-2 rounded-md bg-amber-500/10 border border-amber-500/20">
+              <Activity className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-600 dark:text-amber-500">Only share public locations like gyms or parks.</p>
+            </div>
+          )}
+
+          {/* Home gym equipment setup */}
+          {isHome && !location && (
+            <div className="space-y-2">
+              <Label>Equipment</Label>
+              {showHomeSetup ? (
+                <div className="border rounded-lg p-3">
+                  <HomeGymSetup
+                    initialEquipment={homeEquipment}
+                    initialDetails={homeDetails}
+                    onComplete={handleHomeGymComplete}
+                    onCancel={() => setShowHomeSetup(false)}
+                    compact
+                  />
+                </div>
+              ) : homeEquipment.length > 0 ? (
+                <div className="p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">{homeEquipment.length} items selected</span>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setShowHomeSetup(true)}>Edit</Button>
+                  </div>
+                  {homeDetails.dumbbells?.available && (
+                    <p className="text-xs text-muted-foreground">Dumbbells up to {homeDetails.dumbbells.maxWeight}lbs</p>
+                  )}
+                  {homeDetails.barbell?.available && (
+                    <p className="text-xs text-muted-foreground">Barbell up to {(homeDetails.barbell.barWeight || 45) + (homeDetails.barbell.totalPlateWeight || 0)}lbs</p>
+                  )}
+                </div>
+              ) : (
+                <Button type="button" variant="outline" className="w-full" onClick={() => setShowHomeSetup(true)}>
+                  <Dumbbell className="h-4 w-4 mr-2" />Set up home gym equipment
+                </Button>
+              )}
+              <p className="text-xs text-muted-foreground">You can also set this up later from your profile.</p>
+            </div>
+          )}
+
+          {/* Non-home equipment notice */}
+          {!isHome && (
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">
+                Equipment is auto-configured for {LOCATION_TYPES.find(t => t.value === type)?.label || type} locations (~{(LOCATION_TEMPLATES[type] || []).length} items). AI will use the standard equipment list when generating workouts for this location.
+              </p>
+            </div>
+          )}
         </div>
         <DialogFooter className="flex-col sm:flex-row gap-2">
-          {location && onDelete && <Button variant="destructive" onClick={() => { onDelete(location.id); onOpenChange(false); }} className="sm:mr-auto"><Trash2 className="h-4 w-4 mr-2" />Delete</Button>}
+          {location && onDelete && <Button variant="destructive" size="sm" onClick={() => { onDelete(location.id); onOpenChange(false); }} className="sm:mr-auto"><Trash2 className="h-4 w-4 mr-2" />Delete</Button>}
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
         </DialogFooter>
@@ -1511,7 +1887,7 @@ function VisibilityBadge({
 }) {
   const options = [
     { value: "public" as const, label: "🌐 Public", description: "Anyone can see" },
-    { value: "circles" as const, label: "👥 Rallies", description: "Rally members only" },
+    { value: "circles" as const, label: "👥 Circles", description: "Circle members only" },
     { value: "private" as const, label: "🔒 Private", description: "Only you" },
   ];
 
@@ -1667,6 +2043,176 @@ const LOCATION_VISIBILITY_OPTIONS_MODAL = [
   { value: "full", label: "Full details", description: "Shows workout spot" },
 ];
 
+interface PlaceSearchResult {
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  type: string;
+}
+
+function WorkoutSpotSearch({
+  city,
+  state,
+  workoutLocation,
+  workoutLocationAddress,
+  workoutLocationType,
+  onLocationChange,
+  onAddressChange,
+  onTypeChange,
+  onLatLngChange,
+}: {
+  city: string;
+  state: string;
+  workoutLocation: string;
+  workoutLocationAddress: string;
+  workoutLocationType: string;
+  onLocationChange: (v: string) => void;
+  onAddressChange: (v: string) => void;
+  onTypeChange: (v: string) => void;
+  onLatLngChange: (lat: number | null, lng: number | null) => void;
+}) {
+  const [placeSearch, setPlaceSearch] = useState("");
+  const [placeResults, setPlaceResults] = useState<PlaceSearchResult[]>([]);
+  const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
+  const [showResults, setShowResults] = useState(true);
+  const placeDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (placeDebounceRef.current) clearTimeout(placeDebounceRef.current);
+    if (!placeSearch || placeSearch.length < 2 || !city) {
+      setPlaceResults([]);
+      return;
+    }
+    placeDebounceRef.current = setTimeout(async () => {
+      setIsSearchingPlaces(true);
+      try {
+        const params = new URLSearchParams({ q: placeSearch, city });
+        if (state) params.set("state", state);
+        const res = await fetch(`/api/places/search?${params}`);
+        if (res.ok) {
+          setPlaceResults(await res.json());
+          setShowResults(true);
+        }
+      } catch { /* silent */ }
+      finally { setIsSearchingPlaces(false); }
+    }, 500);
+    return () => { if (placeDebounceRef.current) clearTimeout(placeDebounceRef.current); };
+  }, [placeSearch, city, state]);
+
+  const handlePlaceSelect = (place: PlaceSearchResult) => {
+    onLocationChange(place.name);
+    onAddressChange(place.address);
+    onTypeChange(place.type === "crossfit" ? "gym" : place.type);
+    onLatLngChange(place.lat, place.lng);
+    setPlaceSearch("");
+    setPlaceResults([]);
+    setShowResults(false);
+  };
+
+  const hasCity = !!city;
+
+  return (
+    <div className="space-y-3 pl-4 border-l-2 border-brand/30">
+      <div className="space-y-2 relative">
+        <Label>Location Name</Label>
+        <div className="relative">
+          <Input
+            value={workoutLocation || placeSearch}
+            onChange={(e) => {
+              if (workoutLocation) {
+                onLocationChange("");
+                onAddressChange("");
+                onLatLngChange(null, null);
+              }
+              setPlaceSearch(e.target.value);
+              setShowResults(true);
+            }}
+            placeholder={hasCity ? "Search gyms, CrossFit boxes..." : "Enter a city first to search"}
+          />
+          {isSearchingPlaces && (
+            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+          )}
+        </div>
+        {/* Place search results */}
+        {showResults && !workoutLocation && placeResults.length > 0 && (
+          <div className="absolute z-50 mt-1 w-[calc(100%-1rem)] rounded-lg border bg-popover shadow-md max-h-48 overflow-y-auto">
+            {placeResults.map((place, i) => (
+              <button
+                key={`${place.name}-${i}`}
+                onClick={() => handlePlaceSelect(place)}
+                className="w-full flex items-start gap-2 px-3 py-2 text-sm hover:bg-accent text-left"
+              >
+                <Dumbbell className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <span className="font-medium block truncate">{place.name}</span>
+                  {place.address && (
+                    <span className="text-xs text-muted-foreground block truncate">{place.address}</span>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+        {!hasCity && placeSearch.length >= 2 && (
+          <p className="text-xs text-muted-foreground">Set your city above to search for nearby gyms</p>
+        )}
+      </div>
+      <div className="space-y-2">
+        <Label>Address (optional)</Label>
+        <Input
+          value={workoutLocationAddress}
+          onChange={(e) => onAddressChange(e.target.value)}
+          placeholder="123 Main St..."
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Type</Label>
+        <Select value={workoutLocationType} onValueChange={onTypeChange}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="gym">Gym</SelectItem>
+            <SelectItem value="crossfit">CrossFit Box</SelectItem>
+            <SelectItem value="park">Park</SelectItem>
+            <SelectItem value="studio">Studio</SelectItem>
+            <SelectItem value="home_gym">Home Gym</SelectItem>
+            <SelectItem value="other">Other</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}
+
+// Reverse lookup: state full name → abbreviation
+const US_STATES_REVERSE: Record<string, string> = Object.fromEntries(
+  Object.entries(US_STATES_MAP).map(([abbr, name]) => [name.toLowerCase(), abbr])
+);
+
+function parseCompositeCity(raw: string): { city: string; state: string; country: string } {
+  if (!raw || !raw.includes(",")) return { city: raw, state: "", country: "" };
+  const parts = raw.split(",").map(s => s.trim());
+  if (parts.length >= 3) {
+    const stateAbbr = US_STATES_REVERSE[parts[1].toLowerCase()] || "";
+    return { city: parts[0], state: stateAbbr, country: parts[2] };
+  }
+  if (parts.length === 2) {
+    const stateAbbr = US_STATES_REVERSE[parts[1].toLowerCase()] || "";
+    return { city: parts[0], state: stateAbbr, country: stateAbbr ? "United States" : "" };
+  }
+  return { city: raw, state: "", country: "" };
+}
+
+interface CitySearchResult {
+  id: number;
+  label: string;
+  city: string;
+  state: string;
+  country: string;
+}
+
 function LocationEditModal({
   open,
   onOpenChange,
@@ -1680,211 +2226,151 @@ function LocationEditModal({
     city: string;
     state: string;
     country: string;
-    workoutLocation: string | null;
-    workoutLocationAddress: string | null;
-    workoutLocationType: string | null;
     locationVisibility: string;
   }) => Promise<void>;
 }) {
-  const [city, setCity] = useState(profile?.city || "");
-  const [state, setState] = useState(profile?.state || "");
-  const [country, setCountry] = useState(profile?.country || "US");
-  const [showWorkoutSpot, setShowWorkoutSpot] = useState(!!profile?.workoutLocation);
-  const [workoutLocation, setWorkoutLocation] = useState(profile?.workoutLocation || "");
-  const [workoutLocationAddress, setWorkoutLocationAddress] = useState(profile?.workoutLocationAddress || "");
-  const [workoutLocationType, setWorkoutLocationType] = useState(profile?.workoutLocationType || "gym");
+  const initLocation = () => {
+    const rawCity = profile?.city || "";
+    const rawState = profile?.state || "";
+    if (rawCity && !rawState && rawCity.includes(",")) {
+      return parseCompositeCity(rawCity);
+    }
+    return { city: rawCity, state: rawState, country: profile?.country || "" };
+  };
+
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [country, setCountry] = useState("");
+  const [citySearch, setCitySearch] = useState("");
+  const [cityResults, setCityResults] = useState<CitySearchResult[]>([]);
+  const [isSearchingCity, setIsSearchingCity] = useState(false);
+  const cityDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [locationVisibility, setLocationVisibility] = useState(profile?.locationVisibility || "city");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    if (cityDebounceRef.current) clearTimeout(cityDebounceRef.current);
+    if (!citySearch || citySearch.length < 3) { setCityResults([]); return; }
+    cityDebounceRef.current = setTimeout(async () => {
+      setIsSearchingCity(true);
+      try {
+        const res = await fetch(`/api/geocode/search?q=${encodeURIComponent(citySearch)}`);
+        if (res.ok) setCityResults(await res.json());
+      } catch { /* silent */ }
+      finally { setIsSearchingCity(false); }
+    }, 400);
+    return () => { if (cityDebounceRef.current) clearTimeout(cityDebounceRef.current); };
+  }, [citySearch]);
+
+  useEffect(() => {
     if (open) {
-      setCity(profile?.city || "");
-      setState(profile?.state || "");
-      setCountry(profile?.country || "US");
-      setShowWorkoutSpot(!!profile?.workoutLocation);
-      setWorkoutLocation(profile?.workoutLocation || "");
-      setWorkoutLocationAddress(profile?.workoutLocationAddress || "");
-      setWorkoutLocationType(profile?.workoutLocationType || "gym");
+      const loc = initLocation();
+      setCity(loc.city);
+      setState(loc.state);
+      setCountry(loc.country);
+      setCitySearch("");
+      setCityResults([]);
       setLocationVisibility(profile?.locationVisibility || "city");
     }
   }, [open, profile]);
 
+  const handleCitySelect = (result: CitySearchResult) => {
+    setCity(result.city);
+    const stateAbbr = US_STATES_REVERSE[result.state.toLowerCase()] || result.state;
+    setState(stateAbbr);
+    setCountry(result.country);
+    setCitySearch("");
+    setCityResults([]);
+  };
+
   const handleSave = async () => {
-    if (city && !state) {
-      toast.error("Please select a state");
-      return;
-    }
+    if (city && !state) { toast.error("Please select a state"); return; }
     setSaving(true);
     try {
-      await onSave({
-        city,
-        state,
-        country,
-        workoutLocation: showWorkoutSpot ? workoutLocation : null,
-        workoutLocationAddress: showWorkoutSpot ? workoutLocationAddress : null,
-        workoutLocationType: showWorkoutSpot ? workoutLocationType : null,
-        locationVisibility,
-      });
+      await onSave({ city, state, country, locationVisibility });
       onOpenChange(false);
       toast.success("Location saved!");
-    } catch {
-      toast.error("Failed to save location");
-    } finally {
-      setSaving(false);
-    }
+    } catch { toast.error("Failed to save location"); }
+    finally { setSaving(false); }
   };
 
   const handleClear = async () => {
     setSaving(true);
     try {
-      await onSave({
-        city: "",
-        state: "",
-        country: "US",
-        workoutLocation: null,
-        workoutLocationAddress: null,
-        workoutLocationType: null,
-        locationVisibility: "city",
-      });
+      await onSave({ city: "", state: "", country: "US", locationVisibility: "city" });
       onOpenChange(false);
       toast.success("Location removed");
-    } catch {
-      toast.error("Failed to remove location");
-    } finally {
-      setSaving(false);
-    }
+    } catch { toast.error("Failed to remove location"); }
+    finally { setSaving(false); }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
-            Edit Location
-          </DialogTitle>
-          <DialogDescription>Manage your location and privacy settings</DialogDescription>
+          <DialogTitle className="flex items-center gap-2"><MapPin className="h-5 w-5" />Edit Location</DialogTitle>
+          <DialogDescription>Your city and privacy settings</DialogDescription>
         </DialogHeader>
         <div className="space-y-6 py-4">
-          {/* Basic Location */}
           <div className="space-y-4">
-            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Your Location</h4>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
+            <div className="space-y-3">
+              <div className="space-y-2 relative">
                 <Label>City {city && <span className="text-destructive">*</span>}</Label>
-                <Input
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  placeholder="Austin, Dallas..."
-                />
+                <div className="relative">
+                  <Input
+                    value={city || citySearch}
+                    onChange={(e) => { setCity(""); setState(""); setCountry(""); setCitySearch(e.target.value); }}
+                    placeholder="Start typing your city..."
+                  />
+                  {isSearchingCity && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />}
+                </div>
+                {!city && cityResults.length > 0 && (
+                  <div className="absolute z-50 mt-1 w-full rounded-lg border bg-popover shadow-md">
+                    {cityResults.map((result) => {
+                      const display = [result.city, result.state, result.country].filter(Boolean).join(", ") || result.label;
+                      return (
+                        <button key={result.id} onClick={() => handleCitySelect(result)} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent text-left">
+                          <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" /><span>{display}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-              <div className="space-y-2">
-                <Label>State {city && <span className="text-destructive">*</span>}</Label>
-                <Select value={state} onValueChange={setState}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select state" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {US_STATES_LIST.map((s) => (
-                      <SelectItem key={s.value} value={s.value}>
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>State {city && <span className="text-destructive">*</span>}</Label>
+                  <Select value={state} onValueChange={setState}><SelectTrigger><SelectValue placeholder="Select state" /></SelectTrigger><SelectContent>{US_STATES_LIST.map((s) => (<SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>))}</SelectContent></Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Country</Label>
+                  <Input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="United States" />
+                </div>
               </div>
             </div>
-          </div>
-
-          {/* Workout Spot */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
-              <div className="space-y-0.5">
-                <Label className="font-medium">Add Workout Spot</Label>
-                <p className="text-xs text-muted-foreground">Share where you work out</p>
-              </div>
-              <Switch checked={showWorkoutSpot} onCheckedChange={setShowWorkoutSpot} />
-            </div>
-
-            {showWorkoutSpot && (
-              <div className="space-y-3 pl-4 border-l-2 border-brand/30">
-                <div className="space-y-2">
-                  <Label>Location Name</Label>
-                  <Input
-                    value={workoutLocation}
-                    onChange={(e) => setWorkoutLocation(e.target.value)}
-                    placeholder="24 Hour Fitness - Downtown"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Address (optional)</Label>
-                  <Input
-                    value={workoutLocationAddress}
-                    onChange={(e) => setWorkoutLocationAddress(e.target.value)}
-                    placeholder="123 Main St..."
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Type</Label>
-                  <Select value={workoutLocationType} onValueChange={setWorkoutLocationType}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="gym">Gym</SelectItem>
-                      <SelectItem value="park">Park</SelectItem>
-                      <SelectItem value="studio">Studio</SelectItem>
-                      <SelectItem value="home_gym">Home Gym</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Privacy Controls */}
           <div className="space-y-3">
-            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Who can see your location?</h4>
+            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Who can see your city?</h4>
             <div className="grid grid-cols-2 gap-2">
               {LOCATION_VISIBILITY_OPTIONS_MODAL.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setLocationVisibility(option.value)}
-                  className={cn(
-                    "p-3 rounded-lg border text-left transition-colors",
-                    locationVisibility === option.value
-                      ? "border-brand bg-brand/10"
-                      : "border-muted hover:border-brand/50"
-                  )}
-                >
+                <button key={option.value} type="button" onClick={() => setLocationVisibility(option.value)}
+                  className={cn("p-3 rounded-lg border text-left transition-colors", locationVisibility === option.value ? "border-brand bg-brand/10" : "border-muted hover:border-brand/50")}>
                   <span className="font-medium text-sm">{option.label}</span>
                   <p className="text-xs text-muted-foreground">{option.description}</p>
                 </button>
               ))}
             </div>
           </div>
-
-          {/* Safety Warning */}
-          <div className="flex gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
-            <Activity className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-amber-600 dark:text-amber-500">
-              Only share public workout locations like gyms or parks. Never share your home address for safety.
-            </p>
-          </div>
         </div>
         <DialogFooter className="flex-col sm:flex-row gap-2">
           {(profile?.city || profile?.state) && (
-            <Button variant="ghost" onClick={handleClear} disabled={saving} className="text-destructive hover:text-destructive">
-              Remove Location
-            </Button>
+            <Button variant="ghost" onClick={handleClear} disabled={saving} className="text-destructive hover:text-destructive">Remove Location</Button>
           )}
           <div className="flex gap-2 ml-auto">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? "Saving..." : "Save"}
-            </Button>
+            <Button onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
           </div>
         </DialogFooter>
       </DialogContent>
@@ -2232,8 +2718,21 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
     router.refresh();
   };
   const handleDeletePR = async (id: string) => { await fetch(`/api/user/prs/${id}`, { method: "DELETE" }); router.refresh(); };
-  const handleSaveLocation = async (data: Partial<LocationData>) => { const response = await fetch(data.id ? `/api/locations/${data.id}` : "/api/locations", { method: data.id ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); if (!response.ok) throw new Error(); router.refresh(); };
+  const handleSaveLocation = async (data: Partial<LocationData>) => {
+    const payload: Record<string, unknown> = { ...data };
+    // Map lat/lng to API field names
+    if (data.lat !== undefined) { payload.workoutLocationLat = data.lat; delete payload.lat; }
+    if (data.lng !== undefined) { payload.workoutLocationLng = data.lng; delete payload.lng; }
+    const response = await fetch(data.id ? `/api/locations/${data.id}` : "/api/locations", { method: data.id ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    if (!response.ok) throw new Error();
+    router.refresh();
+  };
   const handleDeleteLocation = async (id: string) => { await fetch(`/api/locations/${id}`, { method: "DELETE" }); router.refresh(); };
+  const handleSaveLocationEquipment = async (locationId: string, equipment: string[], details: EquipmentDetails) => {
+    const response = await fetch(`/api/locations/${locationId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ equipment, equipmentDetails: details }) });
+    if (!response.ok) throw new Error();
+    router.refresh();
+  };
   const handleSaveLimitation = async (data: Partial<LimitationData>) => { const response = await fetch(data.id ? `/api/user/limitations/${data.id}` : "/api/user/limitations", { method: data.id ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); if (!response.ok) throw new Error(); router.refresh(); };
   const handleDeleteLimitation = async (id: string) => { await fetch(`/api/user/limitations/${id}`, { method: "DELETE" }); router.refresh(); };
   const handleSaveMetrics = async (data: MetricsData) => { const response = await fetch("/api/user/metrics", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); if (!response.ok) throw new Error(); router.refresh(); };
@@ -2280,9 +2779,6 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
     city: string;
     state: string;
     country: string;
-    workoutLocation: string | null;
-    workoutLocationAddress: string | null;
-    workoutLocationType: string | null;
     locationVisibility: string;
   }) => {
     const response = await fetch("/api/user/profile", {
@@ -2409,7 +2905,7 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
               <button
                 onClick={() => profilePicInputRef.current?.click()}
                 disabled={uploadingProfilePic}
-                className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute bottom-0 right-0 flex items-center justify-center bg-black/60 rounded-full h-7 w-7 shadow-sm"
               >
                 {uploadingProfilePic ? (
                   <Loader2 className="h-5 w-5 text-white animate-spin" />
@@ -2572,47 +3068,55 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
           </div>
 
           {/* Profile Visibility - last item */}
-          <div className="mt-3 p-3 bg-muted/50 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <Shield className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Profile Visibility</span>
-              </div>
-              <Switch
-                checked={profile?.visibility === "public"}
-                onCheckedChange={async (checked) => {
-                  try {
-                    const res = await fetch("/api/user/profile", {
-                      method: "PUT",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ visibility: checked ? "public" : "private" }),
-                    });
-                    if (res.ok) {
-                      router.refresh();
-                      toast.success(checked ? "Profile is now public" : "Profile is now private");
-                    }
-                  } catch {
-                    toast.error("Failed to update privacy settings");
-                  }
-                }}
-              />
+          <div className="mt-3 p-4 rounded-lg border border-border bg-card">
+            <div className="flex items-center gap-2 mb-3">
+              <Shield className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-semibold">Profile Visibility</span>
             </div>
-            <div className={cn(
-              "text-xs p-2 rounded-md",
-              profile?.visibility === "public" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
-            )}>
-              {profile?.visibility === "public" ? (
-                <div>
-                  <p className="font-medium">🌐 Public Profile</p>
-                  <p className="mt-0.5">Anyone with your link can view your handle, age, bio, sports, PRs, and achievements.</p>
-                </div>
-              ) : (
-                <div>
-                  <p className="font-medium">🔒 Private Profile</p>
-                  <p className="mt-0.5">Only members of your circles can see your full profile. Others see just your name and photo.</p>
-                </div>
-              )}
+            {/* Segmented toggle */}
+            <div className="flex gap-2 mb-3">
+              {(["private", "public"] as const).map((option) => {
+                const isActive = (profile?.visibility || "private") === option;
+                return (
+                  <button
+                    key={option}
+                    onClick={async () => {
+                      if (isActive) return;
+                      try {
+                        const res = await fetch("/api/user/profile", {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ visibility: option }),
+                        });
+                        if (res.ok) {
+                          router.refresh();
+                          toast.success(option === "public" ? "Profile is now public" : "Profile is now private");
+                        }
+                      } catch {
+                        toast.error("Failed to update privacy settings");
+                      }
+                    }}
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all border-2",
+                      isActive
+                        ? "border-brand bg-brand/10 text-foreground"
+                        : "border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"
+                    )}
+                  >
+                    {option === "private" ? (
+                      <><EyeOff className="h-4 w-4" /> Private</>
+                    ) : (
+                      <><Eye className="h-4 w-4" /> Public</>
+                    )}
+                  </button>
+                );
+              })}
             </div>
+            <p className="text-xs text-muted-foreground">
+              {profile?.visibility === "public"
+                ? "Anyone with your link can view your handle, age, bio, sports, PRs, and achievements."
+                : "Only members of your circles can see your full profile. Others see just your name and photo."}
+            </p>
           </div>
 
         </CardContent>
@@ -2632,7 +3136,7 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
           <Card className="h-full hover:border-brand/50 transition-colors cursor-pointer">
             <CardContent className="pt-4 pb-3 text-center">
               <p className="text-2xl font-bold">{circles.length}</p>
-              <p className="text-xs text-muted-foreground">Rallies</p>
+              <p className="text-xs text-muted-foreground">Circles</p>
             </CardContent>
           </Card>
         </button>
@@ -2656,12 +3160,7 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
           </Card>
         </button>
         <button
-          onClick={() => {
-            setOpenSections((prev) => prev.includes("badges") ? prev : [...prev, "badges"]);
-            setTimeout(() => {
-              document.querySelector('[data-section="badges"]')?.scrollIntoView({ behavior: "smooth", block: "center" });
-            }, 100);
-          }}
+          onClick={() => router.push("/you/achievements")}
           className="text-left"
         >
           <Card className="h-full hover:border-brand/50 transition-colors cursor-pointer">
@@ -2756,6 +3255,15 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
                     </div>
                   </div>
                 ))}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full mt-2 text-xs text-muted-foreground"
+                  onClick={() => router.push("/you/achievements")}
+                >
+                  View All Achievements
+                  <ChevronRight className="h-3 w-3 ml-1" />
+                </Button>
               </div>
             </AccordionContent>
           </AccordionItem>
@@ -2773,14 +3281,84 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
           <AccordionContent className="pb-4">
             <div className="space-y-4 pt-2">
               <div className="flex items-center justify-between"><span className="text-sm font-medium">Metrics</span><Button variant="ghost" size="sm" onClick={() => setMetricsModal(true)}><Edit className="h-3.5 w-3.5 mr-1" />Edit</Button></div>
-              <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="grid grid-cols-4 gap-2 text-center">
                 <div className="rounded-lg bg-muted p-3"><p className="text-lg font-bold">{metrics?.weight || "—"}</p><p className="text-xs text-muted-foreground">lbs</p></div>
                 <div className="rounded-lg bg-muted p-3"><p className="text-lg font-bold">{metrics?.height ? `${Math.floor(metrics.height / 12)}'${metrics.height % 12}"` : "—"}</p><p className="text-xs text-muted-foreground">height</p></div>
                 <div className="rounded-lg bg-muted p-3"><p className="text-lg font-bold">{metrics?.bodyFat ? `${metrics.bodyFat}%` : "—"}</p><p className="text-xs text-muted-foreground">body fat</p></div>
+                <div className="rounded-lg bg-muted p-3"><p className="text-lg font-bold capitalize">{metrics?.fitnessLevel ? metrics.fitnessLevel.slice(0, 3) : "—"}</p><p className="text-xs text-muted-foreground">level</p></div>
               </div>
+              {/* Training Schedule */}
+              {(profile?.workoutPreferences?.workoutDays?.length || profile?.workoutPreferences?.workoutDuration || profile?.workoutPreferences?.trainingFrequency) && (
+                <div className="space-y-2">
+                  <span className="text-sm font-medium">Training Schedule</span>
+                  <div className="flex flex-wrap gap-2">
+                    {profile?.workoutPreferences?.trainingFrequency && (
+                      <Badge variant="outline" className="text-xs">{profile.workoutPreferences.trainingFrequency}x/week</Badge>
+                    )}
+                    {profile?.workoutPreferences?.workoutDuration && (
+                      <Badge variant="outline" className="text-xs">
+                        {profile.workoutPreferences.workoutDuration <= 30 ? "15–30 min" :
+                         profile.workoutPreferences.workoutDuration <= 60 ? "45–60 min" :
+                         profile.workoutPreferences.workoutDuration <= 90 ? "75–90 min" : "Varies"}
+                      </Badge>
+                    )}
+                    {profile?.workoutPreferences?.activityLevel?.jobType && (
+                      <Badge variant="outline" className="text-xs capitalize">{profile.workoutPreferences.activityLevel.jobType.replace("_", " ")} activity</Badge>
+                    )}
+                  </div>
+                  {profile?.workoutPreferences?.workoutDays && profile.workoutPreferences.workoutDays.length > 0 && (
+                    <div className="flex gap-1.5">
+                      {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, i) => {
+                        const dayIds = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+                        const isActive = profile?.workoutPreferences?.workoutDays?.includes(dayIds[i]);
+                        return (
+                          <div key={day} className={cn("w-9 h-9 rounded-lg flex items-center justify-center text-xs font-medium", isActive ? "bg-brand/20 text-brand border border-brand/30" : "bg-muted text-muted-foreground")}>
+                            {day.slice(0, 1)}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="flex items-center justify-between"><span className="text-sm font-medium">Limitations</span><Button variant="ghost" size="sm" onClick={() => setLimitationModal({ open: true })}><Plus className="h-3.5 w-3.5 mr-1" />Add</Button></div>
               {limitations.length === 0 ? <p className="text-sm text-muted-foreground">No limitations added</p> : (
                 <div className="space-y-2">{limitations.map((l) => (<ItemCard key={l.id} onEdit={() => setLimitationModal({ open: true, limitation: l })} onDelete={() => handleDeleteLimitation(l.id)} itemName={l.condition || l.type} itemType="limitation"><div className="flex items-center gap-2"><span className="text-sm font-medium">{l.condition || l.type}</span>{l.bodyPart && <span className="text-xs text-muted-foreground">({l.bodyPart})</span>}{l.severity && <Badge variant="outline" className="text-xs ml-auto">{l.severity}</Badge>}</div></ItemCard>))}</div>
+              )}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Goals */}
+        <AccordionItem value="goals" data-section="goals" className="!border rounded-xl px-4">
+          <AccordionTrigger className="hover:no-underline py-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand/20"><Target className="h-4 w-4 text-brand" /></div>
+              <span className="font-medium text-sm">Goals</span>
+              {goals.length > 0 && <Badge variant="secondary" className="ml-auto mr-2 text-xs">{goals.length}</Badge>}
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pb-4">
+            <div className="space-y-2 pt-2">
+              {goals.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No goals set yet</p>
+              ) : (
+                goals.map((g) => (
+                  <div key={g.id} className="flex items-center gap-3 rounded-lg bg-muted p-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand/10 shrink-0">
+                      <Target className="h-4 w-4 text-brand" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate capitalize">{g.title.replace(/_/g, " ")}</p>
+                      {g.targetValue && g.unit && (
+                        <p className="text-xs text-muted-foreground">Target: {g.targetValue} {g.unit}</p>
+                      )}
+                    </div>
+                    {g.category && (
+                      <Badge variant="outline" className="text-xs capitalize shrink-0">{g.category}</Badge>
+                    )}
+                  </div>
+                ))
               )}
             </div>
           </AccordionContent>
@@ -2811,7 +3389,7 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
               )}
               <div className="flex items-center justify-between pt-2"><span className="text-sm font-medium">Personal Records</span><Button variant="ghost" size="sm" onClick={() => setPrModal({ open: true })}><Plus className="h-3.5 w-3.5 mr-1" />Add</Button></div>
               {personalRecords.length === 0 ? <p className="text-sm text-muted-foreground">No PRs added</p> : (
-                <div className="space-y-2">{personalRecords.map((pr) => (<ItemCard key={pr.id} onEdit={() => setPrModal({ open: true, pr })} onDelete={() => handleDeletePR(pr.id)} itemName={pr.exerciseName} itemType="personal record"><div className="flex items-center justify-between"><span className="text-sm font-medium">{pr.exerciseName}</span><span className="text-sm font-bold text-brand">{pr.value} {pr.unit}</span></div></ItemCard>))}</div>
+                <div className="space-y-2">{personalRecords.map((pr) => (<ItemCard key={pr.id} onEdit={() => setPrModal({ open: true, pr })} onDelete={() => handleDeletePR(pr.id)} itemName={pr.exerciseName} itemType="personal record"><div className="flex items-center justify-between"><span className="text-sm font-medium">{pr.exerciseName}</span><span className="text-sm font-bold text-brand">{formatPRDisplay(pr.value, pr.unit)}</span></div></ItemCard>))}</div>
               )}
             </div>
           </AccordionContent>
@@ -2849,26 +3427,48 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
           <AccordionTrigger className="hover:no-underline py-3">
             <div className="flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted"><Dumbbell className="h-4 w-4" /></div>
-              <span className="font-medium text-sm">Equipment & Gyms</span>
+              <span className="font-medium text-sm">Workout Spots</span>
               {locations.length > 0 && <Badge variant="secondary" className="ml-auto mr-2 text-xs">{locations.length}</Badge>}
             </div>
           </AccordionTrigger>
           <AccordionContent className="pb-4">
             <div className="space-y-4 pt-2">
-              <div className="flex items-center justify-between"><span className="text-sm font-medium">Your Locations</span><Button variant="ghost" size="sm" onClick={() => setLocationModal({ open: true })}><Plus className="h-3.5 w-3.5 mr-1" />Add</Button></div>
-              {locations.length === 0 ? <p className="text-sm text-muted-foreground">No locations added</p> : (
-                <div className="space-y-2">{locations.map((l) => (<ItemCard key={l.id} onEdit={() => setLocationModal({ open: true, location: l })} onDelete={() => handleDeleteLocation(l.id)} itemName={l.name} itemType="location"><div className="flex items-center gap-2"><span className="text-sm font-medium">{l.name}</span><Badge variant="secondary" className="text-xs capitalize">{LOCATION_TYPES.find((t) => t.value === l.type)?.label || l.type}</Badge>{l.isActive && <Badge className="text-xs ml-auto bg-success/20 text-success">Active</Badge>}</div></ItemCard>))}</div>
+              <div className="flex items-center justify-between"><span className="text-sm font-medium">Your Workout Spots</span><Button variant="ghost" size="sm" onClick={() => setLocationModal({ open: true })}><Plus className="h-3.5 w-3.5 mr-1" />Add</Button></div>
+              {locations.length === 0 ? <p className="text-sm text-muted-foreground">Add where you work out — gyms, parks, CrossFit boxes</p> : (
+                <div className="space-y-2">
+                  {locations.map((l) => {
+                    const isHome = l.type === "home";
+                    const templateEquipment = !isHome ? (LOCATION_TEMPLATES[l.type] || []) : [];
+                    return (
+                      <ItemCard key={l.id} onEdit={() => setLocationModal({ open: true, location: l })} onDelete={() => handleDeleteLocation(l.id)} itemName={l.name} itemType="location">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium">{l.name}</span>
+                          <Badge variant="secondary" className="text-xs capitalize">{LOCATION_TYPES.find((t) => t.value === l.type)?.label || l.type}</Badge>
+                          {l.visibility === "public" ? <Badge className="text-xs bg-brand/20 text-brand"><Eye className="h-2.5 w-2.5 mr-0.5" />Public</Badge> : <Badge variant="outline" className="text-xs"><EyeOff className="h-2.5 w-2.5 mr-0.5" />Private</Badge>}
+                        </div>
+                        {l.address && !isHome && <p className="text-xs text-muted-foreground mt-1">{l.address}</p>}
+                        {isHome ? (
+                          <HomeEquipmentInline location={l} onSave={handleSaveLocationEquipment} />
+                        ) : (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {templateEquipment.length > 0 ? `Full gym equipment (~${templateEquipment.length} items)` : "Custom equipment"}
+                          </p>
+                        )}
+                      </ItemCard>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </AccordionContent>
         </AccordionItem>
 
-        {/* Rallies */}
+        {/* Circles */}
         <AccordionItem value="circles" data-section="circles" className="!border rounded-xl px-4">
           <AccordionTrigger className="hover:no-underline py-3">
             <div className="flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-energy/20"><Users className="h-4 w-4 text-energy" /></div>
-              <span className="font-medium text-sm">Rallies</span>
+              <span className="font-medium text-sm">Circles</span>
               <Badge variant="secondary" className="ml-auto mr-2 text-xs">{circles.length}</Badge>
             </div>
           </AccordionTrigger>
@@ -2885,7 +3485,7 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </button>
               ))}
-              <Button variant="outline" size="sm" className="w-full" onClick={() => router.push("/discover?tab=circles")}><Plus className="mr-1 h-4 w-4" />Join or Create Rally</Button>
+              <Button variant="outline" size="sm" className="w-full" onClick={() => router.push("/discover?tab=circles")}><Plus className="mr-1 h-4 w-4" />Join or Create Circle</Button>
             </div>
           </AccordionContent>
         </AccordionItem>
@@ -2916,28 +3516,67 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
                 </div>
               </div>
 
-              {/* Security Actions */}
+              {/* Security */}
               <div className="space-y-2">
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Security</span>
                 <div className="space-y-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="w-full justify-start" 
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start"
                     onClick={() => setPasswordResetModal(true)}
                   >
                     <Key className="mr-2 h-4 w-4" />
                     Reset Password
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="w-full justify-start"
-                    onClick={() => router.push("/account/privacy")}
-                  >
-                    <Shield className="mr-2 h-4 w-4" />
-                    Privacy Settings
-                  </Button>
+                </div>
+              </div>
+
+              {/* Privacy & AI */}
+              <div className="space-y-2">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Privacy</span>
+                <div className="space-y-2">
+                  {[
+                    { key: "personalization" as const, label: "AI Coaching", desc: "Personalized workouts & advice" },
+                    { key: "analytics" as const, label: "Analytics", desc: "Help us improve the app" },
+                    { key: "marketing" as const, label: "Marketing emails", desc: "Tips & feature updates" },
+                  ].map((item) => {
+                    const isChecked = profile?.consentPreferences?.[item.key] ?? false;
+                    return (
+                      <div key={item.key} className="flex items-center justify-between gap-4 rounded-lg border p-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium leading-none">{item.label}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{item.desc}</p>
+                        </div>
+                        <Switch
+                          className="scale-125 origin-right data-[state=checked]:bg-brand shrink-0"
+                          checked={isChecked}
+                          onCheckedChange={async (checked) => {
+                            const prefs = {
+                              analytics: profile?.consentPreferences?.analytics ?? false,
+                              marketing: profile?.consentPreferences?.marketing ?? false,
+                              personalization: profile?.consentPreferences?.personalization ?? false,
+                              doNotSell: profile?.consentPreferences?.doNotSell ?? false,
+                              [item.key]: checked,
+                            };
+                            try {
+                              const res = await fetch("/api/user/consent", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify(prefs),
+                              });
+                              if (res.ok) {
+                                toast.success(`${item.label} ${checked ? "enabled" : "disabled"}`);
+                                router.refresh();
+                              }
+                            } catch {
+                              toast.error("Failed to update privacy settings");
+                            }
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -2965,7 +3604,7 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
       {/* ==================== MODALS ==================== */}
       <SkillModal open={skillModal.open} onOpenChange={(open) => setSkillModal({ open, skill: open ? skillModal.skill : null })} skill={skillModal.skill} onSave={handleSaveSkill} onDelete={handleDeleteSkill} />
       <PRModal open={prModal.open} onOpenChange={(open) => setPrModal({ open, pr: open ? prModal.pr : null })} pr={prModal.pr} onSave={handleSavePR} onDelete={handleDeletePR} />
-      <LocationModal open={locationModal.open} onOpenChange={(open) => setLocationModal({ open, location: open ? locationModal.location : null })} location={locationModal.location} onSave={handleSaveLocation} onDelete={handleDeleteLocation} />
+      <LocationModal open={locationModal.open} onOpenChange={(open) => setLocationModal({ open, location: open ? locationModal.location : null })} location={locationModal.location} onSave={handleSaveLocation} onDelete={handleDeleteLocation} userCity={profile?.city} userState={profile?.state} />
       <LimitationModal open={limitationModal.open} onOpenChange={(open) => setLimitationModal({ open, limitation: open ? limitationModal.limitation : null })} limitation={limitationModal.limitation} onSave={handleSaveLimitation} onDelete={handleDeleteLimitation} />
       <MetricsModal open={metricsModal} onOpenChange={setMetricsModal} metrics={metrics} onSave={handleSaveMetrics} />
       <SportModal open={sportModal.open} onOpenChange={(open) => setSportModal({ open, sport: open ? sportModal.sport : null })} sport={sportModal.sport} onSave={handleSaveSport} onDelete={handleDeleteSport} />

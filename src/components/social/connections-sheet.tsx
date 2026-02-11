@@ -134,7 +134,7 @@ function ConnectionItem({
         size="sm"
         onClick={onRemove}
         disabled={isRemoving}
-        className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+        className="text-muted-foreground hover:text-destructive"
       >
         {isRemoving ? (
           <Loader2 className="h-4 w-4 animate-spin" />

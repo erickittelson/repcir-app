@@ -217,7 +217,7 @@ interface DiscoverPageProps {
 const TABS: Array<{ id: TabType; label: string; icon: React.ElementType }> = [
   { id: "workouts", label: "Workouts", icon: Dumbbell },
   { id: "challenges", label: "Challenges", icon: Trophy },
-  { id: "circles", label: "Rallies", icon: Users },
+  { id: "circles", label: "Circles", icon: Users },
 ];
 
 type SortOption = "popular" | "newest" | "rating" | "duration";
@@ -1045,7 +1045,7 @@ export function DiscoverPage({
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="h-8 w-8 text-muted-foreground"
                             onClick={() => copyShareLink("workout", workout.id, workout.title)}
                           >
                             <LinkIcon className="h-4 w-4" />
@@ -1283,7 +1283,7 @@ export function DiscoverPage({
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="h-8 w-8 text-muted-foreground"
                             onClick={() => copyShareLink("challenge", challenge.id, challenge.name)}
                           >
                             <LinkIcon className="h-4 w-4" />
@@ -1320,10 +1320,10 @@ export function DiscoverPage({
           </div>
         )}
 
-        {/* ==================== RALLIES TAB ==================== */}
+        {/* ==================== CIRCLES TAB ==================== */}
         {activeTab === "circles" && (
           <div className="space-y-3">
-            {/* Create Rally CTA */}
+            {/* Create Circle CTA */}
             <Card className="bg-gradient-to-br from-energy/10 to-brand/10 border-energy/20">
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
@@ -1331,7 +1331,7 @@ export function DiscoverPage({
                     <Users className="h-5 w-5 text-energy" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-medium">Start Your Rally</p>
+                    <p className="font-medium">Start Your Circle</p>
                     <p className="text-xs text-muted-foreground">Create a group & invite via handle or link</p>
                   </div>
                   <Button size="sm" onClick={() => setShowCreateCircle(true)}>
@@ -1428,7 +1428,7 @@ export function DiscoverPage({
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="h-8 w-8 text-muted-foreground"
                             onClick={() => copyShareLink("circle", circle.id, circle.name)}
                           >
                             <LinkIcon className="h-4 w-4" />
@@ -1461,7 +1461,7 @@ export function DiscoverPage({
         )}
       </div>
 
-      {/* Create Rally Experience */}
+      {/* Create Circle Experience */}
       <CreateCircleExperience open={showCreateCircle} onOpenChange={setShowCreateCircle} />
       
       {/* Detail Sheets */}

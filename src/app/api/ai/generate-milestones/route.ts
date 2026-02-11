@@ -6,7 +6,7 @@ import { goals, milestones } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getMemberContext, buildSystemPrompt, aiModel, getTaskOptions } from "@/lib/ai";
 import { checkAIPersonalizationConsent, createConsentRequiredResponse } from "@/lib/consent";
-import { applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit";
+import { applyDistributedRateLimit as applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit-redis";
 
 export const runtime = "nodejs";
 export const maxDuration = 60; // 1 minute for milestone generation
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     }
 
     // Apply rate limiting
-    const rateLimitResult = applyRateLimit(
+    const rateLimitResult = await applyRateLimit(
       `ai-milestones:${session.user.id}`,
       RATE_LIMITS.aiGeneration
     );

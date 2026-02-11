@@ -2,18 +2,16 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Calendar } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { OnboardingActions } from "./onboarding-actions";
 import type { SectionProps } from "./types";
 
 const FREQUENCIES = [
-  { value: 1, label: "1 day", description: "Just starting out" },
-  { value: 2, label: "2 days", description: "Light training" },
-  { value: 3, label: "3 days", description: "Moderate" },
-  { value: 4, label: "4 days", description: "Active" },
-  { value: 5, label: "5 days", description: "Dedicated" },
-  { value: 6, label: "6+ days", description: "Intense" },
+  { value: 3, display: "2–3x", description: "Getting started" },
+  { value: 4, display: "3–4x", description: "Building consistency" },
+  { value: 5, display: "4–5x", description: "Committed" },
+  { value: 6, display: "6x", description: "All in" },
 ];
 
 const ACTIVITY_LEVELS = [
@@ -24,7 +22,7 @@ const ACTIVITY_LEVELS = [
   { id: "very_active", label: "Extremely Active", description: "Labor intensive, 15,000+ steps/day", emoji: "🔥", steps: 17000 },
 ];
 
-export function ActivitySection({ data, onUpdate, onNext }: SectionProps) {
+export function ActivitySection({ data, onUpdate, onNext, onBack }: SectionProps) {
   const [step, setStep] = useState<"frequency" | "activity">("frequency");
   const [frequency, setFrequency] = useState(data.trainingFrequency || 0);
   const [activityLevel, setActivityLevel] = useState(data.activityLevel?.jobType || "");
@@ -53,7 +51,7 @@ export function ActivitySection({ data, onUpdate, onNext }: SectionProps) {
   };
 
   return (
-    <div className="h-full flex flex-col items-center justify-center p-6">
+    <div className="min-h-full flex flex-col items-center justify-start py-6 px-6">
       <div className="max-w-md mx-auto w-full">
         {step === "frequency" && (
           <motion.div
@@ -74,33 +72,30 @@ export function ActivitySection({ data, onUpdate, onNext }: SectionProps) {
               We&apos;ll create a plan that fits your schedule
             </p>
 
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              {FREQUENCIES.map(({ value, description }) => (
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              {FREQUENCIES.map(({ value, display, description }) => (
                 <button
                   key={value}
                   onClick={() => handleFrequencySelect(value)}
                   className={cn(
-                    "p-4 rounded-xl border-2 transition-all",
+                    "p-5 rounded-xl border-2 transition-all",
                     "hover:border-brand hover:bg-brand/5",
                     frequency === value
                       ? "border-brand bg-brand/10"
                       : "border-border bg-card"
                   )}
                 >
-                  <span className="text-2xl font-bold block">{value}</span>
+                  <span className="text-2xl font-bold block">{display}</span>
                   <span className="text-xs text-muted-foreground">{description}</span>
                 </button>
               ))}
             </div>
 
-            <Button
-              onClick={handleFrequencyContinue}
-              disabled={frequency === 0}
-              className="w-full h-12 text-lg bg-energy-gradient hover:opacity-90 rounded-xl group disabled:opacity-50"
-            >
-              Continue
-              <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-            </Button>
+            <OnboardingActions
+              onNext={handleFrequencyContinue}
+              onBack={onBack}
+              nextDisabled={frequency === 0}
+            />
           </motion.div>
         )}
 
@@ -142,14 +137,11 @@ export function ActivitySection({ data, onUpdate, onNext }: SectionProps) {
               ))}
             </div>
 
-            <Button
-              onClick={handleActivityContinue}
-              disabled={!activityLevel}
-              className="w-full h-12 text-lg bg-energy-gradient hover:opacity-90 rounded-xl group disabled:opacity-50"
-            >
-              Continue
-              <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-            </Button>
+            <OnboardingActions
+              onNext={handleActivityContinue}
+              onBack={onBack}
+              nextDisabled={!activityLevel}
+            />
           </motion.div>
         )}
       </div>

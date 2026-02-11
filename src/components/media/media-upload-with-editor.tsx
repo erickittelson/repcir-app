@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { PhotoEditor } from "./photo-editor";
 import { haptics } from "@/lib/haptics";
+import { compressImage } from "@/lib/image-compress";
 
 export interface UploadedMedia {
   file: File;
@@ -191,11 +192,13 @@ export function MediaUploadWithEditor({
     [editingIndex, media, autoUpload, uploadFile, onChange, onUpload]
   );
 
-  const handleEditorSkip = useCallback(() => {
+  const handleEditorSkip = useCallback(async () => {
     if (pendingFile) {
-      const previewUrl = URL.createObjectURL(pendingFile);
+      // Compress when skipping editor since no canvas processing happens
+      const compressed = await compressImage(pendingFile);
+      const previewUrl = URL.createObjectURL(compressed);
       const newMedia: UploadedMedia = {
-        file: pendingFile,
+        file: compressed,
         previewUrl,
       };
 
@@ -292,20 +295,20 @@ export function MediaUploadWithEditor({
                   </div>
                 )}
 
-                {/* Hover overlay */}
+                {/* Action buttons */}
                 {!uploadingIndexes.has(index) && (
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  <div className="absolute top-1 right-1 flex gap-1">
                     <button
                       onClick={() => handleEdit(index)}
-                      className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white hover:bg-white/30 transition-colors"
+                      className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white hover:bg-black/80 transition-colors shadow-sm"
                     >
-                      <Pencil className="h-4 w-4" />
+                      <Pencil className="h-3 w-3" />
                     </button>
                     <button
                       onClick={() => handleRemove(index)}
-                      className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white hover:bg-red-500/50 transition-colors"
+                      className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white hover:bg-red-500/80 transition-colors shadow-sm"
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-3 w-3" />
                     </button>
                   </div>
                 )}

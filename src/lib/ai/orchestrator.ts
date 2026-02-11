@@ -119,7 +119,8 @@ export async function streamWithSemanticContext(options: {
   openaiConversationId?: string;
   /** Previous response ID for chaining responses */
   previousResponseId?: string;
-  onFinish?: (params: { text: string; response?: { id?: string } }) => Promise<void>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onFinish?: (params: { text: string; response?: { id?: string }; usage?: any }) => Promise<void>;
 }) {
   const {
     messages,
@@ -186,9 +187,9 @@ export async function streamWithSemanticContext(options: {
     tools,
     stopWhen: stepCountIs(maxSteps),
     onFinish: onFinish
-      ? async ({ text, response }) => onFinish({ text, response })
+      ? async ({ text, response, usage }) => onFinish({ text, response, usage })
       : undefined,
-    ...providerOptions,
+    providerOptions,
   });
 
   return result;
@@ -251,13 +252,14 @@ export async function generateWithSemanticContext(options: {
   });
 
   // Generate the response with multi-step tool calling
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result = await generateText({
     model: aiModel,
     system: enhancedPrompt,
     messages,
     tools,
     stopWhen: stepCountIs(maxSteps),
-    ...providerOptions,
+    providerOptions: providerOptions as any,
   });
 
   return result;

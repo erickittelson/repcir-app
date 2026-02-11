@@ -8,58 +8,21 @@ import { Label } from "@/components/ui/label";
 import { Check, ChevronLeft, Dumbbell, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Home gym equipment options (matching onboarding)
-export const HOME_EQUIPMENT = [
-  { id: "bodyweight", label: "Bodyweight Only", emoji: "🏃" },
-  { id: "dumbbells", label: "Dumbbells", emoji: "🏋️" },
-  { id: "barbell", label: "Barbell & Plates", emoji: "🔩" },
-  { id: "squat_rack", label: "Squat Rack/Stand", emoji: "🏗️" },
-  { id: "bench", label: "Bench", emoji: "🛋️" },
-  { id: "pull_up_bar", label: "Pull-up Bar", emoji: "🔝" },
-  { id: "kettlebells", label: "Kettlebells", emoji: "🔔" },
-  { id: "resistance_bands", label: "Resistance Bands", emoji: "🎗️" },
-  { id: "cables", label: "Cable Machine", emoji: "⚙️" },
-  { id: "cardio", label: "Cardio Equipment", emoji: "🚴" },
-  { id: "trx", label: "TRX/Suspension", emoji: "🪢" },
-  { id: "rings", label: "Gymnastic Rings", emoji: "⭕" },
-  { id: "box", label: "Plyo Box", emoji: "📦" },
-  { id: "medicine_ball", label: "Medicine Ball", emoji: "🏀" },
-  { id: "jump_rope", label: "Jump Rope", emoji: "🪢" },
-  { id: "foam_roller", label: "Foam Roller", emoji: "🧻" },
-];
+// Re-export shared constants for backward compatibility
+export {
+  HOME_EQUIPMENT,
+  HOME_EQUIPMENT_TO_CATALOG,
+  DUMBBELL_OPTIONS,
+  PLATE_OPTIONS,
+} from "@/lib/constants/equipment";
+export type { EquipmentDetails } from "@/lib/constants/equipment";
 
-// Dumbbell weight options
-export const DUMBBELL_OPTIONS = [
-  { label: "Light (5-25 lbs)", max: 25, weights: [5, 10, 15, 20, 25] },
-  { label: "Medium (5-50 lbs)", max: 50, weights: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50] },
-  { label: "Heavy (5-75 lbs)", max: 75, weights: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75] },
-  { label: "Full Set (5-100+ lbs)", max: 100, weights: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100] },
-  { label: "Adjustable (specify max)", max: 0, weights: [] },
-];
-
-// Plate configuration options
-export const PLATE_OPTIONS = [
-  { label: "Basic (up to 135 lbs)", totalWeight: 90, plates: [2.5, 5, 10, 25, 45] },
-  { label: "Intermediate (up to 225 lbs)", totalWeight: 180, plates: [2.5, 5, 10, 25, 35, 45] },
-  { label: "Advanced (up to 315 lbs)", totalWeight: 270, plates: [2.5, 5, 10, 25, 35, 45] },
-  { label: "Full Home Gym (up to 405+ lbs)", totalWeight: 360, plates: [2.5, 5, 10, 25, 35, 45] },
-];
-
-export interface EquipmentDetails {
-  dumbbells?: {
-    available: boolean;
-    type?: "fixed" | "adjustable" | "both";
-    maxWeight?: number;
-    weights?: number[];
-  };
-  barbell?: {
-    available: boolean;
-    type?: "standard" | "olympic";
-    barWeight?: number;
-    plates?: number[];
-    totalPlateWeight?: number;
-  };
-}
+import {
+  HOME_EQUIPMENT,
+  DUMBBELL_OPTIONS,
+  PLATE_OPTIONS,
+} from "@/lib/constants/equipment";
+import type { EquipmentDetails } from "@/lib/constants/equipment";
 
 type Step = "equipment" | "weights";
 
@@ -330,22 +293,3 @@ export function HomeGymSetup({
   );
 }
 
-// Map home equipment IDs to catalog equipment names for saving
-export const HOME_EQUIPMENT_TO_CATALOG: Record<string, string[]> = {
-  bodyweight: [],
-  dumbbells: ["Dumbbells"],
-  barbell: ["Barbell", "Weight Plates"],
-  squat_rack: ["Squat Rack"],
-  bench: ["Flat Bench", "Adjustable Bench"],
-  pull_up_bar: ["Pull-up Bar"],
-  kettlebells: ["Kettlebells"],
-  resistance_bands: ["Resistance Bands"],
-  cables: ["Cable Machine"],
-  cardio: ["Treadmill", "Stationary Bike", "Rowing Machine"],
-  trx: ["TRX"],
-  rings: ["Gymnastics Rings"],
-  box: ["Plyo Box"],
-  medicine_ball: ["Medicine Ball"],
-  jump_rope: ["Jump Rope"],
-  foam_roller: ["Foam Roller"],
-};

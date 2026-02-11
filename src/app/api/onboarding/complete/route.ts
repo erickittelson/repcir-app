@@ -27,6 +27,7 @@ import {
   userMetrics,
   userLocations,
   userSports,
+  userSkills,
   onboardingProgress,
 } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -47,6 +48,8 @@ const onboardingDataSchema = z.object({
   heightInches: z.number().optional(),
   weight: z.number().optional(),
   city: z.string().optional(),
+  state: z.string().optional(),
+  country: z.string().optional(),
   bodyFatPercentage: z.number().optional(),
   targetWeight: z.number().optional(),
   fitnessLevel: z.enum(["beginner", "intermediate", "advanced", "elite"]).optional(),
@@ -100,6 +103,13 @@ const onboardingDataSchema = z.object({
   })).optional(),
   workoutDuration: z.number().optional(),
   gymLocations: z.array(z.string()).optional(),
+  commercialGymDetails: z.array(z.object({
+    locationType: z.string(),
+    name: z.string(),
+    address: z.string().optional(),
+    lat: z.number().optional(),
+    lng: z.number().optional(),
+  })).optional(),
   equipmentAccess: z.array(z.string()).optional(),
   equipmentDetails: z.object({
     dumbbells: z.object({
@@ -181,12 +191,15 @@ export async function POST(request: Request) {
         })
         .where(eq(circleMembers.id, memberId));
     } else {
-      // Create a personal circle for the user
+      // Create a personal "My Training" circle for the user
       const [newCircle] = await db
         .insert(circles)
         .values({
-          name: `${userName}'s Circle`,
+          name: "My Training",
           description: "Your personal workout space",
+          isSystemCircle: true,
+          visibility: "private",
+          joinType: "invite_only",
         })
         .returning();
 
@@ -239,6 +252,8 @@ export async function POST(request: Request) {
         birthMonth: birthMonth || null,
         birthYear: birthYear || null,
         city: data.city || null,
+        state: data.state || null,
+        country: data.country || null,
         visibility: data.profileVisibility || "private",
         workoutPreferences,
       })
@@ -250,6 +265,8 @@ export async function POST(request: Request) {
           birthMonth: birthMonth || null,
           birthYear: birthYear || null,
           city: data.city || null,
+          state: data.state || null,
+          country: data.country || null,
           visibility: data.profileVisibility || "private",
           workoutPreferences,
           updatedAt: new Date(),
@@ -306,17 +323,22 @@ export async function POST(request: Request) {
 
     // Check for commercial gym types
     const commercialTypes = ["commercial", "crossfit", "school"];
+    const gymDetailsMap = new Map(
+      (data.commercialGymDetails || []).map(d => [d.locationType, d])
+    );
     for (const locationType of commercialTypes) {
       if (gymLocations.includes(locationType)) {
-        const locationNames: Record<string, string> = {
+        const defaultNames: Record<string, string> = {
           commercial: "Commercial Gym",
           crossfit: "CrossFit Box",
           school: "School/University Gym",
         };
+        const gymDetail = gymDetailsMap.get(locationType);
         locationEntries.push({
           userId: session.user.id,
-          name: locationNames[locationType],
+          name: gymDetail?.name || defaultNames[locationType],
           type: locationType,
+          address: gymDetail?.address || null,
           isActive: !gymLocations.includes("home"), // Active if no home gym
           equipment: ["full_gym"], // Commercial gyms have everything
           equipmentDetails: {},
@@ -445,6 +467,29 @@ export async function POST(request: Request) {
         status: "active",
         aiGenerated: true,
       });
+    }
+
+    // Save skills from currentMaxes to user_skills table
+    if (data.currentMaxes && data.currentMaxes.length > 0) {
+      const skillEntries = data.currentMaxes
+        .filter((max) => max.unit === "skill")
+        .map((max) => ({
+          userId: session.user.id,
+          name: max.exercise,
+          category: "calisthenics" as const,
+          currentStatus: "achieved" as const,
+          allTimeBestStatus: "achieved" as const,
+          allTimeBestDate: new Date(),
+        }));
+
+      if (skillEntries.length > 0) {
+        for (const entry of skillEntries) {
+          await db
+            .insert(userSkills)
+            .values(entry)
+            .onConflictDoNothing();
+        }
+      }
     }
 
     // Create personal records from currentMaxes (new format)

@@ -1,13 +1,13 @@
 # Repcir Brand Guidelines
-## Family Fitness App | Brand Strategy Package
+## Accountability Fitness App | Brand Strategy Package
 
 ---
 
 ## 1. Brand Positioning Statement
 
-**For families and close friends who believe fitness is earned through discipline and accountability**, Repcir is the premium family fitness app **that transforms your inner circle into a high-performance unit**. Unlike casual fitness apps that reward participation trophies and streaks of mediocrity, **Repcir is built on the principle that effort is the standard**—creating a space where effort is the only currency, accountability is mutual, and excellence is the standard.
+**For anyone serious enough to let their circle hold them accountable**, Repcir is the accountability fitness app **that transforms your crew into a high-performance unit**. Unlike casual fitness apps that reward participation trophies and streaks of mediocrity, **Repcir is built on the principle that effort is the standard**—creating a space where effort is the only currency, accountability is mutual, and excellence is the standard.
 
-**We exist for the families who understand:** the dinner table is earned, not given.
+**We exist for those who understand:** results are earned, not given.
 
 ---
 
@@ -89,8 +89,8 @@ SOFT ←————————————————[REPCIR]—————�
 
 | DO | DON'T |
 |----|-------|
-| "This isn't for everyone. That's the point." | "Welcome to the #1 family fitness app!" |
-| "Your circle will hold you accountable. Ready?" | "Get ready for FUN family workouts!" |
+| "This isn't for everyone. That's the point." | "Welcome to the #1 fitness app for everyone!" |
+| "Your circle will hold you accountable. Ready?" | "Get ready for FUN group workouts!" |
 | "Effort is the standard. You're here. Good start." | "You're going to LOVE this journey!" |
 
 #### Push Notifications
@@ -105,7 +105,7 @@ SOFT ←————————————————[REPCIR]—————�
 
 1. **Brevity is respect** — Say it in fewer words. Time is earned.
 2. **Statements over questions** — We don't ask "Ready to work out?" We state "It's time."
-3. **Collective language** — "Your cohort" > "Your family" > "You"
+3. **Collective language** — "Your cohort" > "Your circle" > "You"
 4. **Earned warmth** — Praise is rare and therefore meaningful
 5. **No exclamation inflation** — One exclamation point per month, maximum
 
@@ -277,7 +277,7 @@ A stylized arrangement that subtly references Roman numerals, nodding to the Lat
 
 ### Logo Don'ts
 
-- No literal family silhouettes (too soft)
+- No literal group silhouettes (too soft)
 - No hearts (too casual/emotional)
 - No flexing muscles (too aggressive/bro)
 - No generic swooshes (too corporate)
@@ -306,7 +306,7 @@ A stylized arrangement that subtly references Roman numerals, nodding to the Lat
 ### Elevator Pitch
 
 **10-Second Version:**
-> "Repcir turns your family and close friends into an accountability unit. It's a premium fitness app built on one belief: effort is the standard. If you're ready to earn your results alongside the people who matter most, this is your app."
+> "Repcir turns your circle into an accountability unit. It's a premium fitness app built on one belief: effort is the standard. If you're ready to earn your results alongside the people who hold you accountable, this is your app."
 
 **30-Second Version:**
 > "Most fitness apps treat you like an individual island—tracking your steps, celebrating your streaks, letting you quit in private. Repcir is different. We're built for families and close friend groups who believe excellence is earned, not given. Your cohort sees when you train. They see when you don't. The accountability is real, the standards are high, and the results are shared. This isn't for everyone. That's exactly the point."
@@ -316,11 +316,11 @@ A stylized arrangement that subtly references Roman numerals, nodding to the Lat
 #### For Parents
 
 **Primary Message:**
-> "Raise hunters, not passengers. Repcir helps your family build the discipline that lasts longer than any youth sports season."
+> "Raise the standard, not the excuses. Repcir helps your circle build the discipline that lasts longer than any New Year's resolution."
 
 **Supporting Messages:**
 - Your kids will learn that consistency beats motivation
-- Family accountability teaches more than any lecture
+- Circle accountability teaches more than any lecture
 - The habits they build with you become the standards they keep forever
 
 **Tone:** Aspirational parenting, legacy-minded, anti-helicopter
@@ -340,10 +340,10 @@ A stylized arrangement that subtly references Roman numerals, nodding to the Lat
 #### For Families (General)
 
 **Primary Message:**
-> "The family that earns together, grows together. Repcir turns fitness into your shared standard."
+> "The circle that earns together, grows together. Repcir turns fitness into your shared standard."
 
 **Supporting Messages:**
-- Replace "family fun time" with family earned time
+- Replace "fun time" with earned time
 - Build traditions around effort, not just activities
 - Your cohort is your first team—make it your best one
 
@@ -370,7 +370,7 @@ A stylized arrangement that subtly references Roman numerals, nodding to the Lat
          ┌───────────────┼───────────────┐
          │               │               │
     EMOTIONAL       FUNCTIONAL       ASPIRATIONAL
-    "You're not     "Real-time       "Build a family
+    "You're not     "Real-time       "Build a circle
     alone in the    accountability   legacy of
     pursuit"        with your        discipline"
                     inner circle"
@@ -408,7 +408,7 @@ showing up.
 
 This is a fitness app that expects it.
 
-You'll train with your cohort—your family,
+You'll train with your cohort—your circle,
 your close friends, the people who won't
 let you quit.
 

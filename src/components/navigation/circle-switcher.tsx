@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, Check, Plus, Settings, Users } from "lucide-react";
+import { ChevronDown, Check, Plus, Users, Dumbbell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CreateCircleExperience } from "@/components/circle";
 
@@ -23,6 +23,7 @@ interface Circle {
   role: string;
   memberId: string;
   imageUrl?: string;
+  isSystemCircle?: boolean;
 }
 
 interface CircleSwitcherProps {
@@ -38,7 +39,10 @@ export function CircleSwitcher({
 }: CircleSwitcherProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  const [showCreateRally, setShowCreateRally] = useState(false);
+  const [showCreateCircle, setShowCreateCircle] = useState(false);
+
+  const personalCircle = circles.find((c) => c.isSystemCircle);
+  const groupCircles = circles.filter((c) => !c.isSystemCircle);
 
   const handleSwitch = async (circleId: string) => {
     if (circleId === activeCircle?.id) return;
@@ -70,31 +74,27 @@ export function CircleSwitcher({
       .slice(0, 2);
   };
 
-  // Display "Rally" instead of "Circle" for branding
-  const getDisplayName = (name: string) => {
-    return name.replace(/Circle/gi, "Rally");
-  };
-
   const getRoleBadge = (role: string) => {
     if (role === "owner") return "Owner";
     if (role === "admin") return "Admin";
     return null;
   };
 
+  // No circles at all — show create button
   if (!activeCircle) {
     return (
       <>
         <Button
           variant="outline"
           className={cn("gap-2", className)}
-          onClick={() => setShowCreateRally(true)}
+          onClick={() => setShowCreateCircle(true)}
         >
           <Plus className="h-4 w-4" />
-          Create Rally
+          Create Circle
         </Button>
         <CreateCircleExperience
-          open={showCreateRally}
-          onOpenChange={setShowCreateRally}
+          open={showCreateCircle}
+          onOpenChange={setShowCreateCircle}
           onComplete={() => {
             router.refresh();
           }}
@@ -102,6 +102,8 @@ export function CircleSwitcher({
       </>
     );
   }
+
+  const isPersonalActive = activeCircle.isSystemCircle;
 
   return (
     <DropdownMenu>
@@ -114,71 +116,104 @@ export function CircleSwitcher({
           )}
           disabled={isLoading}
         >
-          <Avatar className="h-7 w-7">
-            <AvatarImage src={activeCircle.imageUrl} />
-            <AvatarFallback className="bg-brand/20 text-xs text-brand">
-              {getInitials(activeCircle.name)}
-            </AvatarFallback>
-          </Avatar>
+          {isPersonalActive ? (
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand/20">
+              <Dumbbell className="h-4 w-4 text-brand" />
+            </div>
+          ) : (
+            <Avatar className="h-7 w-7">
+              <AvatarImage src={activeCircle.imageUrl} />
+              <AvatarFallback className="bg-brand/20 text-xs text-brand">
+                {getInitials(activeCircle.name)}
+              </AvatarFallback>
+            </Avatar>
+          )}
           <span className="max-w-[120px] truncate font-medium">
-            {getDisplayName(activeCircle.name)}
+            {isPersonalActive ? "My Training" : activeCircle.name}
           </span>
           <ChevronDown className="h-4 w-4 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
-        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-          Switch Rally
-        </DropdownMenuLabel>
-        {circles.map((circle) => {
-          const isActive = circle.id === activeCircle.id;
-          const roleBadge = getRoleBadge(circle.role);
-
-          return (
+        {/* My Training — always first */}
+        {personalCircle && (
+          <>
             <DropdownMenuItem
-              key={circle.id}
-              onClick={() => handleSwitch(circle.id)}
+              onClick={() => handleSwitch(personalCircle.id)}
               className="gap-3 py-2"
             >
-              <Avatar className="h-8 w-8">
-                <AvatarImage src={circle.imageUrl} />
-                <AvatarFallback className="bg-brand/20 text-xs text-brand">
-                  {getInitials(circle.name)}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="truncate font-medium">{getDisplayName(circle.name)}</span>
-                  {roleBadge && (
-                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                      {roleBadge}
-                    </Badge>
-                  )}
-                </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand/20">
+                <Dumbbell className="h-4 w-4 text-brand" />
               </div>
-              {isActive && <Check className="h-4 w-4 text-brand" />}
+              <div className="flex-1 min-w-0">
+                <span className="font-medium">My Training</span>
+              </div>
+              {personalCircle.id === activeCircle.id && (
+                <Check className="h-4 w-4 text-brand" />
+              )}
             </DropdownMenuItem>
-          );
-        })}
+            {groupCircles.length > 0 && <DropdownMenuSeparator />}
+          </>
+        )}
+
+        {/* Group Circles */}
+        {groupCircles.length > 0 && (
+          <>
+            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+              Circles
+            </DropdownMenuLabel>
+            {groupCircles.map((circle) => {
+              const isActive = circle.id === activeCircle.id;
+              const roleBadge = getRoleBadge(circle.role);
+
+              return (
+                <DropdownMenuItem
+                  key={circle.id}
+                  onClick={() => handleSwitch(circle.id)}
+                  className="gap-3 py-2"
+                >
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={circle.imageUrl} />
+                    <AvatarFallback className="bg-brand/20 text-xs text-brand">
+                      {getInitials(circle.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-medium">{circle.name}</span>
+                      {roleBadge && (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                          {roleBadge}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  {isActive && <Check className="h-4 w-4 text-brand" />}
+                </DropdownMenuItem>
+              );
+            })}
+          </>
+        )}
+
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => router.push("/you?section=circles")}
           className="gap-3"
         >
           <Users className="h-4 w-4" />
-          Manage Rallies
+          Manage Circles
         </DropdownMenuItem>
         <DropdownMenuItem
-          onClick={() => setShowCreateRally(true)}
+          onClick={() => setShowCreateCircle(true)}
           className="gap-3"
         >
           <Plus className="h-4 w-4" />
-          Create New Rally
+          Create New Circle
         </DropdownMenuItem>
       </DropdownMenuContent>
       <CreateCircleExperience
-        open={showCreateRally}
-        onOpenChange={setShowCreateRally}
+        open={showCreateCircle}
+        onOpenChange={setShowCreateCircle}
         onComplete={() => {
           router.refresh();
         }}

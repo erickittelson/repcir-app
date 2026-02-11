@@ -281,27 +281,6 @@ export default function EquipmentPage() {
     }
   };
 
-  const handleSetActive = async (id: string) => {
-    try {
-      const response = await fetch(`/api/locations/${id}/activate`, {
-        method: "POST",
-      });
-
-      if (response.ok) {
-        toast.success("Active location updated");
-        fetchData();
-      } else {
-        toast.error("Failed to update active location");
-      }
-    } catch (error) {
-      console.error("Failed to set active location:", error);
-      toast.error("Failed to update active location");
-    }
-  };
-
-  const activeLocation = locations.find((l) => l.isActive);
-  const ActiveIcon = activeLocation ? LOCATION_ICONS[activeLocation.type] : MapPin;
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -325,48 +304,6 @@ export default function EquipmentPage() {
         </Button>
       </div>
 
-      {/* Active Location Selector */}
-      {locations.length > 0 && (
-        <Card>
-          <CardContent className="py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-                  <ActiveIcon className="w-5 h-5 text-primary-foreground" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Active Location</p>
-                  <p className="font-medium">
-                    {activeLocation?.name || "No active location"}
-                  </p>
-                </div>
-              </div>
-              <Select
-                value={activeLocation?.id || ""}
-                onValueChange={(id) => handleSetActive(id)}
-              >
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Select location" />
-                </SelectTrigger>
-                <SelectContent>
-                  {locations.map((location) => {
-                    const Icon = LOCATION_ICONS[location.type];
-                    return (
-                      <SelectItem key={location.id} value={location.id}>
-                        <div className="flex items-center gap-2">
-                          <Icon className="h-4 w-4" />
-                          {location.name}
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Locations Grid */}
       {locations.length === 0 ? (
         <Card>
@@ -388,8 +325,6 @@ export default function EquipmentPage() {
             <LocationCard
               key={location.id}
               location={location}
-              isActive={location.isActive}
-              onSetActive={() => handleSetActive(location.id)}
               onEdit={() => openEditDialog(location)}
               onDelete={() => setDeleteTarget(location)}
               equipmentCount={location.equipment.length}

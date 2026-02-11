@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 /**
- * Proxy for the Family Workout App (Next.js 16+)
+ * Proxy for the Repcir App (Next.js 16+)
  *
  * Handles:
  * - URL rewrites (e.g., /@handle -> /u/handle)

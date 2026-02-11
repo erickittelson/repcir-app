@@ -69,6 +69,7 @@ import {
   CheckCircle,
   Info,
   Brain,
+  MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -125,7 +126,7 @@ interface WorkoutExercise {
   restSecondsInterval?: number | null;
 }
 
-interface FamilyMember {
+interface CircleMember {
   id: string;
   name: string;
   avatar?: string;
@@ -267,7 +268,7 @@ function SortableExerciseItem({
                 title="Click for exercise details"
               >
                 {item.exercise.name}
-                <Info className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary opacity-50 group-hover:opacity-100" />
+                <Info className="h-3.5 w-3.5 text-muted-foreground" />
               </button>
               <div className="flex gap-1 mt-1 flex-wrap">
                 <Badge variant="outline" className="text-xs">
@@ -562,7 +563,7 @@ export default function WorkoutBuilderPage() {
     startTime?: number;
     elapsedSeconds?: number;
   }>({ phase: "idle", message: "" });
-  const [members, setMembers] = useState<FamilyMember[]>([]);
+  const [members, setMembers] = useState<CircleMember[]>([]);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [workoutFocus, setWorkoutFocus] = useState("auto");
   const [customFocus, setCustomFocus] = useState("");
@@ -600,6 +601,10 @@ export default function WorkoutBuilderPage() {
   const [reasoningLevel, setReasoningLevel] = useState<"none" | "quick" | "standard" | "deep" | "max">("standard");
   const [showInteractiveGenerator, setShowInteractiveGenerator] = useState(false);
 
+  // Location state
+  const [userLocations, setUserLocations] = useState<Array<{ id: string; name: string; type: string }>>([]);
+  const [selectedLocationId, setSelectedLocationId] = useState<string | undefined>();
+
   // Exercise detail modal
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
 
@@ -620,6 +625,8 @@ export default function WorkoutBuilderPage() {
   useEffect(() => {
     fetchExercises();
     fetchMembers();
+    // Fetch user's workout locations for the location selector
+    fetch("/api/locations").then(r => r.ok ? r.json() : []).then(locs => setUserLocations(locs)).catch(() => {});
     if (editId) {
       fetchPlan(editId);
     } else {
@@ -792,7 +799,7 @@ export default function WorkoutBuilderPage() {
 
   const handleAIGenerate = async () => {
     if (selectedMembers.length === 0) {
-      toast.error("Please select at least one family member");
+      toast.error("Please select at least one circle member");
       return;
     }
 
@@ -862,6 +869,7 @@ export default function WorkoutBuilderPage() {
           includeWarmup,
           includeCooldown,
           reasoningLevel,
+          locationId: selectedLocationId,
         }),
         signal: controller.signal,
       });
@@ -994,7 +1002,7 @@ export default function WorkoutBuilderPage() {
   // Start interactive generation
   const startInteractiveGeneration = () => {
     if (selectedMembers.length === 0) {
-      toast.error("Please select at least one family member");
+      toast.error("Please select at least one circle member");
       return;
     }
     setAiDialogOpen(false);
@@ -1348,7 +1356,7 @@ export default function WorkoutBuilderPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="h-6 w-6 text-muted-foreground"
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedExercise(exercise);
@@ -1359,7 +1367,7 @@ export default function WorkoutBuilderPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="h-6 w-6 text-muted-foreground"
                             onClick={(e) => {
                               e.stopPropagation();
                               addExercise(exercise);
@@ -1431,7 +1439,7 @@ export default function WorkoutBuilderPage() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    className="h-5 w-5 text-muted-foreground"
                                     onClick={() => setSelectedExercise(exercise)}
                                   >
                                     <Info className="h-3 w-3" />
@@ -1439,7 +1447,7 @@ export default function WorkoutBuilderPage() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    className="h-5 w-5 text-muted-foreground"
                                     onClick={() => addExercise(exercise)}
                                   >
                                     <Plus className="h-3 w-3" />
@@ -1486,7 +1494,7 @@ export default function WorkoutBuilderPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="h-5 w-5 text-muted-foreground"
                                 onClick={() => setSelectedExercise(exercise)}
                               >
                                 <Info className="h-3 w-3" />
@@ -1494,7 +1502,7 @@ export default function WorkoutBuilderPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="h-5 w-5 text-muted-foreground"
                                 onClick={() => addExercise(exercise)}
                               >
                                 <Plus className="h-3 w-3" />
@@ -1589,7 +1597,7 @@ export default function WorkoutBuilderPage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="h-6 w-6 text-muted-foreground"
                               onClick={() => setSelectedExercise(exercise)}
                             >
                               <Info className="h-3 w-3" />
@@ -1597,7 +1605,7 @@ export default function WorkoutBuilderPage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="h-6 w-6 text-muted-foreground"
                               onClick={() => addExercise(exercise)}
                             >
                               <Plus className="h-4 w-4" />
@@ -2198,6 +2206,29 @@ export default function WorkoutBuilderPage() {
                         </Select>
                       </div>
                     </>
+                  )}
+
+                  {/* Location selector */}
+                  {userLocations.length > 0 && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        Workout Location
+                      </Label>
+                      <Select value={selectedLocationId || "none"} onValueChange={(v) => setSelectedLocationId(v === "none" ? undefined : v)}>
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Select location..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Any / No preference</SelectItem>
+                          {userLocations.map((loc) => (
+                            <SelectItem key={loc.id} value={loc.id}>
+                              {loc.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   )}
 
                   <div className="space-y-1.5">

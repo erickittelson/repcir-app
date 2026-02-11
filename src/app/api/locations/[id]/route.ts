@@ -47,7 +47,7 @@ export async function PUT(
 
   try {
     const body = await request.json();
-    const { name, type, address, equipment, equipmentDetails } = body;
+    const { name, type, address, equipment, equipmentDetails, visibility, isActive } = body;
 
     // Check if location exists and belongs to user
     const existingLocation = await db.query.userLocations.findFirst({
@@ -61,14 +61,18 @@ export async function PUT(
       return NextResponse.json({ error: "Location not found" }, { status: 404 });
     }
 
+    const resolvedType = type ?? existingLocation.type;
+
     const [updated] = await db
       .update(userLocations)
       .set({
         name: name ?? existingLocation.name,
-        type: type ?? existingLocation.type,
-        address: address !== undefined ? address : existingLocation.address,
+        type: resolvedType,
+        address: resolvedType === "home" ? null : (address !== undefined ? address : existingLocation.address),
         equipment: equipment ?? existingLocation.equipment,
         equipmentDetails: equipmentDetails !== undefined ? equipmentDetails : existingLocation.equipmentDetails,
+        visibility: visibility ?? existingLocation.visibility,
+        isActive: isActive !== undefined ? isActive : existingLocation.isActive,
         updatedAt: new Date(),
       })
       .where(eq(userLocations.id, id))
@@ -106,22 +110,6 @@ export async function DELETE(
     }
 
     await db.delete(userLocations).where(eq(userLocations.id, id));
-
-    // If deleted location was active, make another one active
-    if (existingLocation.isActive) {
-      const remainingLocations = await db.query.userLocations.findMany({
-        where: eq(userLocations.userId, session.user.id),
-        orderBy: (locations, { desc }) => [desc(locations.createdAt)],
-        limit: 1,
-      });
-
-      if (remainingLocations.length > 0) {
-        await db
-          .update(userLocations)
-          .set({ isActive: true, updatedAt: new Date() })
-          .where(eq(userLocations.id, remainingLocations[0].id));
-      }
-    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

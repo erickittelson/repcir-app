@@ -21,6 +21,7 @@ import {
   Zap,
   X,
   Lightbulb,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BadgeProgressCard } from "@/components/badges/badge-progress-card";
@@ -35,6 +36,8 @@ interface HomeFeedProps {
     currentStreak: number;
     activeGoalsCount: number;
   };
+  /** Whether user has group circles (non-system). If false, show a join/create prompt */
+  hasGroupCircles?: boolean;
   activeGoals: Array<{
     id: string;
     name: string;
@@ -88,6 +91,7 @@ export function HomeFeed({
   activityFeed,
   completeness,
   badgeProgress,
+  hasGroupCircles = true,
 }: HomeFeedProps) {
   const greeting = getGreeting();
   const [dismissedPrompts, setDismissedPrompts] = useState<Set<string>>(new Set());
@@ -125,6 +129,33 @@ export function HomeFeed({
           prompt={activePrompts[0]}
           onDismiss={() => handleDismissPrompt(activePrompts[0].id)}
         />
+      )}
+
+      {/* Join/Create Circle Prompt for solo users */}
+      {!hasGroupCircles && (
+        <Card className="border-brand/20 bg-gradient-to-r from-brand/5 to-energy/5">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand/20">
+                <Users className="h-5 w-5 text-brand" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold">Train with others</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Join or create a circle to train with friends and stay accountable together.
+                </p>
+                <div className="flex gap-2 mt-3">
+                  <Link href="/discover">
+                    <Button size="sm" variant="secondary">Discover</Button>
+                  </Link>
+                  <Link href="/circles">
+                    <Button size="sm" className="bg-brand-gradient">Create Circle</Button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Today's Focus Card */}
@@ -176,7 +207,7 @@ export function HomeFeed({
             <CardContent className="py-8 text-center">
               <MessageSquare className="mx-auto h-10 w-10 text-muted-foreground/50" />
               <p className="mt-3 text-muted-foreground">
-                No activity yet. Complete a workout or follow friends to see updates here.
+                No activity yet. Complete a workout or invite your circle to see updates here.
               </p>
             </CardContent>
           </Card>

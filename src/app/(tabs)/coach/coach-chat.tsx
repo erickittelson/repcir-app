@@ -19,24 +19,36 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { Shield, Check } from "lucide-react";
 import { ClarificationChips } from "@/components/chat/clarification-chips";
 import { WorkoutCard } from "@/components/chat/workout-card";
+import { WorkoutConfigForm } from "@/components/chat/workout-config-form";
+import { GenerationLoadingCard } from "@/components/chat/generation-loading-card";
+import {
+  DEFAULT_WORKOUT_ACTIONS as WORKOUT_ACTIONS,
+} from "@/lib/ai/structured-chat";
 import type {
   ClarificationData,
   WorkoutData,
   ActionData,
   ConversationState,
   StructuredChatResponse,
+  WorkoutConfigData,
+  GenerationJobData,
+  GeneratedWorkout,
 } from "@/lib/ai/structured-chat";
+import type { WorkoutConfigFormData } from "@/lib/types/workout-config";
 
 // Extended message interface to support structured data
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
-  type?: "text" | "clarification" | "workout" | "mixed";
+  type?: "text" | "clarification" | "workout" | "mixed" | "workout_config" | "generation_pending";
   clarification?: ClarificationData;
   workout?: WorkoutData;
+  workoutConfig?: WorkoutConfigData;
+  generationJob?: GenerationJobData;
   actions?: ActionData[];
 }
 
@@ -90,6 +102,9 @@ export function CoachChat({ memberId }: CoachChatProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [conversationState, setConversationState] = useState<ConversationState | null>(null);
+  const [showConsentModal, setShowConsentModal] = useState(false);
+  const [consentLoading, setConsentLoading] = useState(false);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -122,6 +137,8 @@ export function CoachChat({ memberId }: CoachChatProps) {
       type: result.type,
       clarification: result.clarification,
       workout: result.workout,
+      workoutConfig: result.workoutConfig,
+      generationJob: result.generationJob,
       actions: result.actions,
     };
 
@@ -173,7 +190,18 @@ export function CoachChat({ memberId }: CoachChatProps) {
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to get response");
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        // Check for consent required — show modal instead of error
+        if (errorText.includes("CONSENT_REQUIRED")) {
+          setPendingMessage(text);
+          setShowConsentModal(true);
+          // Remove the user message we just added since we can't process it yet
+          setMessages((prev) => prev.filter((m) => m.id !== userMessage.id));
+          return;
+        }
+        throw new Error(errorText || `Request failed (${response.status})`);
+      }
 
       // Check if this is a structured response (JSON) or streaming text
       if (isStructuredResponse(response)) {
@@ -258,7 +286,10 @@ export function CoachChat({ memberId }: CoachChatProps) {
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to get response");
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        throw new Error(errorText || `Request failed (${response.status})`);
+      }
 
       if (isStructuredResponse(response)) {
         const result: StructuredChatResponse = await response.json();
@@ -311,9 +342,97 @@ export function CoachChat({ memberId }: CoachChatProps) {
 
   // Handle workout card actions
   const handleWorkoutAction = (action: string, planId?: string) => {
-    console.log("Workout action:", action, planId);
-    // Actions are handled within WorkoutCard component
-    // This callback is for any additional handling needed
+    if (action === "regenerate") {
+      // Re-trigger the config form for modification
+      handleSend("Generate me a new workout");
+    }
+    // Other actions handled within WorkoutCard component
+  };
+
+  // Handle workout config form submission
+  const handleWorkoutConfigSubmit = async (config: WorkoutConfigFormData) => {
+    // Add a summary message from the user
+    const sectionLabels = config.workoutSections.map(s => s.label || s.workoutType).join(" + ");
+    const summary = `Generate a ${config.duration}min ${sectionLabels} workout at ${config.intensity} intensity`;
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: summary,
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/ai/generate-workout/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Generation failed" }));
+        throw new Error(errorData.error || "Failed to start generation");
+      }
+
+      const { jobId } = await response.json();
+
+      // Add generation loading message
+      const loadingMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "Generating your workout...",
+        type: "generation_pending",
+        generationJob: { jobId, estimatedSeconds: 30 },
+      };
+      setMessages((prev) => [...prev, loadingMessage]);
+    } catch (error) {
+      console.error("Workout config submit error:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: `Sorry, I couldn't start the workout generation. ${error instanceof Error ? error.message : "Please try again."}`,
+          type: "text",
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle generation complete — replace loading card with workout card
+  const handleGenerationComplete = (messageId: string, workout: GeneratedWorkout, planId?: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId
+          ? {
+              ...m,
+              content: "Here's your workout!",
+              type: "workout" as const,
+              workout: { data: workout, planId },
+              actions: WORKOUT_ACTIONS,
+              generationJob: undefined,
+            }
+          : m
+      )
+    );
+  };
+
+  // Handle generation error
+  const handleGenerationError = (messageId: string, error: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId
+          ? {
+              ...m,
+              content: `Generation failed: ${error}`,
+              type: "text" as const,
+              generationJob: undefined,
+            }
+          : m
+      )
+    );
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -332,6 +451,36 @@ export function CoachChat({ memberId }: CoachChatProps) {
 
     setIsListening(!isListening);
     // Voice recognition implementation would go here
+  };
+
+  // Grant AI personalization consent
+  const handleGrantConsent = async () => {
+    setConsentLoading(true);
+    try {
+      const res = await fetch("/api/user/consent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          analytics: true,
+          personalization: true,
+          marketing: false,
+          doNotSell: false,
+        }),
+      });
+      if (res.ok) {
+        setShowConsentModal(false);
+        // Retry the pending message
+        if (pendingMessage) {
+          const msg = pendingMessage;
+          setPendingMessage(null);
+          handleSend(msg);
+        }
+      }
+    } catch {
+      // Show error in chat
+    } finally {
+      setConsentLoading(false);
+    }
   };
 
   // Render message content based on type
@@ -373,12 +522,97 @@ export function CoachChat({ memberId }: CoachChatProps) {
             memberId={memberId}
           />
         )}
+
+        {/* Workout config form */}
+        {message.type === "workout_config" && message.workoutConfig && (
+          <WorkoutConfigForm
+            defaults={message.workoutConfig}
+            memberId={memberId}
+            onSubmit={handleWorkoutConfigSubmit}
+            disabled={isLoading}
+          />
+        )}
+
+        {/* Generation loading card */}
+        {message.type === "generation_pending" && message.generationJob && (
+          <GenerationLoadingCard
+            generationId={message.generationJob.jobId}
+            onComplete={(workout, planId) => handleGenerationComplete(message.id, workout, planId)}
+            onError={(error) => handleGenerationError(message.id, error)}
+          />
+        )}
       </div>
     );
   };
 
   return (
     <div className="relative">
+      {/* AI Consent Modal */}
+      <AnimatePresence>
+        {showConsentModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-6"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-background rounded-2xl p-6 max-w-sm w-full shadow-2xl border"
+            >
+              <div className="flex items-center justify-center h-14 w-14 rounded-full bg-brand/10 mx-auto mb-4">
+                <Shield className="h-7 w-7 text-brand" />
+              </div>
+              <h2 className="text-lg font-semibold text-center mb-2">
+                Enable AI Coaching
+              </h2>
+              <p className="text-sm text-muted-foreground text-center mb-4">
+                To personalize workouts and coaching, we need your permission to process your fitness data with AI. Your data stays secure and is never shared.
+              </p>
+              <ul className="text-xs text-muted-foreground space-y-1.5 mb-6">
+                <li className="flex items-start gap-2">
+                  <Check className="h-3.5 w-3.5 text-brand mt-0.5 shrink-0" />
+                  Personalized workout generation
+                </li>
+                <li className="flex items-start gap-2">
+                  <Check className="h-3.5 w-3.5 text-brand mt-0.5 shrink-0" />
+                  Context-aware coaching advice
+                </li>
+                <li className="flex items-start gap-2">
+                  <Check className="h-3.5 w-3.5 text-brand mt-0.5 shrink-0" />
+                  You can disable this anytime in settings
+                </li>
+              </ul>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setShowConsentModal(false);
+                    setPendingMessage(null);
+                  }}
+                >
+                  Not Now
+                </Button>
+                <Button
+                  className="flex-1 bg-brand-gradient"
+                  onClick={handleGrantConsent}
+                  disabled={consentLoading}
+                >
+                  {consentLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Enable"
+                  )}
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Scrollable Messages Area - contained scroll */}
       <div
         ref={scrollContainerRef}

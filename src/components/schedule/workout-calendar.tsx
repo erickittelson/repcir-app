@@ -137,7 +137,7 @@ function WorkoutCard({
     >
       <div className="flex items-start gap-2">
         {canReschedule && (
-          <GripVertical className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity cursor-grab" />
+          <GripVertical className="h-4 w-4 text-muted-foreground/50 cursor-grab" />
         )}
         
         <div className="flex-1 min-w-0">
@@ -172,7 +172,7 @@ function WorkoutCard({
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="h-6 w-6 text-muted-foreground"
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
             </Button>

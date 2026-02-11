@@ -6,7 +6,7 @@ import {
   circleMembers,
   circlePosts,
 } from "@/lib/db/schema";
-import { eq, desc, sql, and, gt } from "drizzle-orm";
+import { eq, desc, sql, and, gt, ne } from "drizzle-orm";
 import { CirclesClient } from "./circles-client";
 
 export default async function CirclesPage() {
@@ -31,7 +31,10 @@ export default async function CirclesPage() {
     })
     .from(circleMembers)
     .innerJoin(circles, eq(circles.id, circleMembers.circleId))
-    .where(eq(circleMembers.userId, session.user.id))
+    .where(and(
+      eq(circleMembers.userId, session.user.id),
+      eq(circles.isSystemCircle, false),
+    ))
     .orderBy(desc(circleMembers.createdAt));
 
   // Get unread post counts for each circle (posts since last visit)

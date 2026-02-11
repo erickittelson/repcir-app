@@ -4,7 +4,7 @@ import { generateObject } from "ai";
 import { getSession } from "@/lib/neon-auth";
 import { db } from "@/lib/db";
 import { exercises } from "@/lib/db/schema";
-import { applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit";
+import { applyDistributedRateLimit as applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit-redis";
 import { aiModel } from "@/lib/ai";
 import { sql } from "drizzle-orm";
 
@@ -220,7 +220,7 @@ export async function POST(request: Request) {
     }
 
     // Rate limiting
-    const rateLimitResult = applyRateLimit(
+    const rateLimitResult = await applyRateLimit(
       `ai-parse-workout:${session.user.id}`,
       RATE_LIMITS.aiGeneration
     );

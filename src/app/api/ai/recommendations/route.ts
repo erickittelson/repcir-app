@@ -13,7 +13,7 @@ import {
 import { eq, and, desc, gte, sql, not, inArray } from "drizzle-orm";
 import { generateText } from "ai";
 import { aiModel, getMemberContext, buildSystemPrompt } from "@/lib/ai";
-import { applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit";
+import { applyDistributedRateLimit as applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit-redis";
 
 // Query parameter validation
 const recommendationTypeSchema = z.enum(["workouts", "challenges", "programs", "all"]);
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Apply rate limiting for AI operations
-  const rateLimitResult = applyRateLimit(
+  const rateLimitResult = await applyRateLimit(
     `ai-recommendations:${session.user.id}`,
     RATE_LIMITS.aiGeneration
   );

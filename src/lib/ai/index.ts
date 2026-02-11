@@ -946,7 +946,7 @@ export type PromptCacheRetention = "in_memory" | "24h";
  * Provider options interface for OpenAI Responses API
  */
 interface OpenAIProviderOptions {
-  reasoningEffort: "none" | "low" | "medium" | "high" | "xhigh";
+  reasoningEffort?: "none" | "low" | "medium" | "high" | "xhigh";
   reasoningSummary?: "auto" | "detailed";
   textVerbosity?: "low" | "medium" | "high";
   serviceTier?: "auto" | "flex" | "priority" | "default";
@@ -1020,18 +1020,23 @@ export const getReasoningOptions = (
     cacheKey?: string;
   }
 ): { openai: OpenAIProviderOptions } => {
-  // Map reasoning levels to GPT-5.2 reasoningEffort values
-  const effortMap: Record<ReasoningLevel, "none" | "low" | "medium" | "high" | "xhigh"> = {
-    none: "none",
+  // Map reasoning levels to Responses API reasoningEffort values.
+  // "none" is NOT valid for GPT-5.2 (only GPT-5.1) — omit it entirely.
+  // "xhigh" is only for GPT-5.1-Codex-Max — map "max" to "high" for GPT-5.2.
+  const effortMap: Record<ReasoningLevel, OpenAIProviderOptions["reasoningEffort"]> = {
+    none: undefined,  // Omit → model uses default behavior (not valid for GPT-5.2 Responses API)
     quick: "low",
     standard: "medium",
     deep: "high",
-    max: "xhigh",
+    max: "high",      // "xhigh" only valid for GPT-5.1-Codex-Max
   };
 
-  const openaiOptions: OpenAIProviderOptions = {
-    reasoningEffort: effortMap[level],
-  };
+  const openaiOptions: OpenAIProviderOptions = {};
+
+  const effort = effortMap[level];
+  if (effort) {
+    openaiOptions.reasoningEffort = effort;
+  }
 
   // Add reasoning summary if requested
   if (options?.showReasoning) {

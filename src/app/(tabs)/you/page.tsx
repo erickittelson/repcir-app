@@ -248,6 +248,19 @@ export default async function YouPage() {
                 badges?: "public" | "circles" | "private";
                 socialLinks?: "public" | "circles" | "private";
               }) || undefined,
+              workoutPreferences: (profile.workoutPreferences as {
+                workoutDays?: string[];
+                workoutDuration?: number;
+                trainingFrequency?: number;
+                activityLevel?: { jobType: string; dailySteps?: number };
+              }) || undefined,
+              consentGiven: profile.consentGiven ?? false,
+              consentPreferences: (profile.consentPreferences as {
+                analytics?: boolean;
+                marketing?: boolean;
+                personalization?: boolean;
+                doNotSell?: boolean;
+              }) || undefined,
             }
           : null
       }
@@ -280,7 +293,11 @@ export default async function YouPage() {
         id: l.id,
         name: l.name,
         type: l.type,
+        address: l.address || undefined,
         isActive: l.isActive ?? false,
+        visibility: (l as any).visibility || "private",
+        equipment: (l.equipment as string[]) || [],
+        equipmentDetails: l.equipmentDetails || null,
       }))}
       sports={sports.map((s) => ({
         id: s.id,

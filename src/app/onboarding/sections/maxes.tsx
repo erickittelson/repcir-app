@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, Plus, X, Trophy, Timer, Dumbbell, Check, Pencil } from "lucide-react";
+import { Plus, X, Trophy, Timer, Dumbbell, Check, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { OnboardingActions } from "./onboarding-actions";
 import type { SectionProps } from "./types";
 
 interface MaxEntry {
@@ -114,7 +115,7 @@ const formatTimeInput = (value: string, format: string): string => {
   return cleaned;
 };
 
-export function MaxesSection({ data, onUpdate, onNext }: SectionProps) {
+export function MaxesSection({ data, onUpdate, onNext, onBack }: SectionProps) {
   const [entries, setEntries] = useState<MaxEntry[]>(
     data.currentMaxes?.map((m, i) => ({
       id: `existing-${i}`,
@@ -255,7 +256,7 @@ export function MaxesSection({ data, onUpdate, onNext }: SectionProps) {
   const hasUnconfirmed = entries.some((e) => !e.confirmed && e.value);
 
   return (
-    <div className="h-full flex flex-col items-center justify-center p-6">
+    <div className="min-h-full flex flex-col items-center justify-start py-6 px-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -488,17 +489,15 @@ export function MaxesSection({ data, onUpdate, onNext }: SectionProps) {
         )}
 
         {/* Continue Button */}
-        <Button
-          onClick={handleContinue}
-          disabled={hasUnconfirmed}
-          className="w-full h-12 text-lg bg-energy-gradient hover:opacity-90 rounded-xl group disabled:opacity-50"
-        >
-          {confirmedCount > 0 
+        <OnboardingActions
+          onNext={handleContinue}
+          onBack={onBack}
+          nextDisabled={hasUnconfirmed}
+          nextLabel={confirmedCount > 0
             ? `Continue with ${confirmedCount} PR${confirmedCount > 1 ? "s" : ""}`
             : "Skip for now"
           }
-          <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-        </Button>
+        />
         
         <p className="text-xs text-center text-muted-foreground mt-2">
           You can always add more later in your profile

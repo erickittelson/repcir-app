@@ -762,7 +762,7 @@ export function DashboardTabs({
             <button className="text-center group" onClick={() => router.push("/you?section=circles")}>
               <p className="text-2xl font-bold">{stats.circleCount}</p>
               <p className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">
-                Rallies
+                Circles
               </p>
             </button>
           </div>
@@ -916,12 +916,12 @@ export function DashboardTabs({
               </CardContent>
             </Card>
 
-            {/* Your Rallies */}
+            {/* Your Circles */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <CardTitle className="text-base font-medium flex items-center gap-2">
                   <Users className="h-4 w-4 text-muted-foreground" />
-                  Your Rallies
+                  Your Circles
                 </CardTitle>
                 <Button asChild variant="ghost" size="sm">
                   <Link href="/discover">
@@ -938,7 +938,7 @@ export function DashboardTabs({
                       No circles yet
                     </p>
                     <Button asChild size="sm" className="mt-3">
-                      <Link href="/discover">Join Rally</Link>
+                      <Link href="/discover">Join Circle</Link>
                     </Button>
                   </div>
                 ) : (
@@ -1162,7 +1162,7 @@ export function DashboardTabs({
             <h3 className="text-lg font-semibold mb-2">Challenges Coming Soon</h3>
             <p className="text-muted-foreground max-w-md mx-auto mb-8">
               Join fitness challenges like 75 Hard, 30-Day Squat Challenge, and more.
-              Compete with friends and track your progress.
+              Compete with your circle and track your progress.
             </p>
             <Button asChild>
               <Link href="/discover">

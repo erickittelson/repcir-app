@@ -49,12 +49,14 @@ interface TabsShellProps {
       name: string;
       role: string;
       memberId: string;
+      isSystemCircle: boolean;
     };
     circles: Array<{
       id: string;
       name: string;
       role: string;
       memberId: string;
+      isSystemCircle: boolean;
     }>;
   };
   children: React.ReactNode;

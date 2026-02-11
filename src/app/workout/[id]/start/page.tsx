@@ -7,6 +7,8 @@ import {
   exercises,
   sharedWorkouts,
   workoutSessions,
+  workoutSessionExercises,
+  exerciseSets,
 } from "@/lib/db/schema";
 import { eq, and, asc } from "drizzle-orm";
 
@@ -79,6 +81,42 @@ export default async function StartWorkoutPage({ params }: StartWorkoutPageProps
       date: new Date(),
     })
     .returning();
+
+  // Create session exercises and sets from plan
+  for (const row of planExercises) {
+    if (!row.exercise) continue;
+
+    const [sessionExercise] = await db
+      .insert(workoutSessionExercises)
+      .values({
+        sessionId: newSession.id,
+        exerciseId: row.planExercise.exerciseId,
+        order: row.planExercise.order,
+      })
+      .returning();
+
+    // Create sets for each exercise
+    const numSets = row.planExercise.sets || 3;
+    const repsStr = row.planExercise.reps;
+    const targetReps = repsStr ? parseInt(repsStr) || undefined : undefined;
+    const weightVal = (row.planExercise as any).weight;
+    const targetWeight = weightVal ? parseFloat(weightVal) || undefined : undefined;
+
+    const setsToCreate = [];
+    for (let i = 1; i <= numSets; i++) {
+      setsToCreate.push({
+        sessionExerciseId: sessionExercise.id,
+        setNumber: i,
+        targetReps,
+        targetWeight,
+        completed: false,
+      });
+    }
+
+    if (setsToCreate.length > 0) {
+      await db.insert(exerciseSets).values(setsToCreate);
+    }
+  }
 
   // Increment use count for shared workout
   if (sharedWorkout) {

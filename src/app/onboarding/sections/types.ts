@@ -4,4 +4,5 @@ export interface SectionProps {
   data: OnboardingData;
   onUpdate: (updates: Partial<OnboardingData>) => void;
   onNext: () => void;
+  onBack?: () => void;
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { applyRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
+import { applyDistributedRateLimit as applyRateLimit, createRateLimitResponse } from "@/lib/rate-limit-redis";
 import {
   checkAIPersonalizationConsent,
   createConsentRequiredResponse,
@@ -34,7 +34,7 @@ export async function POST(
     }
 
     // Rate limit embedding generation (expensive operation, 5 embeddings generated per call)
-    const rateLimitResult = applyRateLimit(
+    const rateLimitResult = await applyRateLimit(
       `embeddings:${session.user.id}`,
       { limit: 5, windowSeconds: 60 } // 5 requests per minute per user
     );

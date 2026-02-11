@@ -27,7 +27,7 @@ import {
 import { toast } from "sonner";
 import Link from "next/link";
 
-interface FamilyMember {
+interface CircleMember {
   id: string;
   name: string;
 }
@@ -69,7 +69,7 @@ export default function LogWorkoutPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [members, setMembers] = useState<FamilyMember[]>([]);
+  const [members, setMembers] = useState<CircleMember[]>([]);
   const [plans, setPlans] = useState<WorkoutPlan[]>([]);
 
   const [selectedMember, setSelectedMember] = useState("");
@@ -174,7 +174,7 @@ export default function LogWorkoutPage() {
 
   const handleSave = async () => {
     if (!selectedMember) {
-      toast.error("Please select a family member");
+      toast.error("Please select a circle member");
       return;
     }
 
@@ -272,7 +272,7 @@ export default function LogWorkoutPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Family Member *</Label>
+              <Label>Circle Member *</Label>
               <Select value={selectedMember} onValueChange={setSelectedMember}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select member" />

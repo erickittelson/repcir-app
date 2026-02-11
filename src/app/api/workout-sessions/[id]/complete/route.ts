@@ -13,6 +13,7 @@ import { eq, and, desc, inArray } from "drizzle-orm";
 import { generateText } from "ai";
 import { aiModel, getMemberContext, buildSystemPrompt, getReasoningOptions } from "@/lib/ai";
 import { evaluateAndAwardBadges } from "@/lib/badges";
+import { triggerWorkoutAnalysis, triggerSnapshotUpdate } from "@/inngest";
 
 export async function POST(
   request: Request,
@@ -110,6 +111,16 @@ export async function POST(
     // Check for personal records and generate AI analysis (non-blocking)
     detectPersonalRecordsAndAnalyze(id, workoutSession.memberId).catch((err) => {
       console.error("Background PR/analysis error:", err);
+    });
+
+    // Trigger Inngest background AI analysis pipeline (non-blocking)
+    triggerWorkoutAnalysis(id, workoutSession.memberId).catch((err) => {
+      console.error("Background Inngest workout analysis error:", err);
+    });
+
+    // Trigger snapshot update for fresh AI context (non-blocking)
+    triggerSnapshotUpdate(workoutSession.memberId).catch((err) => {
+      console.error("Background snapshot update error:", err);
     });
 
     // Evaluate badges for workout completion (non-blocking)

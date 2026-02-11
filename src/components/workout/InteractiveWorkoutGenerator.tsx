@@ -122,6 +122,7 @@ interface GenerationConfig {
   restPreference: string;
   includeWarmup: boolean;
   includeCooldown: boolean;
+  locationId?: string;
 }
 
 interface InteractiveWorkoutGeneratorProps {
@@ -701,7 +702,7 @@ export default function InteractiveWorkoutGenerator({
                             {ex.category} • {ex.muscleGroups?.join(", ")}
                           </div>
                         </div>
-                        <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
                       </button>
                     ))
                   )}

@@ -39,15 +39,16 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' https://vercel.live",
+      "script-src 'self' 'unsafe-inline' https://vercel.live https://*.posthog.com https://us-assets.i.posthog.com",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https: http:",
       "font-src 'self' data:",
+      "worker-src 'self' blob:",
       "connect-src 'self' https://api.openai.com https://*.vercel-storage.com https://*.neon.tech https://*.sentry.io https://*.ingest.sentry.io https://*.posthog.com https://us.i.posthog.com wss:",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
-      "upgrade-insecure-requests",
+      ...(process.env.NODE_ENV === "production" ? ["upgrade-insecure-requests"] : []),
     ].join("; "),
   },
 ];

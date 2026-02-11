@@ -278,7 +278,7 @@ const conversationStateSchema = z.object({
   }),
   pendingQuestions: z.array(z.string()),
   answeredQuestions: z.array(z.string()),
-}).optional();
+}).nullish();
 
 export const aiChatSchema = z.object({
   messages: z.array(z.object({
@@ -392,6 +392,55 @@ export const createCircleCommentSchema = z.object({
     .trim(),
   parentId: uuidSchema.optional().nullable(),
 }).strict();
+
+// ============================================================================
+// Circle Goal schemas
+// ============================================================================
+
+export const createCircleGoalSchema = z.object({
+  title: z.string().min(1).max(200).trim(),
+  category: z.enum(["strength", "endurance", "flexibility", "weight_loss", "skill", "custom"]),
+  targetValue: z.number().optional(),
+  targetUnit: z.string().max(50).optional(),
+  description: z.string().max(500).optional(),
+  priority: z.number().int().min(0).max(10).optional().default(0),
+});
+
+export const updateCircleGoalSchema = createCircleGoalSchema.partial().extend({
+  status: z.enum(["active", "archived"]).optional(),
+});
+
+// ============================================================================
+// Workout Config Form schemas (AI chat-triggered generation)
+// ============================================================================
+
+const workoutStructureSectionSchema = z.object({
+  workoutType: z.enum([
+    "standard", "emom", "amrap", "for_time",
+    "tabata", "superset", "circuit", "intervals",
+  ]),
+  label: z.string().max(100).optional(),
+  order: z.number().int().min(0),
+});
+
+export const workoutConfigFormSchema = z.object({
+  targetType: z.enum(["individual", "circle", "selected_members"]),
+  circleId: uuidSchema.optional(),
+  memberIds: z.array(uuidSchema).optional(),
+  guestMemberUserIds: z.array(uuidSchema).optional(),
+  workoutSections: z.array(workoutStructureSectionSchema).min(1).max(5),
+  duration: z.number().int().min(10).max(180),
+  goalIds: z.array(uuidSchema).optional(),
+  circleGoalIds: z.array(uuidSchema).optional(),
+  locationId: uuidSchema.optional(),
+  intensity: z.enum(["light", "moderate", "hard", "max"]),
+  includeWarmup: z.boolean().optional().default(true),
+  includeCooldown: z.boolean().optional().default(true),
+  conversationId: uuidSchema.optional(),
+}).refine(
+  (data) => data.targetType !== "selected_members" || (data.memberIds && data.memberIds.length > 0),
+  { message: "memberIds required when targetType is selected_members" }
+);
 
 // ============================================================================
 // Helper function to validate request body

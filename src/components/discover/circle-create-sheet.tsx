@@ -264,7 +264,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
       }
 
       const circle = await response.json();
-      toast.success(editData?.id ? "Rally updated!" : "Rally created!");
+      toast.success(editData?.id ? "Circle updated!" : "Circle created!");
       onOpenChange(false);
       resetForm();
       
@@ -293,7 +293,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
             <SheetHeader>
               <SheetTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5 text-brand" />
-                {editData?.id ? "Edit Rally" : "Create a Rally"}
+                {editData?.id ? "Edit Circle" : "Create a Circle"}
               </SheetTitle>
               <SheetDescription>
                 {editData?.id
@@ -320,12 +320,12 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
                     size="lg"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Rally image (optional)
+                    Circle image (optional)
                   </p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="name">Rally Name *</Label>
+                  <Label htmlFor="name">Circle Name *</Label>
                   <Input
                     id="name"
                     value={formData.name}
@@ -397,7 +397,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
                     )}
                     <div>
                       <p className="font-medium text-sm">
-                        {formData.visibility === "public" ? "Public Rally" : "Private Rally"}
+                        {formData.visibility === "public" ? "Public Circle" : "Private Circle"}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {formData.visibility === "public"
@@ -526,7 +526,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
                   <AccordionTrigger className="text-sm">
                     <div className="flex items-center gap-2">
                       <Scroll className="h-4 w-4" />
-                      Rally Rules ({formData.rules.length})
+                      Circle Rules ({formData.rules.length})
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="space-y-4 pt-4">
@@ -650,7 +650,7 @@ export function CircleCreateSheet({ open, onOpenChange, editData }: CircleCreate
                     {editData?.id ? "Saving..." : "Creating..."}
                   </>
                 ) : (
-                  editData?.id ? "Save Changes" : "Create Rally"
+                  editData?.id ? "Save Changes" : "Create Circle"
                 )}
               </Button>
             </div>

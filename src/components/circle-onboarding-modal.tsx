@@ -185,7 +185,7 @@ export function CircleOnboardingModal({
                 <DialogDescription className="pt-1">
                   {hasCircles
                     ? "Create a new circle or join an existing one."
-                    : "Circles let you train with friends and family. Create your own or join someone else's!"}
+                    : "Circles let you train with your crew and stay accountable. Create your own or join someone else's!"}
                 </DialogDescription>
               </DialogHeader>
 
@@ -210,7 +210,7 @@ export function CircleOnboardingModal({
                       <Label htmlFor="circle-name">Circle Name</Label>
                       <Input
                         id="circle-name"
-                        placeholder="e.g., The Smiths, Gym Buddies"
+                        placeholder="e.g., Morning Crew, Iron Club, Office Gains"
                         value={circleName}
                         onChange={(e) => setCircleName(e.target.value)}
                         disabled={isLoading}

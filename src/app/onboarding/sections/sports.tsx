@@ -2,10 +2,10 @@
 
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, Search, Check, X, Trophy, Activity } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Search, Check, X, Trophy, Activity } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { OnboardingActions } from "./onboarding-actions";
 import type { SectionProps } from "./types";
 
 interface Sport {
@@ -104,7 +104,7 @@ const CATEGORIES = [
   { id: "other", label: "Other" },
 ];
 
-export function SportsSection({ data, onUpdate, onNext }: SectionProps) {
+export function SportsSection({ data, onUpdate, onNext, onBack }: SectionProps) {
   const [selectedSports, setSelectedSports] = useState<string[]>(
     data.sports?.map(s => s.id) || []
   );
@@ -161,7 +161,7 @@ export function SportsSection({ data, onUpdate, onNext }: SectionProps) {
     .filter(Boolean) as Sport[];
 
   return (
-    <div className="h-full flex flex-col items-center justify-center p-6">
+    <div className="min-h-full flex flex-col items-center justify-start py-6 px-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -266,16 +266,14 @@ export function SportsSection({ data, onUpdate, onNext }: SectionProps) {
         </div>
 
         {/* Continue Button */}
-        <Button
-          onClick={handleContinue}
-          className="w-full h-12 text-lg bg-energy-gradient hover:opacity-90 rounded-xl group"
-        >
-          {selectedSports.length > 0 
+        <OnboardingActions
+          onNext={handleContinue}
+          onBack={onBack}
+          nextLabel={selectedSports.length > 0
             ? `Continue with ${selectedSports.length} sport${selectedSports.length > 1 ? "s" : ""}`
             : "Skip for now"
           }
-          <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-        </Button>
+        />
         
         <p className="text-xs text-center text-muted-foreground mt-2">
           You can always add more later in your profile

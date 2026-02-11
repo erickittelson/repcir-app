@@ -1,6 +1,6 @@
 # Agent Configuration
 
-This file configures AI agent behavior for the Family Workout App.
+This file configures AI agent behavior for the Repcir.
 
 ## MCP Server Usage
 

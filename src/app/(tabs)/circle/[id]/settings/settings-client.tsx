@@ -235,7 +235,7 @@ export function SettingsClient({ circle, userRole }: SettingsClientProps) {
         throw new Error(error.error || "Failed to save changes");
       }
 
-      toast.success("Rally settings saved!");
+      toast.success("Circle settings saved!");
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save changes");
@@ -256,7 +256,7 @@ export function SettingsClient({ circle, userRole }: SettingsClientProps) {
         throw new Error(error.error || "Failed to delete circle");
       }
 
-      toast.success("Rally deleted");
+      toast.success("Circle deleted");
       router.push("/");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete circle");
@@ -272,7 +272,7 @@ export function SettingsClient({ circle, userRole }: SettingsClientProps) {
       {/* Page title with save button */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Rally Settings</h1>
+          <h1 className="text-2xl font-bold">Circle Settings</h1>
           <p className="text-sm text-muted-foreground">{circle.name}</p>
         </div>
         <Button onClick={handleSave} disabled={isSaving}>
@@ -290,11 +290,11 @@ export function SettingsClient({ circle, userRole }: SettingsClientProps) {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Basic Info</CardTitle>
-              <CardDescription>Rally name, description, and image</CardDescription>
+              <CardDescription>Circle name, description, and image</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Rally Name *</Label>
+                <Label htmlFor="name">Circle Name *</Label>
                 <Input
                   id="name"
                   value={formData.name}
@@ -405,7 +405,7 @@ export function SettingsClient({ circle, userRole }: SettingsClientProps) {
                   )}
                   <div>
                     <p className="font-medium text-sm">
-                      {formData.visibility === "public" ? "Public Rally" : "Private Rally"}
+                      {formData.visibility === "public" ? "Public Circle" : "Private Circle"}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {formData.visibility === "public"
@@ -557,7 +557,7 @@ export function SettingsClient({ circle, userRole }: SettingsClientProps) {
                   <AccordionTrigger className="text-sm">
                     <div className="flex items-center gap-2">
                       <Scroll className="h-4 w-4" />
-                      Rally Rules ({formData.rules.length})
+                      Circle Rules ({formData.rules.length})
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="space-y-4 pt-4">
@@ -721,7 +721,7 @@ export function SettingsClient({ circle, userRole }: SettingsClientProps) {
                               Deleting...
                             </>
                           ) : (
-                            "Delete Rally"
+                            "Delete Circle"
                           )}
                         </AlertDialogAction>
                       </AlertDialogFooter>

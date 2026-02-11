@@ -160,6 +160,49 @@ export async function triggerWorkoutGeneration(
 }
 
 /**
+ * Trigger workout generation from the AI chat config form.
+ *
+ * Creates an aiGenerationJobs row, sends the Inngest event, and returns the jobId.
+ * The client polls /api/ai/generate-workout/status/[id] for completion.
+ */
+export async function triggerWorkoutGenerationFromChat(
+  userId: string,
+  circleId: string,
+  memberIds: string[],
+  jobId: string,
+  options: {
+    targetType?: "individual" | "circle" | "selected_members";
+    workoutType?: string;
+    workoutSections?: Array<{ workoutType: string; label?: string; order: number }>;
+    intensity?: string;
+    targetDuration?: number;
+    goalIds?: string[];
+    circleGoalIds?: string[];
+    locationId?: string;
+    includeWarmup?: boolean;
+    includeCooldown?: boolean;
+    conversationId?: string;
+    memberGenders?: Record<string, string>;
+    reasoningLevel?: string;
+  } = {}
+) {
+  return inngest.send({
+    name: "ai/generate-workout",
+    data: {
+      userId,
+      circleId,
+      memberIds,
+      jobId,
+      options: {
+        ...options,
+        chatTriggered: true,
+        saveAsPlan: true,
+      },
+    },
+  });
+}
+
+/**
  * Batch update multiple member snapshots
  *
  * Use after bulk operations or migrations
@@ -168,5 +211,35 @@ export async function triggerBatchSnapshotUpdate(memberIds: string[]) {
   return inngest.send({
     name: "member/batch-snapshot-update",
     data: { memberIds },
+  });
+}
+
+/**
+ * Trigger post-workout AI analysis
+ *
+ * Use after a workout session is completed to generate insights
+ */
+export async function triggerWorkoutAnalysis(
+  sessionId: string,
+  memberId: string
+) {
+  return inngest.send({
+    name: "ai/analyze-workout",
+    data: { sessionId, memberId },
+  });
+}
+
+/**
+ * Trigger coaching memory extraction from a conversation
+ *
+ * Use after a coaching conversation ends to extract long-term insights
+ */
+export async function triggerCoachingMemoryExtraction(
+  conversationId: string,
+  memberId: string
+) {
+  return inngest.send({
+    name: "ai/extract-coaching-memory",
+    data: { conversationId, memberId },
   });
 }

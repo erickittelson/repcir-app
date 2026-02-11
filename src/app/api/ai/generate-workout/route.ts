@@ -1,10 +1,14 @@
 import { generateObject, generateText } from "ai";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
-import { applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit";
+import { applyDistributedRateLimit as applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit-redis";
 import { db, dbRead } from "@/lib/db";
-import { workoutPlans, workoutPlanExercises, exercises, circleMembers, circleEquipment, coachConversations, coachMessages } from "@/lib/db/schema";
+import { workoutPlans, workoutPlanExercises, exercises, circleMembers, circleEquipment, coachConversations, coachMessages, userLocations, equipmentCatalog } from "@/lib/db/schema";
 import { eq, and, inArray, ilike, desc } from "drizzle-orm";
+import { LOCATION_TEMPLATES } from "@/lib/constants/equipment";
+import type { EquipmentDetails } from "@/lib/constants/equipment";
+import { checkAIQuota, createQuotaExceededResponse } from "@/lib/ai/quota-check";
+import { trackAIUsage } from "@/lib/ai/usage-tracking";
 import {
   getMemberContext,
   buildSystemPrompt,
@@ -157,6 +161,7 @@ const workoutRequestSchema = z.object({
   periodizationPhase: z.enum(["accumulation", "intensification", "deload"]).optional(),
   muscleRecoveryOverride: z.record(z.string(), z.boolean()).optional(),
   enableTempo: z.boolean().optional().default(false),
+  locationId: z.string().uuid().optional(),
 }).refine(
   (data) => data.memberIds?.length || data.memberId,
   { message: "Either memberIds or memberId is required" }
@@ -287,12 +292,18 @@ export async function POST(request: Request) {
     }
 
     // Apply rate limiting
-    const rateLimitResult = applyRateLimit(
+    const rateLimitResult = await applyRateLimit(
       `ai-workout:${session.user.id}`,
       RATE_LIMITS.aiGeneration
     );
     if (!rateLimitResult.success) {
       return createRateLimitResponse(rateLimitResult);
+    }
+
+    // Check AI quota
+    const quotaResult = await checkAIQuota(session.user.id, "workout");
+    if (!quotaResult.allowed) {
+      return createQuotaExceededResponse(quotaResult, "workout");
     }
 
     const body = await request.json();
@@ -326,6 +337,7 @@ export async function POST(request: Request) {
       periodizationPhase,
       muscleRecoveryOverride,
       enableTempo,
+      locationId,
     } = validation.data;
 
     // If a preset is specified, use its default values
@@ -420,13 +432,51 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get circle's available equipment
-    const circleEquipmentList = await db.query.circleEquipment.findMany({
-      where: eq(circleEquipment.circleId, session.circleId),
-    });
+    // Get available equipment — prefer user's selected location, fall back to circle equipment
+    let availableEquipmentNames: string[] = [];
+    let hasEquipment = false;
+    let locationEquipmentDetails: EquipmentDetails | null = null;
+    let locationName: string | null = null;
 
-    const availableEquipmentNames = circleEquipmentList.map(e => e.name.toLowerCase());
-    const hasEquipment = circleEquipmentList.length > 0;
+    if (locationId) {
+      // Fetch user's selected workout location
+      const userLocation = await db.query.userLocations.findFirst({
+        where: and(
+          eq(userLocations.id, locationId),
+          eq(userLocations.userId, session.user.id)
+        ),
+      });
+
+      if (userLocation) {
+        locationName = userLocation.name;
+        if (userLocation.type === "home") {
+          // Home gym: resolve stored equipment IDs via catalog
+          const storedEquipment = (userLocation.equipment as string[]) || [];
+          if (storedEquipment.length > 0) {
+            const catalogItems = await db.query.equipmentCatalog.findMany({
+              where: inArray(equipmentCatalog.id, storedEquipment),
+            });
+            availableEquipmentNames = catalogItems.map(e => e.name.toLowerCase());
+          }
+          locationEquipmentDetails = (userLocation.equipmentDetails as EquipmentDetails) || null;
+          hasEquipment = availableEquipmentNames.length > 0;
+        } else {
+          // Non-home (commercial, crossfit, etc.): use template equipment
+          const templateEquipment = LOCATION_TEMPLATES[userLocation.type] || [];
+          availableEquipmentNames = templateEquipment.map(e => e.toLowerCase());
+          hasEquipment = templateEquipment.length > 0;
+        }
+      }
+    }
+
+    // Fall back to circle equipment if no location selected or found
+    if (!hasEquipment && !locationId) {
+      const circleEquipmentList = await db.query.circleEquipment.findMany({
+        where: eq(circleEquipment.circleId, session.circleId),
+      });
+      availableEquipmentNames = circleEquipmentList.map(e => e.name.toLowerCase());
+      hasEquipment = circleEquipmentList.length > 0;
+    }
 
     // Get available exercises with full metadata
     const availableExercises = await db.query.exercises.findMany({
@@ -626,20 +676,32 @@ You are designing a workout for ${members.length > 1 ? 'a group of circle member
     // Build equipment section for context
     let equipmentSection = "";
     if (hasEquipment) {
-      const equipmentByCategory: Record<string, string[]> = {};
-      circleEquipmentList.forEach((e) => {
-        if (!equipmentByCategory[e.category]) {
-          equipmentByCategory[e.category] = [];
-        }
-        const itemDesc = e.brand ? `${e.name} (${e.brand})` : e.name;
-        equipmentByCategory[e.category].push(itemDesc);
-      });
+      const equipmentList = availableEquipmentNames.map(e => e.charAt(0).toUpperCase() + e.slice(1)).join(", ");
+      const locationLabel = locationName ? `at "${locationName}"` : "in the circle";
 
       equipmentSection = `\n## AVAILABLE EQUIPMENT (MUST USE)
-The circle has the following equipment available. PRIORITIZE exercises that use this equipment:
-${Object.entries(equipmentByCategory).map(([cat, items]) => `- ${cat}: ${items.join(", ")}`).join("\n")}
-
+The following equipment is available ${locationLabel}. PRIORITIZE exercises that use this equipment:
+${equipmentList}
 `;
+
+      // Add weight details for home gym locations
+      if (locationEquipmentDetails) {
+        if (locationEquipmentDetails.dumbbells?.available) {
+          const db = locationEquipmentDetails.dumbbells;
+          equipmentSection += `\nDumbbell details: ${db.type || "fixed"} dumbbells, max weight ${db.maxWeight || "unknown"} lbs`;
+          if (db.weights?.length) {
+            equipmentSection += ` (available: ${db.weights.join(", ")} lbs)`;
+          }
+          equipmentSection += `. IMPORTANT: Only prescribe dumbbell weights up to ${db.maxWeight || 50} lbs.\n`;
+        }
+        if (locationEquipmentDetails.barbell?.available) {
+          const bb = locationEquipmentDetails.barbell;
+          const totalMax = (bb.barWeight || 45) + (bb.totalPlateWeight || 0);
+          equipmentSection += `Barbell details: ${bb.type || "olympic"} barbell (${bb.barWeight || 45} lbs bar), plates up to ${bb.totalPlateWeight || 0} lbs total = ${totalMax} lbs max. IMPORTANT: Only prescribe barbell weights up to ${totalMax} lbs.\n`;
+        }
+      }
+
+      equipmentSection += "\n";
     } else {
       equipmentSection = `\n## EQUIPMENT NOTICE
 No specific equipment has been listed. Include a mix of:
@@ -948,14 +1010,13 @@ Add tempo prescription in the notes field when relevant.\n`;
 
     // Try to get cached response first
     const cachedWorkout = await getCachedResponse<typeof workoutSchema._output>(cacheKey);
+    const generationStart = performance.now();
     if (cachedWorkout && !saveAsPlan) {
       workout = cachedWorkout.data;
       cacheHit = true;
     } else {
       // For quick/none reasoning, skip the planning step entirely for faster response
       const skipPlanning = reasoningLevel === "none" || reasoningLevel === "quick";
-
-      const generationStart = performance.now();
 
       if (skipPlanning) {
         // Single-step generation for faster response
@@ -1065,6 +1126,22 @@ The workout should feel cohesive and purposeful with ${recommendedExercises}+ ex
         generationTimeMs,
       });
     }
+    }
+
+    // Track AI usage (fire and forget)
+    if (!cacheHit) {
+      trackAIUsage({
+        userId: session.user.id,
+        memberId: memberIds?.[0],
+        endpoint: "ai/generate-workout",
+        modelUsed: "gpt-5.2",
+        reasoningLevel,
+        inputTokens: 0, // generateObject doesn't expose usage in the same way
+        outputTokens: 0,
+        durationMs: Math.round(performance.now() - generationStart),
+        cacheHit: false,
+        metadata: { exerciseCount: workout.exercises.length, duration: effectiveDuration },
+      }).catch(() => {});
     }
 
     // Fix invalid supersets - supersets must have at least 2 exercises

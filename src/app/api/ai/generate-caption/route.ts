@@ -2,7 +2,7 @@ import { generateText } from "ai";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { aiModelFast } from "@/lib/ai";
-import { applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit";
+import { applyDistributedRateLimit as applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit-redis";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     }
 
     // Apply rate limiting
-    const rateLimitResult = applyRateLimit(
+    const rateLimitResult = await applyRateLimit(
       `ai-caption:${session.user.id}`,
       RATE_LIMITS.aiGeneration
     );

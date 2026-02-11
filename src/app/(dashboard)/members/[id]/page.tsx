@@ -1185,23 +1185,24 @@ export default function MemberProfilePage() {
             )}
           </div>
           {/* Upload overlay */}
-          <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-            {uploadingPicture ? (
+          {/* Upload button */}
+          {uploadingPicture ? (
+            <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center">
               <Loader2 className="h-6 w-6 text-white animate-spin" />
-            ) : (
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="text-white p-2 hover:bg-white/20 rounded-full transition-colors"
-              >
-                <Camera className="h-5 w-5" />
-              </button>
-            )}
-          </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="absolute bottom-0 right-0 bg-black/60 rounded-full h-7 w-7 flex items-center justify-center shadow-sm"
+            >
+              <Camera className="h-3.5 w-3.5 text-white" />
+            </button>
+          )}
           {/* Remove button (shown when picture exists) */}
           {member.profilePicture && !uploadingPicture && (
             <button
               onClick={handleRemoveProfilePicture}
-              className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+              className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-1 shadow-md"
             >
               <X className="h-3 w-3" />
             </button>
@@ -1815,7 +1816,7 @@ export default function MemberProfilePage() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-5 w-5 opacity-0 group-hover:opacity-100"
+                                    className="h-5 w-5 text-muted-foreground"
                                     onClick={() => handleDeletePr(allTime.id)}
                                   >
                                     <Trash2 className="h-3 w-3 text-destructive" />
@@ -1868,7 +1869,7 @@ export default function MemberProfilePage() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-5 w-5 opacity-0 group-hover:opacity-100"
+                                    className="h-5 w-5 text-muted-foreground"
                                     onClick={() => handleDeletePr(current.id)}
                                   >
                                     <Trash2 className="h-3 w-3 text-destructive" />
@@ -2034,7 +2035,7 @@ export default function MemberProfilePage() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-5 w-5 opacity-0 group-hover:opacity-100"
+                                    className="h-5 w-5 text-muted-foreground"
                                     onClick={() => handleDeletePr(allTime.id)}
                                   >
                                     <Trash2 className="h-3 w-3 text-destructive" />
@@ -2085,7 +2086,7 @@ export default function MemberProfilePage() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-5 w-5 opacity-0 group-hover:opacity-100"
+                                    className="h-5 w-5 text-muted-foreground"
                                     onClick={() => handleDeletePr(current.id)}
                                   >
                                     <Trash2 className="h-3 w-3 text-destructive" />
@@ -2345,7 +2346,7 @@ export default function MemberProfilePage() {
                               </div>
                             </div>
                           </div>
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex gap-1">
                             <Button
                               variant="ghost"
                               size="icon"
@@ -2408,7 +2409,7 @@ export default function MemberProfilePage() {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="text-muted-foreground"
                               onClick={() => handleUpdateSkillStatus(skill.id, "mastered")}
                               title="Mark as mastered"
                             >
@@ -2418,7 +2419,7 @@ export default function MemberProfilePage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="h-8 w-8 text-muted-foreground"
                               onClick={() => openSkillEdit(skill)}
                               title="Edit skill"
                             >
@@ -2427,7 +2428,7 @@ export default function MemberProfilePage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="h-8 w-8 text-muted-foreground"
                               onClick={() => handleDeleteSkill(skill.id)}
                             >
                               <Trash2 className="h-4 w-4 text-destructive" />
@@ -2474,7 +2475,7 @@ export default function MemberProfilePage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="h-8 w-8 text-muted-foreground"
                               onClick={() => openSkillEdit(skill)}
                               title="Edit skill"
                             >
@@ -2483,7 +2484,7 @@ export default function MemberProfilePage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="h-8 w-8 text-muted-foreground"
                               onClick={() => handleDeleteSkill(skill.id)}
                             >
                               <Trash2 className="h-4 w-4 text-destructive" />
@@ -3143,7 +3144,7 @@ export default function MemberProfilePage() {
                           )}
                         </div>
                       </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-1">
                         <Button
                           variant="ghost"
                           size="icon"

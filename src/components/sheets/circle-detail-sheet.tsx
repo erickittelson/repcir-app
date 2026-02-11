@@ -484,14 +484,14 @@ export function CircleDetailSheet({
                   )}
                   {circle.visibility === "private"
                     ? "Request to Join"
-                    : "Join Rally"}
+                    : "Join Circle"}
                 </Button>
               )}
             </div>
           </ScrollArea>
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground">
-            Rally not found
+            Circle not found
           </div>
         )}
       </SheetContent>

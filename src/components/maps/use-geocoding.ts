@@ -63,7 +63,7 @@ export function useGeocoding() {
           `${NOMINATIM_BASE_URL}/search?${params.toString()}`,
           {
             headers: {
-              "User-Agent": "FamilyWorkoutApp/1.0",
+              "User-Agent": "Repcir/1.0",
             },
           }
         );
@@ -119,7 +119,7 @@ export function useGeocoding() {
           `${NOMINATIM_BASE_URL}/reverse?${params.toString()}`,
           {
             headers: {
-              "User-Agent": "FamilyWorkoutApp/1.0",
+              "User-Agent": "Repcir/1.0",
             },
           }
         );

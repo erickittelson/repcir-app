@@ -1,5 +1,5 @@
 {
-  "name": "family-workout-app",
+  "name": "repcir-app",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -34,7 +34,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@hookform/resolvers": "^5.2.2",
-    "@neondatabase/auth": "^0.1.0-beta.21",
+    "@neondatabase/auth": "^0.2.0-beta.1",
     "@neondatabase/serverless": "^1.0.2",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -59,6 +59,8 @@
     "@types/canvas-confetti": "^1.9.0",
     "@types/leaflet": "^1.9.21",
     "@types/lodash": "^4.17.23",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.36.2",
     "@vercel/blob": "^2.0.0",
     "ai": "^6.0.39",
     "bcrypt": "^6.0.0",

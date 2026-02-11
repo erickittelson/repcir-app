@@ -3,30 +3,16 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   ArrowLeft,
   Loader2,
   Play,
-  Pause,
-  RotateCcw,
   CheckCircle,
-  Clock,
-  Dumbbell,
-  Timer,
-  ChevronDown,
-  ChevronUp,
-  Trophy,
-  AlertCircle,
   Users,
-  User,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -34,6 +20,7 @@ import { cn } from "@/lib/utils";
 import WorkoutReflectionWizard, {
   type WorkoutReflection,
 } from "@/components/workout/WorkoutReflectionWizard";
+import { SetTracker } from "@/components/workout/set-tracker";
 
 interface ExerciseSet {
   id: string;
@@ -108,7 +95,6 @@ export default function ActiveWorkoutPage() {
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [activeMemberIndex, setActiveMemberIndex] = useState(0);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
-  const [expandedExercises, setExpandedExercises] = useState<Set<number>>(new Set([0]));
 
   // Active session for the currently selected member
   const session = sessions[activeMemberIndex] || null;
@@ -117,12 +103,6 @@ export default function ActiveWorkoutPage() {
   const [workoutTime, setWorkoutTime] = useState(0);
   const [isWorkoutRunning, setIsWorkoutRunning] = useState(false);
   const workoutStartRef = useRef<Date | null>(null);
-
-  // Rest timer
-  const [restTime, setRestTime] = useState(0);
-  const [isResting, setIsResting] = useState(false);
-  const [restDuration, setRestDuration] = useState(90); // Default 90 seconds
-  const restStartRef = useRef<Date | null>(null);
 
   // Completion wizard
   const [showCompletion, setShowCompletion] = useState(false);
@@ -146,28 +126,6 @@ export default function ActiveWorkoutPage() {
     }
     return () => clearInterval(interval);
   }, [isWorkoutRunning]);
-
-  // Rest timer effect
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isResting && restTime > 0) {
-      interval = setInterval(() => {
-        setRestTime((prev) => {
-          if (prev <= 1) {
-            setIsResting(false);
-            // Play a sound or vibrate to notify rest is over
-            if ("vibrate" in navigator) {
-              navigator.vibrate([200, 100, 200]);
-            }
-            toast.success("Rest time complete! Ready for next set.");
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isResting, restTime]);
 
   const fetchAllSessions = async () => {
     try {
@@ -206,7 +164,6 @@ export default function ActiveWorkoutPage() {
         );
         if (firstIncompleteIndex >= 0) {
           setCurrentExerciseIndex(firstIncompleteIndex);
-          setExpandedExercises(new Set([firstIncompleteIndex]));
         }
       }
     } catch (error) {
@@ -294,11 +251,10 @@ export default function ActiveWorkoutPage() {
       )
     );
 
-    // If completing a set, start rest timer
-    if (updates.completed && !set.completed) {
-      setRestTime(restDuration);
-      setIsResting(true);
-      restStartRef.current = new Date();
+    // Check if all sets are now completed — auto-complete exercise
+    const updatedSets = updatedExercises[exerciseIndex].sets;
+    if (updatedSets.every((s) => s.completed) && !exercise.completed) {
+      autoCompleteExercise(exerciseIndex, updatedExercises);
     }
 
     try {
@@ -314,16 +270,51 @@ export default function ActiveWorkoutPage() {
     }
   };
 
-  const toggleExerciseExpanded = (index: number) => {
-    setExpandedExercises((prev) => {
-      const next = new Set(prev);
-      if (next.has(index)) {
-        next.delete(index);
+  // Auto-complete exercise when all sets are done (called from updateSet)
+  const autoCompleteExercise = (exerciseIndex: number, updatedExercises: SessionExercise[]) => {
+    if (!session) return;
+
+    updatedExercises[exerciseIndex] = {
+      ...updatedExercises[exerciseIndex],
+      completed: true,
+    };
+    setSessions((prev) =>
+      prev.map((s, i) =>
+        i === activeMemberIndex ? { ...s, exercises: updatedExercises } : s
+      )
+    );
+
+    const exercise = session.exercises[exerciseIndex];
+    toast.success(`${exercise.exercise.name} complete!`);
+
+    // Move to next exercise
+    if (exerciseIndex < session.exercises.length - 1) {
+      const nextIndex = exerciseIndex + 1;
+      setCurrentExerciseIndex(nextIndex);
+    } else {
+      // Check if all members are complete (for group workouts)
+      const allMembersComplete = sessions.every((s, i) =>
+        i === activeMemberIndex
+          ? updatedExercises.every((ex) => ex.completed)
+          : s.exercises.every((ex) => ex.completed)
+      );
+
+      if (allMembersComplete || !isGroupWorkout) {
+        setShowCompletion(true);
       } else {
-        next.add(index);
+        // Move to next incomplete member
+        const nextMemberIndex = sessions.findIndex(
+          (s, i) => i !== activeMemberIndex && !s.exercises.every((ex) => ex.completed)
+        );
+        if (nextMemberIndex >= 0) {
+          setActiveMemberIndex(nextMemberIndex);
+          const nextSession = sessions[nextMemberIndex];
+          const nextExerciseIndex = nextSession.exercises.findIndex((ex) => !ex.completed);
+          setCurrentExerciseIndex(nextExerciseIndex >= 0 ? nextExerciseIndex : 0);
+          toast.success(`${session.member.name} done! Switching to ${nextSession.member.name}`);
+        }
       }
-      return next;
-    });
+    }
   };
 
   const completeExercise = async (exerciseIndex: number) => {
@@ -371,7 +362,6 @@ export default function ActiveWorkoutPage() {
     if (exerciseIndex < session.exercises.length - 1) {
       const nextIndex = exerciseIndex + 1;
       setCurrentExerciseIndex(nextIndex);
-      setExpandedExercises(new Set([nextIndex]));
     } else {
       // Check if all members are complete (for group workouts)
       const allMembersComplete = sessions.every((s, i) =>
@@ -480,18 +470,6 @@ export default function ActiveWorkoutPage() {
     return parts.join("\n");
   };
 
-  const skipRestTimer = () => {
-    setIsResting(false);
-    setRestTime(0);
-  };
-
-  const adjustRestDuration = (delta: number) => {
-    setRestDuration((prev) => Math.max(15, prev + delta));
-    if (isResting) {
-      setRestTime((prev) => Math.max(0, prev + delta));
-    }
-  };
-
   // Calculate progress (for current member and overall)
   const currentMemberTotalSets = session?.exercises.reduce((acc, ex) => acc + ex.sets.length, 0) || 0;
   const currentMemberCompletedSets =
@@ -589,7 +567,6 @@ export default function ActiveWorkoutPage() {
                     setActiveMemberIndex(idx);
                     const firstIncomplete = s.exercises.findIndex((ex) => !ex.completed);
                     setCurrentExerciseIndex(firstIncomplete >= 0 ? firstIncomplete : 0);
-                    setExpandedExercises(new Set([firstIncomplete >= 0 ? firstIncomplete : 0]));
                   }}
                   className={cn(
                     "flex items-center gap-2 px-3 py-2 rounded-lg border transition-all min-w-[120px]",
@@ -641,190 +618,42 @@ export default function ActiveWorkoutPage() {
         </div>
       </div>
 
-      {/* Rest Timer Overlay */}
-      {isResting && (
-        <Card className="bg-primary/10 border-primary">
-          <CardContent className="py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Timer className="h-6 w-6 text-primary animate-pulse" />
-                <div>
-                  <p className="text-sm font-medium">Rest Time</p>
-                  <p className="text-3xl font-mono font-bold text-primary">
-                    {formatTime(restTime)}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => adjustRestDuration(-15)}>
-                  -15s
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => adjustRestDuration(15)}>
-                  +15s
-                </Button>
-                <Button variant="default" size="sm" onClick={skipRestTimer}>
-                  Skip
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Rest duration setting when not resting */}
-      {!isResting && session.status === "in_progress" && (
-        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-          <Timer className="h-4 w-4" />
-          <span>Rest timer: {restDuration}s</span>
-          <Button variant="ghost" size="sm" onClick={() => adjustRestDuration(-15)}>
-            -
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => adjustRestDuration(15)}>
-            +
-          </Button>
-        </div>
-      )}
-
-      {/* Exercises */}
-      <div className="space-y-3">
+      {/* Exercises — using SetTracker for polished tracking UI */}
+      <div className="space-y-6">
         {session.exercises.map((exercise, exerciseIndex) => {
-          const isExpanded = expandedExercises.has(exerciseIndex);
           const isCurrent = exerciseIndex === currentExerciseIndex;
-          const exerciseCompletedSets = exercise.sets.filter((s) => s.completed).length;
-          const isExerciseComplete = exerciseCompletedSets === exercise.sets.length;
+          const isExerciseComplete = exercise.sets.every((s) => s.completed);
 
           return (
-            <Card
+            <div
               key={exercise.id}
               className={cn(
-                "transition-all",
-                isCurrent && "ring-2 ring-primary",
+                "transition-all rounded-xl",
+                isCurrent && "ring-2 ring-primary ring-offset-2 ring-offset-background",
                 isExerciseComplete && "opacity-60"
               )}
             >
-              <CardHeader
-                className="py-3 cursor-pointer"
-                onClick={() => toggleExerciseExpanded(exerciseIndex)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={cn(
-                        "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold",
-                        isExerciseComplete
-                          ? "bg-green-500 text-white"
-                          : isCurrent
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted"
-                      )}
-                    >
-                      {isExerciseComplete ? (
-                        <CheckCircle className="h-4 w-4" />
-                      ) : (
-                        exerciseIndex + 1
-                      )}
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">{exercise.exercise.name}</CardTitle>
-                      <div className="flex gap-2 mt-1">
-                        <Badge variant="secondary" className="text-xs">
-                          {exercise.exercise.category}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {exerciseCompletedSets}/{exercise.sets.length} sets
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  {isExpanded ? (
-                    <ChevronUp className="h-5 w-5 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                  )}
-                </div>
-              </CardHeader>
-
-              {isExpanded && (
-                <CardContent className="pt-0 pb-4">
-                  <div className="space-y-2">
-                    {exercise.sets.map((set, setIndex) => (
-                      <div
-                        key={set.id}
-                        className={cn(
-                          "flex items-center gap-3 p-3 rounded-lg border",
-                          set.completed && "bg-green-50 border-green-200 dark:bg-green-950/20"
-                        )}
-                      >
-                        <Checkbox
-                          checked={set.completed}
-                          onCheckedChange={(checked) =>
-                            updateSet(exerciseIndex, setIndex, {
-                              completed: checked as boolean,
-                            })
-                          }
-                          disabled={session.status === "planned"}
-                        />
-
-                        <Badge variant="outline" className="w-12 justify-center">
-                          Set {set.setNumber}
-                        </Badge>
-
-                        <div className="flex items-center gap-2 flex-1">
-                          <div className="flex-1">
-                            <label className="text-xs text-muted-foreground">Reps</label>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={set.actualReps ?? set.targetReps ?? ""}
-                              onChange={(e) =>
-                                updateSet(exerciseIndex, setIndex, {
-                                  actualReps: parseInt(e.target.value) || undefined,
-                                })
-                              }
-                              placeholder={set.targetReps?.toString() || "Reps"}
-                              className="h-8"
-                              disabled={session.status === "planned"}
-                            />
-                          </div>
-                          <div className="flex-1">
-                            <label className="text-xs text-muted-foreground">Weight (lbs)</label>
-                            <Input
-                              type="number"
-                              min="0"
-                              step="2.5"
-                              value={set.actualWeight ?? set.targetWeight ?? ""}
-                              onChange={(e) =>
-                                updateSet(exerciseIndex, setIndex, {
-                                  actualWeight: parseFloat(e.target.value) || undefined,
-                                })
-                              }
-                              placeholder={set.targetWeight?.toString() || "lbs"}
-                              className="h-8"
-                              disabled={session.status === "planned"}
-                            />
-                          </div>
-                        </div>
-
-                        {set.targetReps && set.actualReps && set.actualReps > set.targetReps && (
-                          <Trophy className="h-4 w-4 text-yellow-500" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  {!isExerciseComplete && session.status === "in_progress" && (
-                    <Button
-                      className="w-full mt-4"
-                      variant="outline"
-                      onClick={() => completeExercise(exerciseIndex)}
-                    >
-                      <CheckCircle className="mr-2 h-4 w-4" />
-                      Complete Exercise
-                    </Button>
-                  )}
-                </CardContent>
+              <SetTracker
+                exerciseName={exercise.exercise.name}
+                exerciseId={exercise.exerciseId}
+                sets={exercise.sets}
+                targetSets={exercise.sets.length}
+                targetReps={exercise.sets[0]?.targetReps}
+                targetWeight={exercise.sets[0]?.targetWeight}
+                onSetComplete={(setIndex, data) => updateSet(exerciseIndex, setIndex, data)}
+                disabled={session.status === "planned"}
+              />
+              {!isExerciseComplete && session.status === "in_progress" && (
+                <Button
+                  className="w-full mt-2"
+                  variant="outline"
+                  onClick={() => completeExercise(exerciseIndex)}
+                >
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Complete All Sets
+                </Button>
               )}
-            </Card>
+            </div>
           );
         })}
       </div>

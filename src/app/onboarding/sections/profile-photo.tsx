@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Camera, User, ArrowRight, Loader2 } from "lucide-react";
+import { Camera, User, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { OnboardingActions } from "./onboarding-actions";
 import type { SectionProps } from "./types";
 
-export function ProfilePhotoSection({ data, onUpdate, onNext }: SectionProps) {
+export function ProfilePhotoSection({ data, onUpdate, onNext, onBack }: SectionProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(data.profilePicture || "");
 
@@ -53,7 +54,7 @@ export function ProfilePhotoSection({ data, onUpdate, onNext }: SectionProps) {
   };
 
   return (
-    <div className="h-full flex flex-col items-center justify-center p-6">
+    <div className="min-h-full flex flex-col items-center justify-start py-6 px-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -127,13 +128,10 @@ export function ProfilePhotoSection({ data, onUpdate, onNext }: SectionProps) {
         {/* Actions */}
         <div className="space-y-3">
           {previewUrl ? (
-            <Button
-              onClick={handleContinue}
-              className="w-full h-14 text-lg bg-energy-gradient hover:opacity-90 rounded-xl group"
-            >
-              Continue
-              <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-            </Button>
+            <OnboardingActions
+              onNext={handleContinue}
+              onBack={onBack}
+            />
           ) : (
             <>
               <Button

@@ -83,7 +83,7 @@ export function CirclesClient({ circles, userId }: CirclesClientProps) {
       {/* Header */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Rallies</h1>
+          <h1 className="text-2xl font-bold">Circles</h1>
           <Button size="sm" onClick={() => setShowCreateCircle(true)}>
             <Plus className="h-4 w-4 mr-1" />
             Create
@@ -102,7 +102,7 @@ export function CirclesClient({ circles, userId }: CirclesClientProps) {
         </div>
       </div>
 
-      {/* Discover Rallies CTA */}
+      {/* Discover Circles CTA */}
       <Card className="bg-gradient-to-br from-brand/10 to-success/10 border-brand/20">
         <CardContent className="p-4">
           <div className="flex items-center gap-3">
@@ -110,7 +110,7 @@ export function CirclesClient({ circles, userId }: CirclesClientProps) {
               <Compass className="h-5 w-5 text-brand" />
             </div>
             <div className="flex-1">
-              <p className="font-medium">Find New Rallies</p>
+              <p className="font-medium">Find New Circles</p>
               <p className="text-xs text-muted-foreground">
                 Join communities that match your fitness goals
               </p>
@@ -126,7 +126,7 @@ export function CirclesClient({ circles, userId }: CirclesClientProps) {
         </CardContent>
       </Card>
 
-      {/* Rallies List */}
+      {/* Circles List */}
       {filteredCircles.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
@@ -218,7 +218,7 @@ export function CirclesClient({ circles, userId }: CirclesClientProps) {
         </div>
       )}
 
-      {/* Create Rally Experience */}
+      {/* Create Circle Experience */}
       <CreateCircleExperience
         open={showCreateCircle}
         onOpenChange={setShowCreateCircle}

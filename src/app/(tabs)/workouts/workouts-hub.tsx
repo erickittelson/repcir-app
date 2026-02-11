@@ -109,7 +109,7 @@ const VISIBILITY_OPTIONS = [
   },
   {
     value: "circle",
-    label: "Rally Only",
+    label: "Circle Only",
     icon: Users,
     description: "Share with your circle members",
   },
@@ -293,7 +293,7 @@ export function WorkoutsHub() {
       case "public":
         return "Public";
       case "circle":
-        return "Rally";
+        return "Circle";
       default:
         return "Private";
     }
@@ -657,7 +657,7 @@ function WorkoutCard({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="h-7 w-7 text-muted-foreground"
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
@@ -952,7 +952,7 @@ function CreatePlanSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="h-[90vh] rounded-t-3xl">
+      <SheetContent side="bottom" className="h-[90vh] rounded-t-3xl px-6">
         <SheetHeader className="pb-4">
           <SheetTitle>Create Training Plan</SheetTitle>
           <SheetDescription>
@@ -1022,7 +1022,7 @@ function CreatePlanSheet({
                       <SelectItem value="circle">
                         <span className="flex items-center gap-2">
                           <Users className="h-3.5 w-3.5" />
-                          Rally
+                          Circle
                         </span>
                       </SelectItem>
                       <SelectItem value="public">
@@ -1092,7 +1092,7 @@ function CreatePlanSheet({
           </div>
         </ScrollArea>
 
-        <div className="absolute bottom-0 left-0 right-0 p-4 bg-background border-t">
+        <div className="absolute bottom-0 left-0 right-0 px-6 py-4 bg-background border-t">
           <Button
             onClick={handleCreate}
             disabled={isCreating || !name.trim() || selectedWorkouts.length === 0}

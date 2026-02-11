@@ -13,12 +13,14 @@ import {
   Heart,
   Calendar,
   AlertTriangle,
-  Trophy
+  Trophy,
+  MapPin,
+  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { OnboardingData } from "../page";
 
-// Section definitions with labels for display
+// Must match SECTIONS in page.tsx (same indexes, same required fields)
 const SECTION_REQUIREMENTS = [
   { id: 0, name: "Name", fields: ["name"] },
   { id: 1, name: "Profile Photo", fields: ["profilePhotoAcknowledged"] },
@@ -29,7 +31,7 @@ const SECTION_REQUIREMENTS = [
   { id: 6, name: "Sports", fields: ["sportsAcknowledged"] },
   { id: 7, name: "PRs & Skills", fields: ["maxesAcknowledged"] },
   { id: 8, name: "Limitations", fields: ["limitationsAcknowledged"] },
-  { id: 9, name: "Equipment", fields: ["equipmentAccess"] },
+  { id: 9, name: "Equipment", fields: ["gymLocations"] },
   { id: 10, name: "Preferences", fields: ["workoutDuration", "workoutDays"] },
 ];
 
@@ -45,10 +47,83 @@ const formatHeight = (feet?: number, inches?: number) => {
   return `${feet}'${inches || 0}"`;
 };
 
+// Goal labels (must match goals.tsx GOALS array)
+const GOAL_LABELS: Record<string, string> = {
+  weight_loss: "Lose weight",
+  muscle_gain: "Build muscle",
+  strength: "Get stronger",
+  endurance: "Build endurance",
+  athletic: "Athletic performance",
+  flexibility: "Improve mobility",
+  body_recomp: "Body recomp",
+  health: "Overall health",
+  energy: "More energy",
+  stress: "Stress relief",
+};
+
+// Activity level labels (must match activity.tsx ACTIVITY_LEVELS)
+const ACTIVITY_LABELS: Record<string, string> = {
+  sedentary: "Sedentary",
+  light: "Lightly Active",
+  moderate: "Moderately Active",
+  active: "Very Active",
+  very_active: "Extremely Active",
+};
+
+// Location labels (must match equipment.tsx LOCATION_TYPES)
+const LOCATION_LABELS: Record<string, string> = {
+  home: "Home Gym",
+  commercial: "Commercial Gym",
+  crossfit: "CrossFit Box",
+  school: "School/University",
+  outdoor: "Outdoor/Park",
+};
+
 // Helper to format goal
 const formatGoal = (goal?: string) => {
   if (!goal) return null;
-  return goal.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+  return GOAL_LABELS[goal] || goal.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+};
+
+// Helper to format training frequency
+const formatFrequency = (freq: number) => {
+  const map: Record<number, string> = {
+    3: "2–3x per week",
+    4: "3–4x per week",
+    5: "4–5x per week",
+    6: "6x per week",
+  };
+  return map[freq] || `${freq}x per week`;
+};
+
+// Helper to format workout duration from stored avgDuration
+const formatDuration = (mins: number) => {
+  if (mins <= 30) return "15–30 min";
+  if (mins <= 60) return "45–60 min";
+  if (mins <= 90) return "75–90 min";
+  return "Varies";
+};
+
+// Helper to format PR values (stored as numbers, need to convert back)
+const formatPRValue = (value: number, unit: string): string => {
+  if (unit === "mm:ss") {
+    const mins = Math.floor(value / 60);
+    const secs = value % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  }
+  if (unit === "hh:mm:ss") {
+    const hrs = Math.floor(value / 3600);
+    const mins = Math.floor((value % 3600) / 60);
+    const secs = value % 60;
+    return `${hrs}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  }
+  if (unit === "ss.ms") {
+    return `${value}s`;
+  }
+  if (unit === "lbs") return `${value} lbs`;
+  if (unit === "reps") return `${value} reps`;
+  if (unit === "rounds") return `${value} rounds`;
+  return `${value}`;
 };
 
 // Helper to format days
@@ -99,7 +174,7 @@ export function CompleteSection({
 
   if (isComplete) {
     return (
-      <div className="h-full flex flex-col items-center justify-center p-6">
+      <div className="min-h-full flex flex-col items-center justify-start py-6 px-6">
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -133,7 +208,7 @@ export function CompleteSection({
   // Not all sections complete - show what's missing
   if (!isAllComplete) {
     return (
-      <div className="h-full flex flex-col items-center justify-center p-6">
+      <div className="min-h-full flex flex-col items-center justify-start py-6 px-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -197,6 +272,13 @@ export function CompleteSection({
   }
 
   // All complete - show comprehensive summary with edit options
+  // Collect all selected goals for display
+  const allGoals = [
+    ...(data.primaryMotivation || []),
+    ...(data.primaryGoal ? [data.primaryGoal] : []),
+    ...(data.secondaryGoals || []),
+  ].filter((g, i, arr) => arr.indexOf(g) === i);
+
   return (
     <div className="h-full flex flex-col p-6 overflow-y-auto">
       <motion.div
@@ -205,16 +287,27 @@ export function CompleteSection({
         transition={{ duration: 0.5 }}
         className="max-w-lg mx-auto w-full"
       >
-        {/* Header */}
+        {/* Header with optional profile photo */}
         <div className="text-center mb-6">
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.2, type: "spring" }}
-            className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-card border border-brand/20 flex items-center justify-center shadow-xl glow-earned"
-          >
-            <Check className="w-8 h-8 text-brand" />
-          </motion.div>
+          {data.profilePicture ? (
+            <motion.img
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.2, type: "spring" }}
+              src={data.profilePicture}
+              alt=""
+              className="w-20 h-20 mx-auto mb-4 rounded-full object-cover border-2 border-brand/20 shadow-xl"
+            />
+          ) : (
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.2, type: "spring" }}
+              className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-card border border-brand/20 flex items-center justify-center shadow-xl glow-earned"
+            >
+              <Check className="w-8 h-8 text-brand" />
+            </motion.div>
+          )}
 
           <h2 className="text-2xl font-display tracking-wider mb-1">
             READY, {data.name?.toUpperCase()}
@@ -249,28 +342,52 @@ export function CompleteSection({
               {data.bodyFatPercentage && (
                 <ReviewItem label="Body Fat" value={`${data.bodyFatPercentage}%`} />
               )}
-              {data.city && (
-                <ReviewItem label="City" value={data.city} />
-              )}
             </div>
           </ReviewSection>
 
-          {/* Goals & Fitness */}
+          {/* Goals */}
           <ReviewSection
             icon={<Target className="w-4 h-4" />}
-            title="Goals & Fitness"
+            title="Goals"
             onEdit={() => onScrollToSection(3)}
             delay={0.15}
           >
+            {allGoals.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {allGoals.map((goal) => (
+                  <span
+                    key={goal}
+                    className="px-2 py-1 bg-brand/10 text-brand rounded-full text-xs font-medium"
+                  >
+                    {formatGoal(goal)}
+                  </span>
+                ))}
+              </div>
+            ) : data.primaryGoal ? (
+              <span className="text-sm">{formatGoal(data.primaryGoal)}</span>
+            ) : null}
+          </ReviewSection>
+
+          {/* Fitness & Activity */}
+          <ReviewSection
+            icon={<Activity className="w-4 h-4" />}
+            title="Fitness & Activity"
+            onEdit={() => onScrollToSection(4)}
+            delay={0.2}
+          >
             <div className="space-y-1 text-sm">
-              {data.primaryGoal && (
-                <ReviewItem label="Primary Goal" value={formatGoal(data.primaryGoal)} fullWidth />
-              )}
               {data.fitnessLevel && (
                 <ReviewItem label="Level" value={data.fitnessLevel} fullWidth />
               )}
               {data.trainingFrequency && (
-                <ReviewItem label="Training" value={`${data.trainingFrequency}x per week`} fullWidth />
+                <ReviewItem label="Training" value={formatFrequency(data.trainingFrequency)} fullWidth />
+              )}
+              {data.activityLevel?.jobType && (
+                <ReviewItem
+                  label="Daily Activity"
+                  value={ACTIVITY_LABELS[data.activityLevel.jobType] || data.activityLevel.jobType}
+                  fullWidth
+                />
               )}
             </div>
           </ReviewSection>
@@ -281,7 +398,7 @@ export function CompleteSection({
               icon={<Heart className="w-4 h-4" />}
               title="Sports & Activities"
               onEdit={() => onScrollToSection(6)}
-              delay={0.2}
+              delay={0.25}
             >
               <div className="flex flex-wrap gap-1.5">
                 {data.sports.map((sport) => (
@@ -297,23 +414,43 @@ export function CompleteSection({
           )}
 
           {/* Personal Records */}
-          {data.currentMaxes && data.currentMaxes.length > 0 && (
-            <ReviewSection
-              icon={<Trophy className="w-4 h-4" />}
-              title="Personal Records"
-              onEdit={() => onScrollToSection(7)}
-              delay={0.25}
-            >
-              <div className="space-y-1 text-sm">
-                {data.currentMaxes.map((pr, i) => (
-                  <div key={i} className="flex justify-between">
-                    <span className="text-muted-foreground">{pr.exercise}</span>
-                    <span className="font-medium">{pr.value} {pr.unit}</span>
-                  </div>
-                ))}
-              </div>
-            </ReviewSection>
-          )}
+          {data.currentMaxes && data.currentMaxes.length > 0 && (() => {
+            const lifts = data.currentMaxes!.filter((pr) => pr.unit !== "skill");
+            const skills = data.currentMaxes!.filter((pr) => pr.unit === "skill");
+            return (
+              <ReviewSection
+                icon={<Trophy className="w-4 h-4" />}
+                title="Personal Records"
+                onEdit={() => onScrollToSection(7)}
+                delay={0.3}
+              >
+                <div className="space-y-2">
+                  {lifts.length > 0 && (
+                    <div className="space-y-1 text-sm">
+                      {lifts.map((pr, i) => (
+                        <div key={i} className="flex justify-between">
+                          <span className="text-muted-foreground">{pr.exercise}</span>
+                          <span className="font-medium">{formatPRValue(pr.value, pr.unit)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {skills.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {skills.map((pr, i) => (
+                        <span
+                          key={i}
+                          className="px-2 py-1 bg-success/10 text-success rounded-full text-xs font-medium"
+                        >
+                          {pr.exercise}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </ReviewSection>
+            );
+          })()}
 
           {/* Limitations */}
           {data.limitations && data.limitations.length > 0 && (
@@ -321,7 +458,7 @@ export function CompleteSection({
               icon={<AlertTriangle className="w-4 h-4 text-amber-500" />}
               title="Limitations"
               onEdit={() => onScrollToSection(8)}
-              delay={0.3}
+              delay={0.35}
             >
               <div className="space-y-1 text-sm">
                 {data.limitations.map((lim, i) => (
@@ -337,47 +474,67 @@ export function CompleteSection({
             </ReviewSection>
           )}
 
-          {/* Equipment */}
+          {/* Equipment & Location */}
           <ReviewSection
             icon={<Dumbbell className="w-4 h-4" />}
             title="Equipment"
             onEdit={() => onScrollToSection(9)}
-            delay={0.35}
+            delay={0.4}
           >
-            {data.equipmentAccess && data.equipmentAccess.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {data.equipmentAccess.slice(0, 8).map((eq) => (
-                  <span
-                    key={eq}
-                    className="px-2 py-1 bg-muted rounded-full text-xs capitalize"
-                  >
-                    {eq.replace(/_/g, " ")}
-                  </span>
-                ))}
-                {data.equipmentAccess.length > 8 && (
-                  <span className="px-2 py-1 text-xs text-muted-foreground">
-                    +{data.equipmentAccess.length - 8} more
-                  </span>
-                )}
-              </div>
-            ) : (
-              <span className="text-sm text-muted-foreground">No equipment selected</span>
-            )}
+            <div className="space-y-2">
+              {/* Where they train */}
+              {data.gymLocations && data.gymLocations.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {data.gymLocations.map((loc) => (
+                    <span
+                      key={loc}
+                      className="px-2 py-1 bg-brand/10 text-brand rounded-full text-xs font-medium"
+                    >
+                      {LOCATION_LABELS[loc] || loc.replace(/_/g, " ")}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {/* What equipment they have */}
+              {data.equipmentAccess && data.equipmentAccess.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {data.equipmentAccess
+                    .filter((eq) => eq !== "full_gym")
+                    .slice(0, 8)
+                    .map((eq) => (
+                      <span
+                        key={eq}
+                        className="px-2 py-1 bg-muted rounded-full text-xs capitalize"
+                      >
+                        {eq.replace(/_/g, " ")}
+                      </span>
+                    ))}
+                  {data.equipmentAccess.includes("full_gym") && (
+                    <span className="px-2 py-1 bg-muted rounded-full text-xs">
+                      Full gym access
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </ReviewSection>
 
-          {/* Preferences */}
+          {/* Schedule & Preferences */}
           <ReviewSection
             icon={<Calendar className="w-4 h-4" />}
-            title="Preferences"
+            title="Schedule"
             onEdit={() => onScrollToSection(10)}
-            delay={0.4}
+            delay={0.45}
           >
             <div className="space-y-1 text-sm">
               {data.workoutDuration && (
-                <ReviewItem label="Duration" value={`${data.workoutDuration} min`} fullWidth />
+                <ReviewItem label="Duration" value={formatDuration(data.workoutDuration)} fullWidth />
               )}
               {data.workoutDays && data.workoutDays.length > 0 && (
                 <ReviewItem label="Days" value={formatDays(data.workoutDays)} fullWidth />
+              )}
+              {data.city && (
+                <ReviewItem label="Location" value={data.city} fullWidth />
               )}
             </div>
           </ReviewSection>

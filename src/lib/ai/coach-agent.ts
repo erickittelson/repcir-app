@@ -8,10 +8,11 @@ import { eq, inArray, ilike } from "drizzle-orm";
 // Agent decision schema - AI decides what action to take
 const agentDecisionSchema = z.object({
   action: z.enum([
-    "ask_clarification", // Need more info from user
-    "generate_workout",  // Have enough info to generate
-    "provide_advice",    // Answer a question (not workout generation)
-    "use_tool",          // Need to query data first
+    "ask_clarification",  // Need more info from user
+    "generate_workout",   // Have enough info to generate (quick/simple workouts)
+    "show_config_form",   // Show the full workout config form (preferred for workout requests)
+    "provide_advice",     // Answer a question (not workout generation)
+    "use_tool",           // Need to query data first
   ]),
   reasoning: z.string().describe("Brief explanation of why this action was chosen"),
   confidence: z.number().min(0).max(1).describe("Confidence in this decision"),
@@ -29,13 +30,26 @@ const agentDecisionSchema = z.object({
     priority: z.enum(["critical", "important", "nice_to_have"]),
   }).optional(),
 
-  // If generating workout
+  // If generating workout (quick path)
   workoutParams: z.object({
     duration: z.number().describe("Duration in minutes"),
     intensity: z.enum(["light", "moderate", "hard", "max"]),
     focus: z.string().nullable().describe("Muscle group or workout type focus"),
     location: z.enum(["gym", "home", "outdoor", "bodyweight"]).nullable(),
     avoidMuscles: z.array(z.string()).describe("Muscles to avoid due to limitations"),
+  }).optional(),
+
+  // If showing config form (pre-filled defaults from conversation context)
+  configFormDefaults: z.object({
+    suggestedDuration: z.number().optional().describe("Suggested duration in minutes"),
+    suggestedIntensity: z.string().optional().describe("Suggested intensity level"),
+    suggestedFocus: z.string().optional().describe("Suggested focus area"),
+    suggestedWorkoutType: z.string().optional().describe("Suggested primary workout type: standard, emom, amrap, for_time, tabata, superset, circuit, intervals"),
+    suggestedWorkoutSections: z.array(z.object({
+      workoutType: z.string().describe("Workout type for this section"),
+      label: z.string().optional().describe("Section label, e.g. 'Main Lifts', 'Finisher'"),
+    })).optional().describe("Multi-section workout suggestion, e.g. Standard + AMRAP finisher"),
+    aiStructureHint: z.string().optional().describe("Brief suggestion explaining the recommended structure, e.g. 'Standard + AMRAP finisher recommended for your strength goals'"),
   }).optional(),
 
   // If using a tool
@@ -78,16 +92,20 @@ CURRENT CONTEXT:
 ${contextSummary}
 
 AVAILABLE ACTIONS:
-1. ask_clarification - Ask the user a question to gather missing information. Only ask questions that are CRITICAL for a good response. Don't over-ask.
-2. generate_workout - You have enough info to generate a personalized workout.
-3. provide_advice - The user is asking a question, not requesting a workout.
-4. use_tool - You need to query data (recovery status, schedule, history) before responding.
+1. show_config_form - Show the workout config form. ALWAYS use this when a user wants a workout.
+2. ask_clarification - Ask the user a question to gather missing information.
+3. generate_workout - ONLY for follow-up modifications like "regenerate", "make it harder", "try again". NEVER for initial workout requests.
+4. provide_advice - The user is asking a question, not requesting a workout.
+5. use_tool - You need to query data (recovery status, schedule, history) before responding.
 
-DECISION RULES:
-- If the user clearly wants a workout and you know duration + energy level, you can generate.
-- If you're missing CRITICAL info (like duration for a workout request), ask ONE focused question.
-- Don't ask about limitations unless they mention pain/injury or have known limitations.
-- Prefer fewer clarifications - 1-2 max, not a long survey.
+CRITICAL DECISION RULES:
+- ANY time the user asks for a workout, exercise, training session, or anything involving generating exercises: ALWAYS choose "show_config_form". No exceptions.
+- This includes messages like "30 min workout", "give me a workout", "leg day", "generate a workout", "HIIT session", etc.
+- NEVER choose "generate_workout" for an initial workout request. ALWAYS use "show_config_form" instead.
+- "generate_workout" is ONLY for follow-up modifications in an ongoing conversation where the user already received a workout and wants tweaks.
+- Pre-fill configFormDefaults with smart suggestions: if user says "30 min", set suggestedDuration=30. If "legs", set suggestedFocus="legs". If "hard", set suggestedIntensity="hard".
+- You can suggest multi-section workouts via suggestedWorkoutSections (e.g., Standard compound lifts + AMRAP finisher). Use aiStructureHint to explain why.
+- If user is NOT asking for a workout, use provide_advice or ask_clarification.
 - If unsure about intent, ask_clarification with a simple "What would you like help with?"
 - Use the user's profile data - don't ask things you already know.
 
@@ -95,7 +113,10 @@ SMART SUGGESTIONS:
 - If they worked out yesterday, suggest different muscle groups
 - If their energy is usually low in mornings, acknowledge that
 - If they have equipment at home AND gym, ask where they'll be
-- Reference their goals when relevant`;
+- Reference their goals when relevant
+- For strength goals, suggest Standard + AMRAP or EMOM finisher
+- For conditioning goals, suggest Circuit or Tabata
+- For balanced goals, suggest Standard with Superset pairing`;
 
   const { object: decision } = await generateObject({
     model: aiModelFast,

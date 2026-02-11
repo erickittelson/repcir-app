@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { RepcirLogo } from "@/components/ui/repcir-logo";
 import type { SectionProps } from "./types";
 
-export function WelcomeSection({ data, onUpdate, onNext }: SectionProps) {
+export function WelcomeSection({ data, onUpdate, onNext, onBack }: SectionProps) {
   const [name, setName] = useState(data.name || "");
   const [showInput, setShowInput] = useState(false);
 
@@ -32,7 +32,7 @@ export function WelcomeSection({ data, onUpdate, onNext }: SectionProps) {
   };
 
   return (
-    <div className="h-full flex flex-col items-center justify-center p-6">
+    <div className="min-h-full flex flex-col items-center justify-start py-6 px-6">
       <motion.div
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}

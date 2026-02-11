@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, AlertTriangle, Check, Plus, X, ChevronRight } from "lucide-react";
+import { AlertTriangle, Check, Plus, X, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { OnboardingActions } from "./onboarding-actions";
 import type { SectionProps } from "./types";
 
 interface Limitation {
@@ -41,7 +42,7 @@ const DURATIONS = [
   { id: "recurring", label: "Recurring", description: "Comes and goes" },
 ];
 
-export function LimitationsSection({ data, onUpdate, onNext }: SectionProps) {
+export function LimitationsSection({ data, onUpdate, onNext, onBack }: SectionProps) {
   const [hasLimitations, setHasLimitations] = useState<boolean | null>(
     data.limitations !== undefined ? (data.limitations?.length || 0) > 0 : null
   );
@@ -98,7 +99,7 @@ export function LimitationsSection({ data, onUpdate, onNext }: SectionProps) {
   const currentLimitation = editingIndex !== null ? limitations[editingIndex] : null;
 
   return (
-    <div className="h-full flex flex-col items-center justify-center p-6">
+    <div className="min-h-full flex flex-col items-center justify-start py-6 px-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -161,12 +162,11 @@ export function LimitationsSection({ data, onUpdate, onNext }: SectionProps) {
               >
                 Go Back
               </Button>
-              <Button
-                onClick={handleNoLimitationsContinue}
-                className="flex-1 h-12 bg-energy-gradient hover:opacity-90 rounded-xl"
-              >
-                Continue
-              </Button>
+              <OnboardingActions
+                onNext={handleNoLimitationsContinue}
+                onBack={onBack}
+                className="flex-1"
+              />
             </div>
           </motion.div>
         )}
@@ -248,13 +248,11 @@ export function LimitationsSection({ data, onUpdate, onNext }: SectionProps) {
               </>
             )}
 
-            <Button
-              onClick={handleContinue}
-              className="w-full h-12 text-base bg-energy-gradient hover:opacity-90 rounded-xl group"
-            >
-              {limitations.length > 0 ? "Continue" : "Skip"}
-              <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-            </Button>
+            <OnboardingActions
+              onNext={handleContinue}
+              onBack={onBack}
+              nextLabel={limitations.length > 0 ? "Continue" : "Skip"}
+            />
           </motion.div>
         )}
 
@@ -344,12 +342,11 @@ export function LimitationsSection({ data, onUpdate, onNext }: SectionProps) {
               </div>
             </div>
 
-            <Button
-              onClick={finishEditing}
-              className="w-full h-12 text-base bg-energy-gradient hover:opacity-90 rounded-xl"
-            >
-              Done
-            </Button>
+            <OnboardingActions
+              onNext={finishEditing}
+              onBack={onBack}
+              nextLabel="Done"
+            />
           </motion.div>
         )}
       </motion.div>

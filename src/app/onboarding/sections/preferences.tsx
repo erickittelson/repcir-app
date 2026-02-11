@@ -1,31 +1,21 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Clock, Calendar, Check, MapPin } from "lucide-react";
+import { Clock, Calendar, Check, MapPin, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { OnboardingActions } from "./onboarding-actions";
 import type { SectionProps } from "./types";
 
-// Major cities for quick selection
-const POPULAR_CITIES = [
-  "New York",
-  "Los Angeles",
-  "Chicago",
-  "Houston",
-  "Phoenix",
-  "San Francisco",
-  "Seattle",
-  "Denver",
-  "Austin",
-  "Boston",
-  "Miami",
-  "Atlanta",
-  "Dallas",
-  "San Diego",
-  "Portland",
-];
+interface CityResult {
+  id: number;
+  label: string;
+  city: string;
+  state: string;
+  country: string;
+}
 
 const DURATION_STYLES = [
   { 
@@ -68,7 +58,7 @@ const DAYS = [
   { id: "sunday", label: "Sun" },
 ];
 
-export function PreferencesSection({ data, onUpdate, onNext }: SectionProps) {
+export function PreferencesSection({ data, onUpdate, onNext, onBack }: SectionProps) {
   const [step, setStep] = useState<"duration" | "days" | "city">("duration");
   const [durationStyle, setDurationStyle] = useState(
     data.workoutDuration 
@@ -80,12 +70,43 @@ export function PreferencesSection({ data, onUpdate, onNext }: SectionProps) {
   );
   const [selectedDays, setSelectedDays] = useState<string[]>(data.workoutDays || []);
   const [city, setCity] = useState(data.city || "");
+  const [cityState, setCityState] = useState(data.state || "");
+  const [cityCountry, setCityCountry] = useState(data.country || "");
+  const [cityDisplay, setCityDisplay] = useState(
+    data.city ? [data.city, data.state, data.country].filter(Boolean).join(", ") : ""
+  );
   const [citySearch, setCitySearch] = useState("");
+  const [cityResults, setCityResults] = useState<CityResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  const filteredCities = useMemo(() => {
-    if (!citySearch) return POPULAR_CITIES;
-    const query = citySearch.toLowerCase();
-    return POPULAR_CITIES.filter((c) => c.toLowerCase().includes(query));
+  // Debounced city search via our API proxy
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (!citySearch || citySearch.length < 3) {
+      setCityResults([]);
+      return;
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await fetch(`/api/geocode/search?q=${encodeURIComponent(citySearch)}`);
+        if (res.ok) {
+          const data: CityResult[] = await res.json();
+          setCityResults(data);
+        }
+      } catch {
+        // silent
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, [citySearch]);
 
   const handleDurationSelect = (id: string) => {
@@ -113,15 +134,19 @@ export function PreferencesSection({ data, onUpdate, onNext }: SectionProps) {
     setStep("city");
   };
 
-  const handleCitySelect = (selectedCity: string) => {
-    setCity(selectedCity);
+  const handleCitySelect = (result: CityResult) => {
+    setCity(result.city);
+    setCityState(result.state);
+    setCityCountry(result.country);
+    const display = [result.city, result.state, result.country].filter(Boolean).join(", ");
+    setCityDisplay(display);
     setCitySearch("");
+    setCityResults([]);
   };
 
   const handleContinue = () => {
-    const finalCity = city.trim() || citySearch.trim();
-    if (finalCity) {
-      onUpdate({ city: finalCity });
+    if (city.trim()) {
+      onUpdate({ city: city.trim(), state: cityState.trim(), country: cityCountry.trim() });
     }
     onNext();
   };
@@ -131,7 +156,7 @@ export function PreferencesSection({ data, onUpdate, onNext }: SectionProps) {
   };
 
   return (
-    <div className="h-full flex flex-col items-center justify-center p-6">
+    <div className="min-h-full flex flex-col items-center justify-start py-6 px-6">
       <div className="max-w-md mx-auto w-full">
         {step === "duration" && (
           <motion.div
@@ -178,14 +203,11 @@ export function PreferencesSection({ data, onUpdate, onNext }: SectionProps) {
               ))}
             </div>
 
-            <Button
-              onClick={handleDurationContinue}
-              disabled={!durationStyle}
-              className="w-full h-12 text-lg bg-energy-gradient hover:opacity-90 rounded-xl group disabled:opacity-50"
-            >
-              Continue
-              <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-            </Button>
+            <OnboardingActions
+              onNext={handleDurationContinue}
+              onBack={onBack}
+              nextDisabled={!durationStyle}
+            />
           </motion.div>
         )}
 
@@ -236,14 +258,11 @@ export function PreferencesSection({ data, onUpdate, onNext }: SectionProps) {
               ))}
             </div>
 
-            <Button
-              onClick={handleDaysContinue}
-              disabled={selectedDays.length === 0}
-              className="w-full h-12 text-lg bg-energy-gradient hover:opacity-90 rounded-xl group disabled:opacity-50"
-            >
-              Continue
-              <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-            </Button>
+            <OnboardingActions
+              onNext={handleDaysContinue}
+              onBack={onBack}
+              nextDisabled={selectedDays.length === 0}
+            />
           </motion.div>
         )}
 
@@ -267,36 +286,62 @@ export function PreferencesSection({ data, onUpdate, onNext }: SectionProps) {
             </p>
 
             {/* City input */}
-            <Input
-              value={city || citySearch}
-              onChange={(e) => {
-                setCity("");
-                setCitySearch(e.target.value);
-              }}
-              placeholder="Type your city..."
-              className="mb-4 h-12 text-center text-lg"
-            />
+            <div className="relative mb-4">
+              <Input
+                value={city ? cityDisplay : citySearch}
+                onChange={(e) => {
+                  setCity("");
+                  setCityState("");
+                  setCityCountry("");
+                  setCityDisplay("");
+                  setCitySearch(e.target.value);
+                }}
+                placeholder="Start typing your city..."
+                className="h-12 text-center text-lg"
+              />
+              {isSearching && (
+                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+              )}
+            </div>
 
-            {/* Quick select cities */}
-            {!city && (
-              <div className="space-y-2 mb-6">
-                <p className="text-xs text-muted-foreground">Popular cities:</p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {filteredCities.slice(0, 8).map((c) => (
+            {/* Geocoding search results */}
+            {!city && cityResults.length > 0 && (
+              <div className="space-y-1 mb-6">
+                {cityResults.map((result) => {
+                  const display = [result.city, result.state, result.country]
+                    .filter(Boolean)
+                    .join(", ") || result.label;
+                  return (
                     <button
-                      key={c}
-                      onClick={() => handleCitySelect(c)}
+                      key={result.id}
+                      onClick={() => handleCitySelect(result)}
                       className={cn(
-                        "px-3 py-1.5 rounded-lg border text-sm transition-all",
+                        "w-full px-4 py-3 rounded-xl border transition-all text-left",
+                        "flex items-center gap-3",
                         "hover:border-brand hover:bg-brand/5",
                         "border-border bg-card"
                       )}
                     >
-                      {c}
+                      <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm">{display}</span>
                     </button>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
+            )}
+
+            {/* Hint when no search yet */}
+            {!city && cityResults.length === 0 && !isSearching && !citySearch && (
+              <p className="text-sm text-muted-foreground mb-6">
+                Results will appear as you type
+              </p>
+            )}
+
+            {/* No results */}
+            {!city && citySearch.length >= 3 && cityResults.length === 0 && !isSearching && (
+              <p className="text-sm text-muted-foreground mb-6">
+                No results found. Try a different spelling.
+              </p>
             )}
 
             {/* Selected city display */}
@@ -307,12 +352,16 @@ export function PreferencesSection({ data, onUpdate, onNext }: SectionProps) {
                 className="flex items-center justify-center gap-2 p-3 rounded-lg bg-brand/10 border border-brand/20 mb-6"
               >
                 <MapPin className="w-4 h-4 text-brand" />
-                <span className="font-medium">{city}</span>
+                <span className="font-medium">{cityDisplay}</span>
                 <button
                   className="ml-2 text-xs text-muted-foreground hover:text-foreground"
                   onClick={() => {
                     setCity("");
+                    setCityState("");
+                    setCityCountry("");
+                    setCityDisplay("");
                     setCitySearch("");
+                    setCityResults([]);
                   }}
                 >
                   Change
@@ -328,14 +377,12 @@ export function PreferencesSection({ data, onUpdate, onNext }: SectionProps) {
               >
                 Skip for now
               </Button>
-              <Button
-                onClick={handleContinue}
-                disabled={!city.trim() && !citySearch.trim()}
-                className="flex-1 h-12 text-lg bg-energy-gradient hover:opacity-90 rounded-xl group disabled:opacity-50"
-              >
-                Continue
-                <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-              </Button>
+              <OnboardingActions
+                onNext={handleContinue}
+                onBack={onBack}
+                nextDisabled={!city.trim() && !citySearch.trim()}
+                className="flex-1"
+              />
             </div>
           </motion.div>
         )}

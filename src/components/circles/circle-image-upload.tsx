@@ -85,7 +85,7 @@ export function CircleImageUpload({
           const { url } = await response.json();
           setPreview(url);
           onImageChange(url);
-          toast.success("Rally image updated");
+          toast.success("Circle image updated");
         } catch (error) {
           console.error("Upload error:", error);
           toast.error(
@@ -195,7 +195,7 @@ export function CircleImageUpload({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={preview}
-              alt="Rally image"
+              alt="Circle image"
               className="w-full h-full object-cover"
             />
             {/* Overlay on hover */}

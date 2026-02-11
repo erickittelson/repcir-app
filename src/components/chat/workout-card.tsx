@@ -13,11 +13,13 @@ import {
   ChevronUp,
   Loader2,
   Check,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import type { GeneratedWorkout, ActionData } from "@/lib/ai/structured-chat";
+import { WorkoutFeedback } from "@/components/ai/workout-feedback";
 
 interface WorkoutCardProps {
   workout: GeneratedWorkout;
@@ -69,14 +71,19 @@ export function WorkoutCard({
     }
 
     const data = await response.json();
-    setSavedPlanId(data.plan.id);
-    return data.plan.id;
+    setSavedPlanId(data.workoutPlan.id);
+    return data.workoutPlan.id;
   };
 
   // Start a workout session
   const startWorkoutSession = async (workoutPlanId: string): Promise<string> => {
-    const response = await fetch(`/api/workouts/${workoutPlanId}/start`, {
+    const response = await fetch("/api/workout-sessions/start", {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        planId: workoutPlanId,
+        memberId: memberId,
+      }),
     });
 
     if (!response.ok) {
@@ -84,7 +91,7 @@ export function WorkoutCard({
     }
 
     const data = await response.json();
-    return data.sessionId;
+    return data.id;
   };
 
   const handleAction = async (action: string) => {
@@ -99,8 +106,8 @@ export function WorkoutCard({
           // Start session
           const sessionId = await startWorkoutSession(workoutPlanId);
 
-          // Navigate to workout timer
-          router.push(`/workout/${workoutPlanId}/session/${sessionId}`);
+          // Navigate to active workout
+          router.push(`/workouts/active/${sessionId}`);
 
           onAction?.(action, workoutPlanId);
           break;
@@ -146,6 +153,8 @@ export function WorkoutCard({
         return isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />;
       case "modify":
         return <Pencil className="h-4 w-4" />;
+      case "regenerate":
+        return <RefreshCw className="h-4 w-4" />;
       default:
         return null;
     }
@@ -177,16 +186,20 @@ export function WorkoutCard({
     >
       {/* Header with gradient */}
       <div className="p-4 bg-brand-gradient text-white">
-        <h3 className="font-semibold text-lg">{workout.name}</h3>
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="font-semibold text-lg">{workout.name}</h3>
+          {workout.structure && workout.structure !== "standard" && (
+            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md bg-white/20 text-white">
+              {workout.structure.replace(/_/g, " ")}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-3 text-sm text-white/80 mt-1">
           <span className="flex items-center gap-1">
             <Clock className="h-3.5 w-3.5" />
             {workout.estimatedDuration} min
           </span>
           <span className="capitalize">{workout.difficulty}</span>
-          {workout.structure && (
-            <span className="text-white/60">| {workout.structure}</span>
-          )}
         </div>
       </div>
 
@@ -235,8 +248,19 @@ export function WorkoutCard({
                   <span>| {exercise.restSeconds}s rest</span>
                 )}
               </div>
-              {/* Member prescriptions */}
-              {exercise.memberPrescriptions && exercise.memberPrescriptions.length > 0 && (
+              {/* Rx weights for large groups */}
+              {exercise.rxWeights && (exercise.rxWeights.rxMen || exercise.rxWeights.rxWomen) && (
+                <div className="mt-1 flex items-center gap-3 text-xs">
+                  {exercise.rxWeights.rxMen && (
+                    <span className="text-blue-500">Rx Men: {exercise.rxWeights.rxMen}</span>
+                  )}
+                  {exercise.rxWeights.rxWomen && (
+                    <span className="text-pink-500">Rx Women: {exercise.rxWeights.rxWomen}</span>
+                  )}
+                </div>
+              )}
+              {/* Individual member prescriptions (small groups) */}
+              {exercise.memberPrescriptions && exercise.memberPrescriptions.length > 0 && !exercise.rxWeights && (
                 <div className="mt-1 space-y-0.5">
                   {exercise.memberPrescriptions.map((rx, rxIdx) => (
                     <div key={rxIdx} className="text-xs text-brand/80">
@@ -284,29 +308,54 @@ export function WorkoutCard({
         </div>
       )}
 
-      {/* Action buttons */}
-      <div className="p-4 border-t bg-muted/30 flex gap-2">
-        {actions.map((action) => (
-          <Button
-            key={action.id}
-            variant={getButtonVariant(action.variant)}
-            onClick={() => handleAction(action.action)}
-            disabled={
-              isStarting ||
-              isSaving ||
-              (action.action === "save_plan" && !!savedPlanId)
-            }
-            className={cn(
-              "flex-1",
-              action.variant === "primary" && "bg-brand-gradient hover:opacity-90"
-            )}
-          >
-            {getActionIcon(action.action)}
-            <span className="ml-2">
-              {action.action === "save_plan" && savedPlanId ? "Saved" : action.label}
-            </span>
-          </Button>
-        ))}
+      {/* Feedback + Action buttons */}
+      <div className="p-4 border-t bg-muted/30 space-y-3">
+        <WorkoutFeedback
+          workoutPlanId={savedPlanId || undefined}
+          memberId={memberId}
+        />
+        {/* Primary actions */}
+        <div className="flex gap-2">
+          {actions.filter(a => a.variant === "primary" || a.variant === "secondary").map((action) => (
+            <Button
+              key={action.id}
+              variant={getButtonVariant(action.variant)}
+              onClick={() => handleAction(action.action)}
+              disabled={
+                isStarting ||
+                isSaving ||
+                (action.action === "save_plan" && !!savedPlanId)
+              }
+              className={cn(
+                "flex-1",
+                action.variant === "primary" && "bg-brand-gradient hover:opacity-90"
+              )}
+            >
+              {getActionIcon(action.action)}
+              <span className="ml-2">
+                {action.action === "save_plan" && savedPlanId ? "Saved" : action.label}
+              </span>
+            </Button>
+          ))}
+        </div>
+        {/* Secondary actions (modify, regenerate) */}
+        {actions.filter(a => a.variant === "outline").length > 0 && (
+          <div className="flex gap-2">
+            {actions.filter(a => a.variant === "outline").map((action) => (
+              <Button
+                key={action.id}
+                variant="outline"
+                size="sm"
+                onClick={() => handleAction(action.action)}
+                disabled={isStarting || isSaving}
+                className="flex-1 text-xs"
+              >
+                {getActionIcon(action.action)}
+                <span className="ml-1.5">{action.label}</span>
+              </Button>
+            ))}
+          </div>
+        )}
       </div>
     </motion.div>
   );

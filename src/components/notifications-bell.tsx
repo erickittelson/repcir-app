@@ -273,7 +273,7 @@ export function NotificationsBell() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="flex-shrink-0 h-6 w-6 opacity-0 group-hover:opacity-100 hover:opacity-100"
+                      className="flex-shrink-0 h-6 w-6 text-muted-foreground"
                       onClick={(e) => {
                         e.stopPropagation();
                         dismiss(notification.id);

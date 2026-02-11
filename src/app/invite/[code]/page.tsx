@@ -226,7 +226,7 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
                     Joining...
                   </>
                 ) : (
-                  "Join Rally"
+                  "Join Circle"
                 )}
               </Button>
             </div>

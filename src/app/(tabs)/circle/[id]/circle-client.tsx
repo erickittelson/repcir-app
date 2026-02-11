@@ -68,6 +68,7 @@ export function CircleClient({
 
   const isAdmin = membership?.role === "admin" || membership?.role === "owner";
   const totalMembers = members.length;
+  const currentUser = members.find(m => m.userId === userId);
 
   const handleJoin = async () => {
     setIsJoining(true);
@@ -89,7 +90,7 @@ export function CircleClient({
     navigator.clipboard.writeText(
       `${window.location.origin}/circle/${circle.id}`
     );
-    toast.success("Rally link copied!");
+    toast.success("Circle link copied!");
   };
 
   return (
@@ -212,6 +213,8 @@ export function CircleClient({
                 circleId={circle.id}
                 userId={userId}
                 userRole={membership.role}
+                userName={currentUser?.name}
+                userImage={currentUser?.profilePicture || undefined}
               />
             ) : (
               <Card>

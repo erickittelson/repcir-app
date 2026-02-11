@@ -1,27 +1,30 @@
 /**
- * Neon Auth Server - January 2026
+ * Neon Auth Server - February 2026
  *
- * Server-side auth utilities for API routes and Server Components.
+ * Unified auth instance using createNeonAuth (v0.2).
+ * Provides server-side auth, route handler, and middleware.
  */
 
-import { createAuthServer } from "@neondatabase/auth/next/server";
+import { createNeonAuth } from "@neondatabase/auth/next/server";
 
 // Lazy initialization to avoid build-time errors when env vars aren't available
-let _authServer: ReturnType<typeof createAuthServer> | null = null;
+let _auth: ReturnType<typeof createNeonAuth> | null = null;
 
-export function getAuthServer() {
-  if (!_authServer) {
-    _authServer = createAuthServer();
+export function getAuth() {
+  if (!_auth) {
+    _auth = createNeonAuth({
+      baseUrl: process.env.NEON_AUTH_BASE_URL!,
+      cookies: {
+        secret: process.env.NEON_AUTH_COOKIE_SECRET!,
+      },
+    });
   }
-  return _authServer;
+  return _auth;
 }
 
-// Legacy export for backward compatibility - uses getter
-export const authServer = new Proxy({} as ReturnType<typeof createAuthServer>, {
+// Proxy for convenient import: `import { auth } from "@/lib/neon-auth/server"`
+export const auth = new Proxy({} as ReturnType<typeof createNeonAuth>, {
   get(_, prop) {
-    return getAuthServer()[prop as keyof ReturnType<typeof createAuthServer>];
+    return getAuth()[prop as keyof ReturnType<typeof createNeonAuth>];
   },
 });
-
-// Re-export the neonAuth utility for quick access in server components
-export { neonAuth } from "@neondatabase/auth/next/server";

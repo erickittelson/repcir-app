@@ -6,7 +6,7 @@
  * Active circle is stored in a cookie for persistence.
  */
 
-import { authServer } from "./server";
+import { auth } from "./server";
 import { db } from "@/lib/db";
 import { circleMembers, circles } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -29,6 +29,7 @@ export interface AppSession {
     name: string;
     role: string; // owner, admin, member
     memberId: string; // The circle_members.id for this user in this circle
+    isSystemCircle: boolean; // true for "My Training" personal circle
   };
   // All circles the user belongs to
   circles: Array<{
@@ -36,6 +37,7 @@ export interface AppSession {
     name: string;
     role: string;
     memberId: string;
+    isSystemCircle: boolean;
   }>;
   // Backward compatibility - maps to activeCircle.id
   circleId: string;
@@ -46,7 +48,7 @@ export interface AppSession {
  */
 export async function getSession(): Promise<AppSession | null> {
   try {
-    const neonSession = await authServer.getSession();
+    const neonSession = await auth.getSession();
 
     if (!neonSession?.data?.session?.userId) {
       return null;
@@ -63,6 +65,7 @@ export async function getSession(): Promise<AppSession | null> {
         circleName: circles.name,
         role: circleMembers.role,
         memberId: circleMembers.id,
+        isSystemCircle: circles.isSystemCircle,
       })
       .from(circleMembers)
       .innerJoin(circles, eq(circleMembers.circleId, circles.id))
@@ -73,16 +76,18 @@ export async function getSession(): Promise<AppSession | null> {
       name: c.circleName,
       role: c.role || "member",
       memberId: c.memberId,
+      isSystemCircle: c.isSystemCircle,
     }));
 
     // Check for active circle in cookie
     const cookieStore = await cookies();
     const activeCircleCookie = cookieStore.get(ACTIVE_CIRCLE_COOKIE)?.value;
 
-    // Find the active circle from cookie or default to first
+    // Find the active circle from cookie or default
     let activeCircle = circlesList.find((c) => c.id === activeCircleCookie);
     if (!activeCircle && circlesList.length > 0) {
-      activeCircle = circlesList[0];
+      // Prefer a group circle over the system circle as default
+      activeCircle = circlesList.find((c) => !c.isSystemCircle) || circlesList[0];
     }
 
     return {

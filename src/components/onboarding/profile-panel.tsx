@@ -633,7 +633,7 @@ export function ProfilePanel({
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => onEdit(field.key, value)}
-                                  className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-accent"
+                                  className="h-6 w-6 text-muted-foreground hover:bg-accent"
                                 >
                                   <Pencil className="w-3 h-3" />
                                 </Button>
@@ -653,7 +653,7 @@ export function ProfilePanel({
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => onEdit("limitations", data.limitations)}
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-accent"
+                                className="h-6 w-6 text-muted-foreground hover:bg-accent"
                               >
                                 <Pencil className="w-3 h-3" />
                               </Button>
@@ -707,7 +707,7 @@ export function ProfilePanel({
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => onEdit("currentMaxes", data.currentMaxes)}
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-accent"
+                                className="h-6 w-6 text-muted-foreground hover:bg-accent"
                               >
                                 <Pencil className="w-3 h-3" />
                               </Button>
@@ -783,7 +783,7 @@ export function ProfilePanel({
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => onEdit("specificGoals", data.specificGoals)}
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-accent"
+                                className="h-6 w-6 text-muted-foreground hover:bg-accent"
                               >
                                 <Pencil className="w-3 h-3" />
                               </Button>

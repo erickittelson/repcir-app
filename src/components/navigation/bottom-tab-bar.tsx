@@ -19,11 +19,11 @@ interface TabItem {
   isAction?: boolean;
 }
 
-// Navigation: Home (Feed) | Rallies | Log (FAB) | Workouts | You
+// Navigation: Home (Feed) | Circles | Log (FAB) | Workouts | You
 // Workouts tab: create, publish, and manage workout plans
 const tabs: TabItem[] = [
   { href: "/", icon: Home, label: "Home" },
-  { href: "/circles", icon: Users, label: "Rallies" },
+  { href: "/circles", icon: Users, label: "Circles" },
   { href: "#log", icon: Plus, label: "Log", isAction: true },
   { href: "/workouts", icon: Dumbbell, label: "Workouts" },
   { href: "/you", icon: User, label: "You" },

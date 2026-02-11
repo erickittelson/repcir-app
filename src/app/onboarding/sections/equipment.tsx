@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, Check, Dumbbell, Home, Building2, ChevronLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Check, Dumbbell, Home, Building2, ChevronLeft, Loader2, Search, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { OnboardingActions } from "./onboarding-actions";
 import type { SectionProps } from "./types";
 
 // Location types
@@ -53,7 +53,25 @@ const PLATE_OPTIONS = [
   { label: "Full Home Gym (up to 405+ lbs)", totalWeight: 360, plates: [2.5, 5, 10, 25, 35, 45] },
 ];
 
-type Step = "location" | "equipment" | "weights";
+const COMMERCIAL_TYPES = ["commercial", "crossfit", "school"];
+
+interface PlaceResult {
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  type: string;
+}
+
+interface GymDetail {
+  locationType: string;
+  name: string;
+  address?: string;
+  lat?: number;
+  lng?: number;
+}
+
+type Step = "location" | "gym-search" | "equipment" | "weights";
 
 interface EquipmentDetails {
   dumbbells?: {
@@ -71,7 +89,7 @@ interface EquipmentDetails {
   };
 }
 
-export function EquipmentSection({ data, onUpdate, onNext }: SectionProps) {
+export function EquipmentSection({ data, onUpdate, onNext, onBack }: SectionProps) {
   const [step, setStep] = useState<Step>("location");
   const [locations, setLocations] = useState<string[]>(data.gymLocations || []);
   const [equipment, setEquipment] = useState<string[]>(data.equipmentAccess || []);
@@ -82,8 +100,41 @@ export function EquipmentSection({ data, onUpdate, onNext }: SectionProps) {
   const [plateSelection, setPlateSelection] = useState<number | null>(null);
   const [adjustableMax, setAdjustableMax] = useState<string>("");
 
+  // Gym search state
+  const [gymDetails, setGymDetails] = useState<GymDetail[]>(data.commercialGymDetails || []);
+  const [currentSearchType, setCurrentSearchType] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<PlaceResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showResults, setShowResults] = useState(true);
+  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
   const hasHomeGym = locations.includes("home");
-  const hasCommercialGym = locations.some(l => ["commercial", "crossfit", "school"].includes(l));
+  const hasCommercialGym = locations.some(l => COMMERCIAL_TYPES.includes(l));
+  const commercialLocations = locations.filter(l => COMMERCIAL_TYPES.includes(l));
+
+  // Debounced gym search
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    if (!searchQuery || searchQuery.length < 2 || !data.city) {
+      setSearchResults([]);
+      return;
+    }
+    searchDebounceRef.current = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const params = new URLSearchParams({ q: searchQuery, city: data.city! });
+        if (data.state) params.set("state", data.state);
+        const res = await fetch(`/api/places/search?${params}`);
+        if (res.ok) {
+          setSearchResults(await res.json());
+          setShowResults(true);
+        }
+      } catch { /* silent */ }
+      finally { setIsSearching(false); }
+    }, 400);
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
+  }, [searchQuery, data.city, data.state]);
 
   const toggleLocation = (id: string) => {
     setLocations((prev) =>
@@ -106,16 +157,15 @@ export function EquipmentSection({ data, onUpdate, onNext }: SectionProps) {
   };
 
   const handleLocationContinue = () => {
-    if (hasHomeGym) {
+    if (hasCommercialGym) {
+      // Go to gym search step for commercial/crossfit/school
+      const firstCommercialType = commercialLocations[0];
+      setCurrentSearchType(firstCommercialType);
+      setSearchQuery("");
+      setSearchResults([]);
+      setStep("gym-search");
+    } else if (hasHomeGym) {
       setStep("equipment");
-    } else if (hasCommercialGym) {
-      // Commercial gym = full equipment assumed
-      onUpdate({
-        gymLocations: locations,
-        equipmentAccess: ["full_gym"],
-        equipmentDetails: {},
-      });
-      onNext();
     } else if (locations.includes("outdoor")) {
       onUpdate({
         gymLocations: locations,
@@ -123,6 +173,77 @@ export function EquipmentSection({ data, onUpdate, onNext }: SectionProps) {
         equipmentDetails: {},
       });
       onNext();
+    }
+  };
+
+  const handlePlaceSelect = (place: PlaceResult) => {
+    const detail: GymDetail = {
+      locationType: currentSearchType,
+      name: place.name,
+      address: place.address,
+      lat: place.lat,
+      lng: place.lng,
+    };
+    setGymDetails(prev => {
+      const filtered = prev.filter(g => g.locationType !== currentSearchType);
+      return [...filtered, detail];
+    });
+    setSearchQuery("");
+    setSearchResults([]);
+    setShowResults(false);
+  };
+
+  const handleManualGymName = () => {
+    if (!searchQuery.trim()) return;
+    const detail: GymDetail = {
+      locationType: currentSearchType,
+      name: searchQuery.trim(),
+    };
+    setGymDetails(prev => {
+      const filtered = prev.filter(g => g.locationType !== currentSearchType);
+      return [...filtered, detail];
+    });
+    setSearchQuery("");
+    setSearchResults([]);
+  };
+
+  const handleGymSearchContinue = () => {
+    // Check if there are more commercial types to search
+    const currentIndex = commercialLocations.indexOf(currentSearchType);
+    if (currentIndex < commercialLocations.length - 1) {
+      const nextType = commercialLocations[currentIndex + 1];
+      setCurrentSearchType(nextType);
+      setSearchQuery("");
+      setSearchResults([]);
+      setShowResults(true);
+      return;
+    }
+
+    // Done with gym search, move to next step
+    if (hasHomeGym) {
+      setStep("equipment");
+    } else {
+      // No home gym, finish with commercial gym data
+      onUpdate({
+        gymLocations: locations,
+        commercialGymDetails: gymDetails,
+        equipmentAccess: ["full_gym"],
+        equipmentDetails: {},
+      });
+      onNext();
+    }
+  };
+
+  const handleGymSearchBack = () => {
+    const currentIndex = commercialLocations.indexOf(currentSearchType);
+    if (currentIndex > 0) {
+      const prevType = commercialLocations[currentIndex - 1];
+      setCurrentSearchType(prevType);
+      setSearchQuery("");
+      setSearchResults([]);
+      setShowResults(true);
+    } else {
+      setStep("location");
     }
   };
 
@@ -170,14 +291,19 @@ export function EquipmentSection({ data, onUpdate, onNext }: SectionProps) {
 
     onUpdate({
       gymLocations: locations,
+      commercialGymDetails: gymDetails.length > 0 ? gymDetails : undefined,
       equipmentAccess: finalEquipment,
       equipmentDetails: details,
     });
     onNext();
   };
 
+  const currentGymDetail = gymDetails.find(g => g.locationType === currentSearchType);
+  const gymTypeLabel = LOCATION_TYPES.find(t => t.id === currentSearchType)?.label || currentSearchType;
+  const hasCity = !!data.city;
+
   return (
-    <div className="h-full flex flex-col items-center justify-center p-6">
+    <div className="min-h-full flex flex-col items-center justify-start py-6 px-6">
       <AnimatePresence mode="wait">
         {/* Step 1: Location Selection */}
         {step === "location" && (
@@ -234,18 +360,150 @@ export function EquipmentSection({ data, onUpdate, onNext }: SectionProps) {
               ))}
             </div>
 
-            <Button
-              onClick={handleLocationContinue}
-              disabled={locations.length === 0}
-              className="w-full h-14 text-lg bg-energy-gradient hover:opacity-90 rounded-xl group"
-            >
-              Continue
-              <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-            </Button>
+            <OnboardingActions
+              onNext={handleLocationContinue}
+              onBack={onBack}
+              nextDisabled={locations.length === 0}
+            />
           </motion.div>
         )}
 
-        {/* Step 2: Home Equipment Selection */}
+        {/* Step 2: Gym Search (for commercial/crossfit/school) */}
+        {step === "gym-search" && (
+          <motion.div
+            key={`gym-search-${currentSearchType}`}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="max-w-lg mx-auto w-full text-center"
+          >
+            <button
+              onClick={handleGymSearchBack}
+              className="absolute top-4 left-4 p-2 rounded-lg hover:bg-muted transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+
+            <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-brand/10 flex items-center justify-center">
+              <Search className="w-8 h-8 text-brand" />
+            </div>
+
+            <h2 className="text-2xl md:text-3xl font-bold mb-2">
+              Find your {gymTypeLabel.toLowerCase()}
+            </h2>
+            <p className="text-muted-foreground mb-6">
+              {hasCity
+                ? `Search for gyms near ${data.city}${data.state ? `, ${data.state}` : ""}`
+                : "Type the name of your gym"}
+            </p>
+
+            <div className="space-y-4 text-left mb-6">
+              {/* Search input */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={currentGymDetail && !searchQuery ? "" : searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setShowResults(true);
+                  }}
+                  placeholder={hasCity ? "Search gyms, CrossFit boxes..." : "Type your gym name..."}
+                  className="w-full pl-10 pr-10 p-3 rounded-xl border-2 border-border bg-background text-sm focus:border-brand focus:outline-none"
+                />
+                {isSearching && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+                )}
+              </div>
+
+              {/* Search results dropdown */}
+              {showResults && searchResults.length > 0 && (
+                <div className="rounded-xl border bg-card shadow-md max-h-52 overflow-y-auto">
+                  {searchResults.map((place, i) => (
+                    <button
+                      key={`${place.name}-${i}`}
+                      onClick={() => handlePlaceSelect(place)}
+                      className="w-full flex items-start gap-3 px-4 py-3 text-sm hover:bg-accent text-left border-b last:border-b-0"
+                    >
+                      <MapPin className="w-4 h-4 text-brand shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <span className="font-medium block truncate">{place.name}</span>
+                        {place.address && (
+                          <span className="text-xs text-muted-foreground block truncate">{place.address}</span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* "Use this name" button when typing but no result selected */}
+              {searchQuery.trim().length >= 2 && !isSearching && searchResults.length === 0 && hasCity && (
+                <p className="text-xs text-muted-foreground text-center">
+                  No gyms found nearby. You can still use this name.
+                </p>
+              )}
+
+              {searchQuery.trim().length >= 2 && (
+                <button
+                  onClick={handleManualGymName}
+                  className={cn(
+                    "w-full p-3 rounded-xl border-2 border-dashed transition-all text-sm text-left",
+                    "hover:border-brand hover:bg-brand/5",
+                    "border-border text-muted-foreground"
+                  )}
+                >
+                  Use &ldquo;{searchQuery.trim()}&rdquo; as gym name
+                </button>
+              )}
+
+              {!hasCity && (
+                <p className="text-xs text-muted-foreground text-center">
+                  Set your city in the Preferences step to search nearby gyms
+                </p>
+              )}
+
+              {/* Selected gym */}
+              {currentGymDetail && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="p-4 rounded-xl border-2 border-brand bg-brand/5"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-brand/10 flex items-center justify-center">
+                      <Check className="w-5 h-5 text-brand" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold truncate">{currentGymDetail.name}</p>
+                      {currentGymDetail.address && (
+                        <p className="text-xs text-muted-foreground truncate">{currentGymDetail.address}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => {
+                        setGymDetails(prev => prev.filter(g => g.locationType !== currentSearchType));
+                        setSearchQuery("");
+                        setShowResults(true);
+                      }}
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      Change
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </div>
+
+            <OnboardingActions
+              onNext={handleGymSearchContinue}
+              onBack={handleGymSearchBack}
+              nextLabel={!currentGymDetail ? "Skip" : undefined}
+            />
+          </motion.div>
+        )}
+
+        {/* Step 3: Home Equipment Selection */}
         {step === "equipment" && (
           <motion.div
             key="equipment"
@@ -255,7 +513,7 @@ export function EquipmentSection({ data, onUpdate, onNext }: SectionProps) {
             className="max-w-lg mx-auto w-full text-center"
           >
             <button
-              onClick={() => setStep("location")}
+              onClick={() => setStep(hasCommercialGym ? "gym-search" : "location")}
               className="absolute top-4 left-4 p-2 rounded-lg hover:bg-muted transition-colors"
             >
               <ChevronLeft className="w-5 h-5" />
@@ -306,18 +564,15 @@ export function EquipmentSection({ data, onUpdate, onNext }: SectionProps) {
               ))}
             </div>
 
-            <Button
-              onClick={handleEquipmentContinue}
-              disabled={equipment.length === 0}
-              className="w-full h-14 text-lg bg-energy-gradient hover:opacity-90 rounded-xl group"
-            >
-              Continue
-              <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-            </Button>
+            <OnboardingActions
+              onNext={handleEquipmentContinue}
+              onBack={onBack}
+              nextDisabled={equipment.length === 0}
+            />
           </motion.div>
         )}
 
-        {/* Step 3: Weight Details */}
+        {/* Step 4: Weight Details */}
         {step === "weights" && (
           <motion.div
             key="weights"
@@ -344,20 +599,20 @@ export function EquipmentSection({ data, onUpdate, onNext }: SectionProps) {
               This helps us create workouts that match your equipment
             </p>
 
-            <div className="space-y-6 text-left">
+            <div className="space-y-5 text-left">
               {/* Dumbbell Selection */}
               {equipment.includes("dumbbells") && (
                 <div>
-                  <h3 className="font-semibold mb-3 flex items-center gap-2">
-                    <span className="text-xl">🏋️</span> Dumbbell Range
+                  <h3 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                    🏋️ Dumbbells
                   </h3>
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
                     {DUMBBELL_OPTIONS.map((option, index) => (
                       <button
                         key={index}
                         onClick={() => setDumbbellSelection(index)}
                         className={cn(
-                          "w-full p-3 rounded-lg border-2 transition-all text-left",
+                          "p-2.5 rounded-lg border-2 transition-all text-left text-sm",
                           "hover:border-brand hover:bg-brand/5",
                           dumbbellSelection === index
                             ? "border-brand bg-brand/10"
@@ -367,38 +622,38 @@ export function EquipmentSection({ data, onUpdate, onNext }: SectionProps) {
                         {option.label}
                       </button>
                     ))}
-                    {dumbbellSelection === 4 && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        className="pt-2"
-                      >
-                        <input
-                          type="number"
-                          placeholder="Max weight (lbs)"
-                          value={adjustableMax}
-                          onChange={(e) => setAdjustableMax(e.target.value)}
-                          className="w-full p-3 rounded-lg border-2 border-border bg-background focus:border-brand focus:outline-none"
-                        />
-                      </motion.div>
-                    )}
                   </div>
+                  {dumbbellSelection === 4 && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      className="pt-2"
+                    >
+                      <input
+                        type="number"
+                        placeholder="Max weight (lbs)"
+                        value={adjustableMax}
+                        onChange={(e) => setAdjustableMax(e.target.value)}
+                        className="w-full p-2.5 rounded-lg border-2 border-border bg-background text-sm focus:border-brand focus:outline-none"
+                      />
+                    </motion.div>
+                  )}
                 </div>
               )}
 
               {/* Barbell/Plate Selection */}
               {equipment.includes("barbell") && (
                 <div>
-                  <h3 className="font-semibold mb-3 flex items-center gap-2">
-                    <span className="text-xl">🔩</span> Barbell & Plates
+                  <h3 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                    🔩 Barbell & Plates
                   </h3>
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
                     {PLATE_OPTIONS.map((option, index) => (
                       <button
                         key={index}
                         onClick={() => setPlateSelection(index)}
                         className={cn(
-                          "w-full p-3 rounded-lg border-2 transition-all text-left",
+                          "p-2.5 rounded-lg border-2 transition-all text-left text-sm",
                           "hover:border-brand hover:bg-brand/5",
                           plateSelection === index
                             ? "border-brand bg-brand/10"
@@ -409,20 +664,18 @@ export function EquipmentSection({ data, onUpdate, onNext }: SectionProps) {
                       </button>
                     ))}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">
+                  <p className="text-xs text-muted-foreground mt-1.5">
                     Assumes 45 lb Olympic barbell
                   </p>
                 </div>
               )}
             </div>
 
-            <Button
-              onClick={finishSection}
-              className="w-full h-14 text-lg bg-energy-gradient hover:opacity-90 rounded-xl group mt-6"
-            >
-              Continue
-              <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-            </Button>
+            <OnboardingActions
+              onNext={finishSection}
+              onBack={onBack}
+              className="mt-6"
+            />
           </motion.div>
         )}
       </AnimatePresence>
