@@ -16,6 +16,8 @@ import {
   Trophy,
   MapPin,
   Activity,
+  MessageSquareText,
+  Camera,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { OnboardingData } from "../page";
@@ -33,6 +35,7 @@ const SECTION_REQUIREMENTS = [
   { id: 8, name: "Limitations", fields: ["limitationsAcknowledged"] },
   { id: 9, name: "Equipment", fields: ["gymLocations"] },
   { id: 10, name: "Preferences", fields: ["workoutDuration", "workoutDays"] },
+  { id: 11, name: "Your Story", fields: ["personalContextAcknowledged"] },
 ];
 
 // Helper to calculate age from birth year
@@ -317,68 +320,89 @@ export function CompleteSection({
           </p>
         </div>
 
-        {/* Profile Sections */}
+        {/* Profile Sections — every onboarding step is represented */}
         <div className="space-y-3 mb-6">
-          {/* Personal Info */}
+          {/* 0: Name */}
           <ReviewSection
             icon={<User className="w-4 h-4" />}
-            title="Personal Info"
+            title="Name"
+            onEdit={() => onScrollToSection(0)}
+            delay={0.05}
+          >
+            <span className="text-sm font-medium">{data.name || "—"}</span>
+          </ReviewSection>
+
+          {/* 1: Profile Photo */}
+          <ReviewSection
+            icon={<Camera className="w-4 h-4" />}
+            title="Profile Photo"
+            onEdit={() => onScrollToSection(1)}
+            delay={0.08}
+          >
+            {data.profilePicture ? (
+              <div className="flex items-center gap-2">
+                <img src={data.profilePicture} alt="" className="w-10 h-10 rounded-full object-cover border border-border" />
+                <span className="text-xs text-muted-foreground">Photo uploaded</span>
+              </div>
+            ) : (
+              <span className="text-xs text-muted-foreground">Skipped — you can add one later</span>
+            )}
+          </ReviewSection>
+
+          {/* 2: Basics (Age, Height, Weight) */}
+          <ReviewSection
+            icon={<User className="w-4 h-4" />}
+            title="Age, Height & Weight"
             onEdit={() => onScrollToSection(2)}
-            delay={0.1}
+            delay={0.11}
           >
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-              {data.gender && (
-                <ReviewItem label="Gender" value={data.gender} />
-              )}
-              {data.birthYear && (
-                <ReviewItem label="Age" value={`${calculateAge(data.birthYear)} years`} />
-              )}
-              {data.heightFeet && (
-                <ReviewItem label="Height" value={formatHeight(data.heightFeet, data.heightInches)} />
-              )}
-              {data.weight && (
-                <ReviewItem label="Weight" value={`${data.weight} lbs`} />
-              )}
-              {data.bodyFatPercentage && (
-                <ReviewItem label="Body Fat" value={`${data.bodyFatPercentage}%`} />
-              )}
+              {data.gender && <ReviewItem label="Gender" value={data.gender} />}
+              {data.birthYear && <ReviewItem label="Age" value={`${calculateAge(data.birthYear)} years`} />}
+              {data.heightFeet && <ReviewItem label="Height" value={formatHeight(data.heightFeet, data.heightInches)} />}
+              {data.weight && <ReviewItem label="Weight" value={`${data.weight} lbs`} />}
+              {data.bodyFatPercentage && <ReviewItem label="Body Fat" value={`${data.bodyFatPercentage}%`} />}
             </div>
           </ReviewSection>
 
-          {/* Goals */}
+          {/* 3: Goals */}
           <ReviewSection
             icon={<Target className="w-4 h-4" />}
             title="Goals"
             onEdit={() => onScrollToSection(3)}
-            delay={0.15}
+            delay={0.14}
           >
             {allGoals.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {allGoals.map((goal) => (
-                  <span
-                    key={goal}
-                    className="px-2 py-1 bg-brand/10 text-brand rounded-full text-xs font-medium"
-                  >
+                  <span key={goal} className="px-2 py-1 bg-brand/10 text-brand rounded-full text-xs font-medium">
                     {formatGoal(goal)}
                   </span>
                 ))}
               </div>
-            ) : data.primaryGoal ? (
-              <span className="text-sm">{formatGoal(data.primaryGoal)}</span>
-            ) : null}
+            ) : (
+              <span className="text-xs text-muted-foreground">No goals set</span>
+            )}
           </ReviewSection>
 
-          {/* Fitness & Activity */}
+          {/* 4: Fitness Level */}
           <ReviewSection
             icon={<Activity className="w-4 h-4" />}
-            title="Fitness & Activity"
+            title="Fitness Level"
             onEdit={() => onScrollToSection(4)}
+            delay={0.17}
+          >
+            <span className="text-sm font-medium capitalize">{data.fitnessLevel || "—"}</span>
+          </ReviewSection>
+
+          {/* 5: Frequency & Activity */}
+          <ReviewSection
+            icon={<Activity className="w-4 h-4" />}
+            title="Frequency & Activity"
+            onEdit={() => onScrollToSection(5)}
             delay={0.2}
           >
             <div className="space-y-1 text-sm">
-              {data.fitnessLevel && (
-                <ReviewItem label="Level" value={data.fitnessLevel} fullWidth />
-              )}
               {data.trainingFrequency && (
                 <ReviewItem label="Training" value={formatFrequency(data.trainingFrequency)} fullWidth />
               )}
@@ -392,38 +416,37 @@ export function CompleteSection({
             </div>
           </ReviewSection>
 
-          {/* Sports */}
-          {data.sports && data.sports.length > 0 && (
-            <ReviewSection
-              icon={<Heart className="w-4 h-4" />}
-              title="Sports & Activities"
-              onEdit={() => onScrollToSection(6)}
-              delay={0.25}
-            >
+          {/* 6: Sports */}
+          <ReviewSection
+            icon={<Heart className="w-4 h-4" />}
+            title="Sports & Activities"
+            onEdit={() => onScrollToSection(6)}
+            delay={0.23}
+          >
+            {data.sports && data.sports.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {data.sports.map((sport) => (
-                  <span
-                    key={sport.id}
-                    className="px-2 py-1 bg-brand/10 text-brand rounded-full text-xs font-medium"
-                  >
+                  <span key={sport.id} className="px-2 py-1 bg-brand/10 text-brand rounded-full text-xs font-medium">
                     {sport.icon} {sport.name}
                   </span>
                 ))}
               </div>
-            </ReviewSection>
-          )}
+            ) : (
+              <span className="text-xs text-muted-foreground">None added — you can add later</span>
+            )}
+          </ReviewSection>
 
-          {/* Personal Records */}
-          {data.currentMaxes && data.currentMaxes.length > 0 && (() => {
-            const lifts = data.currentMaxes!.filter((pr) => pr.unit !== "skill");
-            const skills = data.currentMaxes!.filter((pr) => pr.unit === "skill");
-            return (
-              <ReviewSection
-                icon={<Trophy className="w-4 h-4" />}
-                title="Personal Records"
-                onEdit={() => onScrollToSection(7)}
-                delay={0.3}
-              >
+          {/* 7: PRs & Skills */}
+          <ReviewSection
+            icon={<Trophy className="w-4 h-4" />}
+            title="PRs & Skills"
+            onEdit={() => onScrollToSection(7)}
+            delay={0.26}
+          >
+            {data.currentMaxes && data.currentMaxes.length > 0 ? (() => {
+              const lifts = data.currentMaxes!.filter((pr) => pr.unit !== "skill");
+              const skills = data.currentMaxes!.filter((pr) => pr.unit === "skill");
+              return (
                 <div className="space-y-2">
                   {lifts.length > 0 && (
                     <div className="space-y-1 text-sm">
@@ -438,32 +461,31 @@ export function CompleteSection({
                   {skills.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
                       {skills.map((pr, i) => (
-                        <span
-                          key={i}
-                          className="px-2 py-1 bg-success/10 text-success rounded-full text-xs font-medium"
-                        >
+                        <span key={i} className="px-2 py-1 bg-success/10 text-success rounded-full text-xs font-medium">
                           {pr.exercise}
                         </span>
                       ))}
                     </div>
                   )}
                 </div>
-              </ReviewSection>
-            );
-          })()}
+              );
+            })() : (
+              <span className="text-xs text-muted-foreground">None added — you can add later</span>
+            )}
+          </ReviewSection>
 
-          {/* Limitations */}
-          {data.limitations && data.limitations.length > 0 && (
-            <ReviewSection
-              icon={<AlertTriangle className="w-4 h-4 text-amber-500" />}
-              title="Limitations"
-              onEdit={() => onScrollToSection(8)}
-              delay={0.35}
-            >
+          {/* 8: Limitations */}
+          <ReviewSection
+            icon={<AlertTriangle className="w-4 h-4 text-amber-500" />}
+            title="Limitations"
+            onEdit={() => onScrollToSection(8)}
+            delay={0.29}
+          >
+            {data.limitations && data.limitations.length > 0 ? (
               <div className="space-y-1 text-sm">
                 {data.limitations.map((lim, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    <span className="text-amber-500">•</span>
+                    <span className="text-amber-500">&bull;</span>
                     <span className="capitalize">{lim.bodyPart.replace(/_/g, " ")}</span>
                     {lim.severity && (
                       <span className="text-xs text-muted-foreground">({lim.severity})</span>
@@ -471,60 +493,61 @@ export function CompleteSection({
                   </div>
                 ))}
               </div>
-            </ReviewSection>
-          )}
+            ) : (
+              <span className="text-xs text-muted-foreground">None — great!</span>
+            )}
+          </ReviewSection>
 
-          {/* Equipment & Location */}
+          {/* 9: Equipment & Gym Locations */}
           <ReviewSection
             icon={<Dumbbell className="w-4 h-4" />}
-            title="Equipment"
+            title="Equipment & Gym"
             onEdit={() => onScrollToSection(9)}
-            delay={0.4}
+            delay={0.32}
           >
             <div className="space-y-2">
-              {/* Where they train */}
-              {data.gymLocations && data.gymLocations.length > 0 && (
+              {data.gymLocations && data.gymLocations.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {data.gymLocations.map((loc) => (
-                    <span
-                      key={loc}
-                      className="px-2 py-1 bg-brand/10 text-brand rounded-full text-xs font-medium"
-                    >
+                    <span key={loc} className="px-2 py-1 bg-brand/10 text-brand rounded-full text-xs font-medium">
                       {LOCATION_LABELS[loc] || loc.replace(/_/g, " ")}
                     </span>
                   ))}
                 </div>
+              ) : (
+                <span className="text-xs text-muted-foreground">No locations set</span>
               )}
-              {/* What equipment they have */}
+              {data.commercialGymDetails && data.commercialGymDetails.length > 0 && (
+                <div className="space-y-1 text-sm">
+                  {data.commercialGymDetails.map((gym, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <MapPin className="w-3 h-3 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground truncate">{gym.name}{gym.address ? ` — ${gym.address}` : ""}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               {data.equipmentAccess && data.equipmentAccess.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
-                  {data.equipmentAccess
-                    .filter((eq) => eq !== "full_gym")
-                    .slice(0, 8)
-                    .map((eq) => (
-                      <span
-                        key={eq}
-                        className="px-2 py-1 bg-muted rounded-full text-xs capitalize"
-                      >
-                        {eq.replace(/_/g, " ")}
-                      </span>
-                    ))}
-                  {data.equipmentAccess.includes("full_gym") && (
-                    <span className="px-2 py-1 bg-muted rounded-full text-xs">
-                      Full gym access
+                  {data.equipmentAccess.filter((eq) => eq !== "full_gym").slice(0, 8).map((eq) => (
+                    <span key={eq} className="px-2 py-1 bg-muted rounded-full text-xs capitalize">
+                      {eq.replace(/_/g, " ")}
                     </span>
+                  ))}
+                  {data.equipmentAccess.includes("full_gym") && (
+                    <span className="px-2 py-1 bg-muted rounded-full text-xs">Full gym access</span>
                   )}
                 </div>
               )}
             </div>
           </ReviewSection>
 
-          {/* Schedule & Preferences */}
+          {/* 10: Preferences (Schedule + City) */}
           <ReviewSection
             icon={<Calendar className="w-4 h-4" />}
-            title="Schedule"
+            title="Schedule & Preferences"
             onEdit={() => onScrollToSection(10)}
-            delay={0.45}
+            delay={0.35}
           >
             <div className="space-y-1 text-sm">
               {data.workoutDuration && (
@@ -534,9 +557,23 @@ export function CompleteSection({
                 <ReviewItem label="Days" value={formatDays(data.workoutDays)} fullWidth />
               )}
               {data.city && (
-                <ReviewItem label="Location" value={data.city} fullWidth />
+                <ReviewItem label="Location" value={[data.city, data.state].filter(Boolean).join(", ")} fullWidth />
               )}
             </div>
+          </ReviewSection>
+
+          {/* 11: Personal Context (Your Story) */}
+          <ReviewSection
+            icon={<MessageSquareText className="w-4 h-4" />}
+            title="Your Story"
+            onEdit={() => onScrollToSection(11)}
+            delay={0.38}
+          >
+            {data.personalContext ? (
+              <p className="text-sm text-muted-foreground line-clamp-3">{data.personalContext}</p>
+            ) : (
+              <span className="text-xs text-muted-foreground">Skipped — you can add context later</span>
+            )}
           </ReviewSection>
         </div>
 

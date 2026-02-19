@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/neon-auth";
 import { db } from "@/lib/db";
-import { 
-  userProfiles, 
-  userBadges, 
-  badgeDefinitions, 
-  personalRecords, 
-  userSkills, 
+import {
+  userProfiles,
+  personalRecords,
+  userSkills,
   goals,
   onboardingProgress,
 } from "@/lib/db/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 export async function GET() {
   try {
@@ -44,28 +42,10 @@ export async function GET() {
     });
 
     // Get user data for the post-login experience
-    const [earnedBadges, prs, skills, userGoals] = await Promise.all([
-      // Get recently earned badges
-      (async () => {
-        try {
-          return await db
-            .select({
-              id: userBadges.id,
-              name: badgeDefinitions.name,
-              description: badgeDefinitions.description,
-              icon: badgeDefinitions.icon,
-              tier: badgeDefinitions.tier,
-            })
-            .from(userBadges)
-            .innerJoin(badgeDefinitions, eq(userBadges.badgeId, badgeDefinitions.id))
-            .where(eq(userBadges.userId, userId))
-            .orderBy(desc(userBadges.earnedAt))
-            .limit(5);
-        } catch {
-          return [];
-        }
-      })(),
-
+    // Note: earnedBadges intentionally excluded — badges are already celebrated
+    // in the onboarding AchievementModal, so PostLoginExperience skips badge
+    // celebration and shows the app tour instead.
+    const [prs, skills, userGoals] = await Promise.all([
       // Get PRs
       memberId
         ? db.query.personalRecords.findMany({
@@ -114,13 +94,7 @@ export async function GET() {
           name: s.name,
           status: s.currentStatus,
         })),
-        earnedBadges: earnedBadges.map(b => ({
-          id: b.id,
-          name: b.name,
-          description: b.description || "",
-          icon: b.icon || "🏆",
-          tier: b.tier as "bronze" | "silver" | "gold" | "platinum",
-        })),
+        earnedBadges: [], // Badges celebrated in onboarding AchievementModal
       },
     });
   } catch (error) {

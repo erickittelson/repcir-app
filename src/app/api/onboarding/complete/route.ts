@@ -50,6 +50,7 @@ const onboardingDataSchema = z.object({
   city: z.string().optional(),
   state: z.string().optional(),
   country: z.string().optional(),
+  personalContext: z.string().optional(),
   bodyFatPercentage: z.number().optional(),
   targetWeight: z.number().optional(),
   fitnessLevel: z.enum(["beginner", "intermediate", "advanced", "elite"]).optional(),
@@ -254,6 +255,7 @@ export async function POST(request: Request) {
         city: data.city || null,
         state: data.state || null,
         country: data.country || null,
+        personalContext: data.personalContext || null,
         visibility: data.profileVisibility || "private",
         workoutPreferences,
       })
@@ -267,6 +269,7 @@ export async function POST(request: Request) {
           city: data.city || null,
           state: data.state || null,
           country: data.country || null,
+          personalContext: data.personalContext || null,
           visibility: data.profileVisibility || "private",
           workoutPreferences,
           updatedAt: new Date(),
@@ -339,6 +342,8 @@ export async function POST(request: Request) {
           name: gymDetail?.name || defaultNames[locationType],
           type: locationType,
           address: gymDetail?.address || null,
+          lat: gymDetail?.lat ?? null,
+          lng: gymDetail?.lng ?? null,
           isActive: !gymLocations.includes("home"), // Active if no home gym
           equipment: ["full_gym"], // Commercial gyms have everything
           equipmentDetails: {},

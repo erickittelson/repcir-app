@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Dumbbell, Home, Building2, ChevronLeft, Loader2, Search, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { US_STATES } from "@/lib/constants/us-states";
 import { OnboardingActions } from "./onboarding-actions";
 import type { SectionProps } from "./types";
 
@@ -71,6 +72,14 @@ interface GymDetail {
   lng?: number;
 }
 
+interface CityResult {
+  id: string;
+  label: string;
+  city: string;
+  state: string;
+  country: string;
+}
+
 type Step = "location" | "gym-search" | "equipment" | "weights";
 
 interface EquipmentDetails {
@@ -109,22 +118,55 @@ export function EquipmentSection({ data, onUpdate, onNext, onBack }: SectionProp
   const [showResults, setShowResults] = useState(true);
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Gym search sub-step state (state → city → search)
+  const [gymSearchStep, setGymSearchStep] = useState<"state" | "city" | "search">("state");
+  const [selectedState, setSelectedState] = useState<string>(data.state || "");
+  const [selectedCity, setSelectedCity] = useState<string>(data.city || "");
+  const [stateFilter, setStateFilter] = useState("");
+  const [citySearch, setCitySearch] = useState("");
+  const [cityResults, setCityResults] = useState<CityResult[]>([]);
+  const [isCitySearching, setIsCitySearching] = useState(false);
+  const cityDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
   const hasHomeGym = locations.includes("home");
   const hasCommercialGym = locations.some(l => COMMERCIAL_TYPES.includes(l));
   const commercialLocations = locations.filter(l => COMMERCIAL_TYPES.includes(l));
 
-  // Debounced gym search
+  // Debounced city search
+  useEffect(() => {
+    if (cityDebounceRef.current) clearTimeout(cityDebounceRef.current);
+    if (!citySearch || citySearch.length < 2) {
+      setCityResults([]);
+      return;
+    }
+    cityDebounceRef.current = setTimeout(async () => {
+      setIsCitySearching(true);
+      try {
+        const stateName = US_STATES.find(s => s.value === selectedState)?.label || "";
+        const q = `${citySearch}, ${stateName}`;
+        const res = await fetch(`/api/geocode/search?q=${encodeURIComponent(q)}`);
+        if (res.ok) {
+          setCityResults(await res.json());
+        }
+      } catch { /* silent */ }
+      finally { setIsCitySearching(false); }
+    }, 400);
+    return () => { if (cityDebounceRef.current) clearTimeout(cityDebounceRef.current); };
+  }, [citySearch, selectedState]);
+
+  // Debounced gym search — uses selected city/state for location context
   useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    if (!searchQuery || searchQuery.length < 2 || !data.city) {
+    if (!searchQuery || searchQuery.length < 2) {
       setSearchResults([]);
       return;
     }
     searchDebounceRef.current = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const params = new URLSearchParams({ q: searchQuery, city: data.city! });
-        if (data.state) params.set("state", data.state);
+        const params = new URLSearchParams({ q: searchQuery });
+        if (selectedCity) params.set("city", selectedCity);
+        if (selectedState) params.set("state", selectedState);
         const res = await fetch(`/api/places/search?${params}`);
         if (res.ok) {
           setSearchResults(await res.json());
@@ -134,7 +176,7 @@ export function EquipmentSection({ data, onUpdate, onNext, onBack }: SectionProp
       finally { setIsSearching(false); }
     }, 400);
     return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
-  }, [searchQuery, data.city, data.state]);
+  }, [searchQuery, selectedCity, selectedState]);
 
   const toggleLocation = (id: string) => {
     setLocations((prev) =>
@@ -158,11 +200,18 @@ export function EquipmentSection({ data, onUpdate, onNext, onBack }: SectionProp
 
   const handleLocationContinue = () => {
     if (hasCommercialGym) {
-      // Go to gym search step for commercial/crossfit/school
       const firstCommercialType = commercialLocations[0];
       setCurrentSearchType(firstCommercialType);
       setSearchQuery("");
       setSearchResults([]);
+      // Skip to search if state+city already selected
+      if (selectedState && selectedCity) {
+        setGymSearchStep("search");
+      } else if (selectedState) {
+        setGymSearchStep("city");
+      } else {
+        setGymSearchStep("state");
+      }
       setStep("gym-search");
     } else if (hasHomeGym) {
       setStep("equipment");
@@ -208,6 +257,18 @@ export function EquipmentSection({ data, onUpdate, onNext, onBack }: SectionProp
   };
 
   const handleGymSearchContinue = () => {
+    // Auto-save typed name if user hasn't explicitly selected/confirmed
+    let updatedGymDetails = gymDetails;
+    const alreadyHasGym = gymDetails.some(g => g.locationType === currentSearchType);
+    if (!alreadyHasGym && searchQuery.trim().length >= 2) {
+      const detail: GymDetail = {
+        locationType: currentSearchType,
+        name: searchQuery.trim(),
+      };
+      updatedGymDetails = [...gymDetails.filter(g => g.locationType !== currentSearchType), detail];
+      setGymDetails(updatedGymDetails);
+    }
+
     // Check if there are more commercial types to search
     const currentIndex = commercialLocations.indexOf(currentSearchType);
     if (currentIndex < commercialLocations.length - 1) {
@@ -216,17 +277,24 @@ export function EquipmentSection({ data, onUpdate, onNext, onBack }: SectionProp
       setSearchQuery("");
       setSearchResults([]);
       setShowResults(true);
+      setGymSearchStep("search");
       return;
     }
 
+    // Save city/state for preferences pre-fill
+    const cityStateUpdate: Record<string, unknown> = {};
+    if (selectedCity) cityStateUpdate.city = selectedCity;
+    if (selectedState) cityStateUpdate.state = selectedState;
+
     // Done with gym search, move to next step
     if (hasHomeGym) {
+      onUpdate({ ...cityStateUpdate });
       setStep("equipment");
     } else {
-      // No home gym, finish with commercial gym data
       onUpdate({
+        ...cityStateUpdate,
         gymLocations: locations,
-        commercialGymDetails: gymDetails,
+        commercialGymDetails: updatedGymDetails,
         equipmentAccess: ["full_gym"],
         equipmentDetails: {},
       });
@@ -235,14 +303,12 @@ export function EquipmentSection({ data, onUpdate, onNext, onBack }: SectionProp
   };
 
   const handleGymSearchBack = () => {
-    const currentIndex = commercialLocations.indexOf(currentSearchType);
-    if (currentIndex > 0) {
-      const prevType = commercialLocations[currentIndex - 1];
-      setCurrentSearchType(prevType);
-      setSearchQuery("");
-      setSearchResults([]);
-      setShowResults(true);
+    if (gymSearchStep === "search") {
+      setGymSearchStep("city");
+    } else if (gymSearchStep === "city") {
+      setGymSearchStep("state");
     } else {
+      // gymSearchStep === "state" — go back to location selection
       setStep("location");
     }
   };
@@ -300,8 +366,6 @@ export function EquipmentSection({ data, onUpdate, onNext, onBack }: SectionProp
 
   const currentGymDetail = gymDetails.find(g => g.locationType === currentSearchType);
   const gymTypeLabel = LOCATION_TYPES.find(t => t.id === currentSearchType)?.label || currentSearchType;
-  const hasCity = !!data.city;
-
   return (
     <div className="min-h-full flex flex-col items-center justify-start py-6 px-6">
       <AnimatePresence mode="wait">
@@ -368,10 +432,10 @@ export function EquipmentSection({ data, onUpdate, onNext, onBack }: SectionProp
           </motion.div>
         )}
 
-        {/* Step 2: Gym Search (for commercial/crossfit/school) */}
+        {/* Step 2: Gym Search — 3 sub-steps: state → city → search */}
         {step === "gym-search" && (
           <motion.div
-            key={`gym-search-${currentSearchType}`}
+            key={`gym-search-${gymSearchStep}`}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
@@ -384,122 +448,333 @@ export function EquipmentSection({ data, onUpdate, onNext, onBack }: SectionProp
               <ChevronLeft className="w-5 h-5" />
             </button>
 
-            <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-brand/10 flex items-center justify-center">
-              <Search className="w-8 h-8 text-brand" />
-            </div>
-
-            <h2 className="text-2xl md:text-3xl font-bold mb-2">
-              Find your {gymTypeLabel.toLowerCase()}
-            </h2>
-            <p className="text-muted-foreground mb-6">
-              {hasCity
-                ? `Search for gyms near ${data.city}${data.state ? `, ${data.state}` : ""}`
-                : "Type the name of your gym"}
-            </p>
-
-            <div className="space-y-4 text-left mb-6">
-              {/* Search input */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  value={currentGymDetail && !searchQuery ? "" : searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setShowResults(true);
-                  }}
-                  placeholder={hasCity ? "Search gyms, CrossFit boxes..." : "Type your gym name..."}
-                  className="w-full pl-10 pr-10 p-3 rounded-xl border-2 border-border bg-background text-sm focus:border-brand focus:outline-none"
-                />
-                {isSearching && (
-                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
-                )}
-              </div>
-
-              {/* Search results dropdown */}
-              {showResults && searchResults.length > 0 && (
-                <div className="rounded-xl border bg-card shadow-md max-h-52 overflow-y-auto">
-                  {searchResults.map((place, i) => (
-                    <button
-                      key={`${place.name}-${i}`}
-                      onClick={() => handlePlaceSelect(place)}
-                      className="w-full flex items-start gap-3 px-4 py-3 text-sm hover:bg-accent text-left border-b last:border-b-0"
-                    >
-                      <MapPin className="w-4 h-4 text-brand shrink-0 mt-0.5" />
-                      <div className="min-w-0">
-                        <span className="font-medium block truncate">{place.name}</span>
-                        {place.address && (
-                          <span className="text-xs text-muted-foreground block truncate">{place.address}</span>
-                        )}
-                      </div>
-                    </button>
-                  ))}
+            {/* Sub-step 2a: State Selection */}
+            {gymSearchStep === "state" && (
+              <>
+                <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-brand/10 flex items-center justify-center">
+                  <MapPin className="w-8 h-8 text-brand" />
                 </div>
-              )}
 
-              {/* "Use this name" button when typing but no result selected */}
-              {searchQuery.trim().length >= 2 && !isSearching && searchResults.length === 0 && hasCity && (
-                <p className="text-xs text-muted-foreground text-center">
-                  No gyms found nearby. You can still use this name.
+                <h2 className="text-2xl md:text-3xl font-bold mb-2">
+                  What state is your gym in?
+                </h2>
+                <p className="text-muted-foreground mb-4">
+                  This helps us find gyms near you
                 </p>
-              )}
 
-              {searchQuery.trim().length >= 2 && (
-                <button
-                  onClick={handleManualGymName}
-                  className={cn(
-                    "w-full p-3 rounded-xl border-2 border-dashed transition-all text-sm text-left",
-                    "hover:border-brand hover:bg-brand/5",
-                    "border-border text-muted-foreground"
-                  )}
-                >
-                  Use &ldquo;{searchQuery.trim()}&rdquo; as gym name
-                </button>
-              )}
+                {/* Filter input */}
+                <div className="relative mb-3">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={stateFilter}
+                    onChange={(e) => setStateFilter(e.target.value)}
+                    placeholder="Filter states..."
+                    className="w-full pl-10 p-3 rounded-xl border-2 border-border bg-background text-sm focus:border-brand focus:outline-none"
+                  />
+                </div>
 
-              {!hasCity && (
-                <p className="text-xs text-muted-foreground text-center">
-                  Set your city in the Preferences step to search nearby gyms
+                {/* States grid */}
+                <div className="grid grid-cols-2 gap-1.5 max-h-[320px] overflow-y-auto overscroll-contain pr-1 mb-4">
+                  {US_STATES
+                    .filter(s =>
+                      !stateFilter ||
+                      s.label.toLowerCase().includes(stateFilter.toLowerCase()) ||
+                      s.value.toLowerCase().includes(stateFilter.toLowerCase())
+                    )
+                    .map(({ value, label }) => (
+                      <button
+                        key={value}
+                        onClick={() => {
+                          setSelectedState(value);
+                          setStateFilter("");
+                        }}
+                        className={cn(
+                          "h-10 px-3 rounded-lg border-2 transition-all text-left",
+                          "flex items-center",
+                          "hover:border-brand hover:bg-brand/5",
+                          selectedState === value
+                            ? "border-brand bg-brand/10"
+                            : "border-border bg-card"
+                        )}
+                      >
+                        <span className="text-xs font-medium truncate">{label}</span>
+                      </button>
+                    ))
+                  }
+                </div>
+
+                <OnboardingActions
+                  onNext={() => { if (selectedState) setGymSearchStep("city"); }}
+                  onBack={() => setStep("location")}
+                  nextDisabled={!selectedState}
+                />
+              </>
+            )}
+
+            {/* Sub-step 2b: City Autocomplete */}
+            {gymSearchStep === "city" && (
+              <>
+                <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-brand/10 flex items-center justify-center">
+                  <MapPin className="w-8 h-8 text-brand" />
+                </div>
+
+                <h2 className="text-2xl md:text-3xl font-bold mb-2">
+                  What city?
+                </h2>
+                <p className="text-muted-foreground mb-4">
+                  {US_STATES.find(s => s.value === selectedState)?.label}
                 </p>
-              )}
 
-              {/* Selected gym */}
-              {currentGymDetail && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="p-4 rounded-xl border-2 border-brand bg-brand/5"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-brand/10 flex items-center justify-center">
-                      <Check className="w-5 h-5 text-brand" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold truncate">{currentGymDetail.name}</p>
-                      {currentGymDetail.address && (
-                        <p className="text-xs text-muted-foreground truncate">{currentGymDetail.address}</p>
-                      )}
-                    </div>
+                {/* Selected city badge */}
+                {selectedCity && (
+                  <div className="mb-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand/10 border border-brand/20 text-sm font-medium">
+                    <MapPin className="w-3.5 h-3.5 text-brand" />
+                    {selectedCity}, {selectedState}
                     <button
                       onClick={() => {
-                        setGymDetails(prev => prev.filter(g => g.locationType !== currentSearchType));
-                        setSearchQuery("");
-                        setShowResults(true);
+                        setSelectedCity("");
+                        setCitySearch("");
+                        setCityResults([]);
                       }}
-                      className="text-xs text-muted-foreground hover:text-foreground"
+                      className="ml-1 hover:text-destructive"
                     >
-                      Change
+                      &times;
                     </button>
                   </div>
-                </motion.div>
-              )}
-            </div>
+                )}
 
-            <OnboardingActions
-              onNext={handleGymSearchContinue}
-              onBack={handleGymSearchBack}
-              nextLabel={!currentGymDetail ? "Skip" : undefined}
-            />
+                {/* City search input */}
+                {!selectedCity && (
+                  <div className="space-y-3 text-left mb-4">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <input
+                        type="text"
+                        value={citySearch}
+                        onChange={(e) => setCitySearch(e.target.value)}
+                        placeholder="Start typing your city..."
+                        className="w-full pl-10 pr-10 p-3 rounded-xl border-2 border-border bg-background text-sm focus:border-brand focus:outline-none"
+                        autoFocus
+                      />
+                      {isCitySearching && (
+                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+                      )}
+                    </div>
+
+                    {/* City results */}
+                    {cityResults.length > 0 && (
+                      <div className="rounded-xl border bg-card shadow-md max-h-52 overflow-y-auto">
+                        {cityResults.map((result) => (
+                          <button
+                            key={result.id}
+                            onClick={() => {
+                              setSelectedCity(result.city || citySearch.trim());
+                              setCitySearch("");
+                              setCityResults([]);
+                            }}
+                            className="w-full flex items-start gap-3 px-4 py-3 text-sm hover:bg-accent text-left border-b last:border-b-0"
+                          >
+                            <MapPin className="w-4 h-4 text-brand shrink-0 mt-0.5" />
+                            <div className="min-w-0">
+                              <span className="font-medium block truncate">
+                                {result.city || result.label.split(",")[0]}
+                              </span>
+                              <span className="text-xs text-muted-foreground block truncate">
+                                {result.state}
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Manual city entry when no results */}
+                    {citySearch.length >= 2 && !isCitySearching && cityResults.length === 0 && (
+                      <button
+                        onClick={() => {
+                          setSelectedCity(citySearch.trim());
+                          setCitySearch("");
+                          setCityResults([]);
+                        }}
+                        className={cn(
+                          "w-full p-3 rounded-xl border-2 border-dashed transition-all text-sm text-left",
+                          "hover:border-brand hover:bg-brand/5",
+                          "border-border text-muted-foreground"
+                        )}
+                      >
+                        Use &ldquo;{citySearch.trim()}&rdquo; as city
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <OnboardingActions
+                  onNext={() => {
+                    if (selectedCity) {
+                      setGymSearchStep("search");
+                      setSearchQuery("");
+                      setSearchResults([]);
+                      setShowResults(true);
+                    }
+                  }}
+                  onBack={() => setGymSearchStep("state")}
+                  nextDisabled={!selectedCity}
+                />
+              </>
+            )}
+
+            {/* Sub-step 2c: Gym Name Search */}
+            {gymSearchStep === "search" && (
+              <>
+                <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-brand/10 flex items-center justify-center">
+                  <Search className="w-8 h-8 text-brand" />
+                </div>
+
+                <h2 className="text-2xl md:text-3xl font-bold mb-2">
+                  Find your {gymTypeLabel.toLowerCase()}
+                </h2>
+                <p className="text-muted-foreground mb-1">
+                  Searching near {selectedCity}, {selectedState}
+                </p>
+                <button
+                  onClick={() => setGymSearchStep("city")}
+                  className="text-xs text-brand hover:underline mb-4 inline-block"
+                >
+                  Change location
+                </button>
+
+                <div className="space-y-4 text-left mb-6">
+                  {/* Search input */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={currentGymDetail && !searchQuery ? "" : searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setShowResults(true);
+                      }}
+                      placeholder="Search gyms, CrossFit boxes..."
+                      className="w-full pl-10 pr-10 p-3 rounded-xl border-2 border-border bg-background text-sm focus:border-brand focus:outline-none"
+                      autoFocus
+                    />
+                    {isSearching && (
+                      <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
+
+                  {/* Search results dropdown */}
+                  {showResults && searchResults.length > 0 && (
+                    <div className="rounded-xl border bg-card shadow-md max-h-52 overflow-y-auto">
+                      {searchResults.map((place, i) => (
+                        <button
+                          key={`${place.name}-${i}`}
+                          onClick={() => handlePlaceSelect(place)}
+                          className="w-full flex items-start gap-3 px-4 py-3 text-sm hover:bg-accent text-left border-b last:border-b-0"
+                        >
+                          <MapPin className="w-4 h-4 text-brand shrink-0 mt-0.5" />
+                          <div className="min-w-0">
+                            <span className="font-medium block truncate">{place.name}</span>
+                            {place.address && (
+                              <span className="text-xs text-muted-foreground block truncate">{place.address}</span>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* No results — prominent manual entry */}
+                  {searchQuery.trim().length >= 2 && !isSearching && searchResults.length === 0 && (
+                    <div className="text-center space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        Not in our database — no problem!
+                      </p>
+                      <button
+                        onClick={handleManualGymName}
+                        className={cn(
+                          "w-full p-3 rounded-xl border-2 transition-all text-sm font-medium",
+                          "hover:border-brand hover:bg-brand/5",
+                          "border-brand/50 bg-brand/5 text-foreground"
+                        )}
+                      >
+                        Use &ldquo;{searchQuery.trim()}&rdquo; as my gym
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Has results — subtle manual entry option */}
+                  {searchQuery.trim().length >= 2 && searchResults.length > 0 && (
+                    <button
+                      onClick={handleManualGymName}
+                      className={cn(
+                        "w-full p-3 rounded-xl border-2 border-dashed transition-all text-sm text-left",
+                        "hover:border-brand hover:bg-brand/5",
+                        "border-border text-muted-foreground"
+                      )}
+                    >
+                      Use &ldquo;{searchQuery.trim()}&rdquo; as gym name
+                    </button>
+                  )}
+
+                  {/* Selected gym with map */}
+                  {currentGymDetail && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="space-y-2"
+                    >
+                      <div className="p-4 rounded-xl border-2 border-brand bg-brand/5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-brand/10 flex items-center justify-center">
+                            <Check className="w-5 h-5 text-brand" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold truncate">{currentGymDetail.name}</p>
+                            {currentGymDetail.address && (
+                              <p className="text-xs text-muted-foreground truncate">{currentGymDetail.address}</p>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => {
+                              setGymDetails(prev => prev.filter(g => g.locationType !== currentSearchType));
+                              setSearchQuery("");
+                              setShowResults(true);
+                            }}
+                            className="text-xs text-muted-foreground hover:text-foreground"
+                          >
+                            Change
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Mini map */}
+                      {currentGymDetail.lat && currentGymDetail.lng && (
+                        <div className="rounded-xl overflow-hidden border border-border aspect-square">
+                          <iframe
+                            title="Gym location"
+                            width="100%"
+                            height="100%"
+                            style={{ border: 0 }}
+                            loading="lazy"
+                            allowFullScreen
+                            referrerPolicy="no-referrer-when-downgrade"
+                            src={`https://www.google.com/maps/embed/v1/place?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&q=${currentGymDetail.lat},${currentGymDetail.lng}&zoom=15`}
+                          />
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </div>
+
+                <OnboardingActions
+                  onNext={handleGymSearchContinue}
+                  onBack={() => setGymSearchStep("city")}
+                  nextLabel={!currentGymDetail ? "Skip" : undefined}
+                />
+              </>
+            )}
           </motion.div>
         )}
 

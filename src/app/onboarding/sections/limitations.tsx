@@ -181,7 +181,7 @@ export function LimitationsSection({ data, onUpdate, onNext, onBack }: SectionPr
             {limitations.length > 0 && (
               <div className="mb-3">
                 <p className="text-xs text-muted-foreground mb-2">Added ({limitations.length}):</p>
-                <div className="grid grid-cols-2 gap-1.5 max-h-[140px] overflow-y-auto overscroll-contain pr-1">
+                <div className="grid grid-cols-2 gap-1.5 max-h-[240px] overflow-y-auto overscroll-contain pr-1">
                   {limitations.map((l, i) => (
                     <div
                       key={i}
@@ -227,7 +227,7 @@ export function LimitationsSection({ data, onUpdate, onNext, onBack }: SectionPr
                 <p className="text-xs text-muted-foreground mb-2">
                   {limitations.length > 0 ? "Add another:" : "Select affected area:"}
                 </p>
-                <div className="grid grid-cols-2 gap-1.5 mb-4 max-h-[120px] overflow-y-auto overscroll-contain pr-1">
+                <div className="grid grid-cols-2 gap-1.5 mb-4 max-h-[240px] overflow-y-auto overscroll-contain pr-1">
                   {BODY_PARTS.filter((b) => !limitations.some((l) => l.bodyPart === b.id)).map(
                     ({ id, label }) => (
                       <button

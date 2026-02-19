@@ -6,11 +6,13 @@ import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RepcirLogo } from "@/components/ui/repcir-logo";
+import { moderateText } from "@/lib/moderation/text";
 import type { SectionProps } from "./types";
 
 export function WelcomeSection({ data, onUpdate, onNext, onBack }: SectionProps) {
   const [name, setName] = useState(data.name || "");
   const [showInput, setShowInput] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     // Delay showing input for dramatic effect
@@ -19,10 +21,18 @@ export function WelcomeSection({ data, onUpdate, onNext, onBack }: SectionProps)
   }, []);
 
   const handleSubmit = () => {
-    if (name.trim()) {
-      onUpdate({ name: name.trim() });
-      onNext();
+    const trimmed = name.trim();
+    if (!trimmed) return;
+
+    const result = moderateText(trimmed);
+    if (!result.isClean) {
+      setError("Please choose a different name.");
+      return;
     }
+
+    setError("");
+    onUpdate({ name: trimmed });
+    onNext();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -94,14 +104,17 @@ export function WelcomeSection({ data, onUpdate, onNext, onBack }: SectionProps)
                 type="text"
                 placeholder="Your name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => { setName(e.target.value); setError(""); }}
                 onKeyDown={handleKeyDown}
-                className="h-14 text-lg text-center bg-card/50 border-border/50 rounded-xl touch-target"
+                className={`h-14 text-lg text-center bg-card/50 border-border/50 rounded-xl touch-target ${error ? "border-red-500" : ""}`}
                 style={{ fontSize: "18px" }} // Prevents iOS zoom on focus
                 autoFocus
                 autoComplete="off"
                 autoCapitalize="words"
               />
+              {error && (
+                <p className="text-sm text-red-500 text-center">{error}</p>
+              )}
             </div>
 
             <Button

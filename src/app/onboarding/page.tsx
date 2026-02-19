@@ -19,6 +19,7 @@ import { MaxesSection } from "./sections/maxes";
 import { LimitationsSection } from "./sections/limitations";
 import { EquipmentSection } from "./sections/equipment";
 import { PreferencesSection } from "./sections/preferences";
+import { PersonalContextSection } from "./sections/personal-context";
 import { CompleteSection } from "./sections/complete";
 
 // Types
@@ -114,6 +115,9 @@ export interface OnboardingData {
   city?: string;
   state?: string;
   country?: string;
+  // Personal Context
+  personalContext?: string;
+  personalContextAcknowledged?: boolean;
   // Privacy
   profileVisibility?: "public" | "private";
 }
@@ -131,6 +135,7 @@ const SECTIONS = [
   { id: "limitations", label: "Limitations", group: "Setup", required: ["limitationsAcknowledged"] },
   { id: "equipment", label: "Equipment", group: "Setup", required: ["gymLocations"] },
   { id: "preferences", label: "Preferences", group: "Setup", required: ["workoutDuration", "workoutDays"] },
+  { id: "personal-context", label: "Your Story", group: "Setup", required: ["personalContextAcknowledged"] },
   { id: "complete", label: "Review & Finish", group: "Setup", required: [] },
 ] as const;
 
@@ -241,8 +246,8 @@ export default function OnboardingPage() {
     setData((prev) => ({ ...prev, ...updates }));
   }, []);
 
-  // Check if a section is complete
-  const isSectionComplete = useCallback((index: number) => {
+  // Check if a single section's required fields are filled
+  const isSectionFieldsComplete = useCallback((index: number) => {
     const section = SECTIONS[index];
     return section.required.every((field) => {
       const value = data[field as keyof OnboardingData];
@@ -250,6 +255,16 @@ export default function OnboardingPage() {
       return value !== undefined && value !== null && value !== "";
     });
   }, [data]);
+
+  // Check if a section should show as complete in the sidebar
+  const isSectionComplete = useCallback((index: number) => {
+    const section = SECTIONS[index];
+    // "Review & Finish" (no required fields) is only complete when all previous sections are
+    if (section.required.length === 0) {
+      return SECTIONS.slice(0, index).every((_, i) => isSectionFieldsComplete(i));
+    }
+    return isSectionFieldsComplete(index);
+  }, [isSectionFieldsComplete]);
 
   const handleComplete = async () => {
     setIsSubmitting(true);
@@ -271,7 +286,12 @@ export default function OnboardingPage() {
         if (badgeResponse.ok) {
           const { newBadges } = await badgeResponse.json();
           if (newBadges && newBadges.length > 0) {
-            setEarnedBadges(newBadges);
+            // Sort by tier: bronze → silver → gold → platinum
+            const tierOrder = { bronze: 0, silver: 1, gold: 2, platinum: 3 };
+            const sorted = [...newBadges].sort(
+              (a: EarnedBadge, b: EarnedBadge) => (tierOrder[a.tier] ?? 0) - (tierOrder[b.tier] ?? 0)
+            );
+            setEarnedBadges(sorted);
             setShowBadgeModal(true);
             return;
           }
@@ -308,6 +328,7 @@ export default function OnboardingPage() {
       case "limitations": return <LimitationsSection {...props} />;
       case "equipment": return <EquipmentSection {...props} />;
       case "preferences": return <PreferencesSection {...props} />;
+      case "personal-context": return <PersonalContextSection {...props} />;
       case "complete":
         return (
           <CompleteSection
