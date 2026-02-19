@@ -12,6 +12,9 @@ import {
 import { PostLoginExperience } from "@/components/onboarding/post-login-experience";
 import { RepcirLogo } from "@/components/ui/repcir-logo";
 import { NotificationsBell } from "@/components/notifications-bell";
+import { PastDueBanner } from "@/components/billing/past-due-banner";
+import { TrialExpiredModal } from "@/components/billing/trial-expired-modal";
+import { useBilling } from "@/hooks/use-billing";
 import type { CircleMember } from "@/components/social/circle-member-selector";
 
 interface UserData {
@@ -68,6 +71,7 @@ export function TabsShell({ session, children }: TabsShellProps) {
   const [preSelectedMembers, setPreSelectedMembers] = useState<CircleMember[]>([]);
   const [showPostLogin, setShowPostLogin] = useState(false);
   const [postLoginData, setPostLoginData] = useState<UserData | null>(null);
+  const billing = useBilling();
 
   // Check if we should show the post-login experience
   useEffect(() => {
@@ -122,6 +126,9 @@ export function TabsShell({ session, children }: TabsShellProps) {
         </div>
       </header>
 
+      {/* Past-due payment banner */}
+      <PastDueBanner isPastDue={billing.isPastDue} />
+
       {/* Main content area */}
       <main className="flex-1 overflow-y-auto pb-32">
         {children}
@@ -160,6 +167,11 @@ export function TabsShell({ session, children }: TabsShellProps) {
           onComplete={handlePostLoginComplete}
         />
       )}
+
+      {/* Trial expired modal (shown once after trial ends) */}
+      <TrialExpiredModal
+        trialExpired={!billing.isLoading && !billing.isPaid && !billing.isTrialing && billing.data?.subscription?.trialEnd != null}
+      />
     </div>
   );
 }
