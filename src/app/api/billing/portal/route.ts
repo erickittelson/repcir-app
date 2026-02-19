@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { createBillingPortalSession } from "@/lib/stripe";
-import { db } from "@/lib/db";
-import { subscriptions } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { createBillingService } from "@/lib/billing/billing-service";
 
 export async function POST() {
   try {
@@ -12,25 +9,12 @@ export async function POST() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get user's Stripe customer ID
-    const subscription = await db.query.subscriptions.findFirst({
-      where: eq(subscriptions.userId, session.user.id),
-    });
-
-    if (!subscription?.stripeCustomerId) {
-      return NextResponse.json(
-        { error: "No billing account found" },
-        { status: 404 }
-      );
-    }
-
-    // Get base URL for redirect
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const billing = createBillingService();
 
-    // Create portal session
-    const portalUrl = await createBillingPortalSession(
-      subscription.stripeCustomerId,
-      `${baseUrl}/settings/billing`
+    const portalUrl = await billing.createPortalSession(
+      session.user.id,
+      `${baseUrl}/you`
     );
 
     return NextResponse.json({ url: portalUrl });

@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { createCheckoutSession, getOrCreateCustomer } from "@/lib/stripe";
+import { createBillingService } from "@/lib/billing/billing-service";
+import { PLAN_TIERS } from "@/lib/billing/types";
 import { z } from "zod";
 
 const checkoutSchema = z.object({
-  priceId: z.string().min(1, "Price ID is required"),
-  interval: z.enum(["monthly", "yearly"]).optional(),
+  tier: z.enum(PLAN_TIERS).refine((t) => t !== "free", {
+    message: "Cannot checkout for the free tier",
+  }),
+  interval: z.enum(["monthly", "yearly"]).default("monthly"),
+  trialDays: z.number().optional(),
 });
 
 export async function POST(request: Request) {
@@ -25,28 +29,22 @@ export async function POST(request: Request) {
       );
     }
 
-    const { priceId } = validation.data;
-
-    // Get or create Stripe customer
-    const customerId = await getOrCreateCustomer(
-      session.user.id,
-      session.user.email,
-      session.user.name
-    );
-
-    // Get base URL for redirects
+    const { tier, interval, trialDays } = validation.data;
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const billing = createBillingService();
 
-    // Create checkout session
-    const checkoutUrl = await createCheckoutSession({
-      customerId,
-      priceId,
-      successUrl: `${baseUrl}/settings/billing?success=true`,
-      cancelUrl: `${baseUrl}/settings/billing?canceled=true`,
+    const result = await billing.createCheckout({
       userId: session.user.id,
+      email: session.user.email,
+      name: session.user.name,
+      tier,
+      interval,
+      successUrl: `${baseUrl}/you/plan/success?tier=${tier}`,
+      cancelUrl: `${baseUrl}/you/plan?canceled=true`,
+      trialDays,
     });
 
-    return NextResponse.json({ url: checkoutUrl });
+    return NextResponse.json({ url: result.url });
   } catch (error) {
     console.error("Checkout error:", error);
     return NextResponse.json(
