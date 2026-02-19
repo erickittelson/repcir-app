@@ -892,6 +892,8 @@ export const userProfiles = pgTable(
       .default([]),
     // Bio/description
     bio: text("bio"),
+    // Free-form context from onboarding (up to 500 words) — fed to AI for personalization
+    personalContext: text("personal_context"),
     // Featured items for public profile (max 3 each)
     featuredGoals: jsonb("featured_goals").$type<string[]>().default([]), // Goal IDs
     featuredAchievements: jsonb("featured_achievements").$type<string[]>().default([]), // Badge IDs
@@ -968,13 +970,18 @@ export const subscriptions = pgTable(
     stripeCustomerId: text("stripe_customer_id").unique(),
     stripeSubscriptionId: text("stripe_subscription_id").unique(),
     stripePriceId: text("stripe_price_id"),
-    plan: text("plan").default("free").notNull(), // free, pro
-    status: text("status").default("active").notNull(), // active, canceled, past_due, trialing
+    plan: text("plan").default("free").notNull(), // free, plus, pro, leader, team
+    billingInterval: text("billing_interval"), // monthly, yearly
+    billingProvider: text("billing_provider").default("stripe"), // stripe, apple_iap, google_play
+    status: text("status").default("active").notNull(), // active, canceled, past_due, trialing, unpaid, incomplete, paused
     currentPeriodStart: timestamp("current_period_start", { withTimezone: true }),
     currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
     cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false).notNull(),
     canceledAt: timestamp("canceled_at", { withTimezone: true }),
     trialEnd: timestamp("trial_end", { withTimezone: true }),
+    // Future mobile IAP fields
+    appleOriginalTransactionId: text("apple_original_transaction_id"),
+    googlePurchaseToken: text("google_purchase_token"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -982,6 +989,28 @@ export const subscriptions = pgTable(
     index("subscriptions_user_idx").on(sub.userId),
     index("subscriptions_stripe_customer_idx").on(sub.stripeCustomerId),
     index("subscriptions_status_idx").on(sub.status),
+    index("subscriptions_plan_idx").on(sub.plan),
+  ]
+);
+
+// ============================================================================
+// WEBHOOK EVENTS (idempotent webhook processing)
+// ============================================================================
+
+export const webhookEvents = pgTable(
+  "webhook_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    provider: text("provider").notNull(), // stripe, apple_iap, google_play
+    eventId: text("event_id").notNull(), // Stripe event ID, Apple notification ID, etc.
+    eventType: text("event_type").notNull(),
+    processedAt: timestamp("processed_at", { withTimezone: true }).defaultNow().notNull(),
+    payload: jsonb("payload"),
+    error: text("error"),
+  },
+  (event) => [
+    uniqueIndex("webhook_events_provider_event_idx").on(event.provider, event.eventId),
+    index("webhook_events_type_idx").on(event.eventType),
   ]
 );
 
@@ -1776,6 +1805,8 @@ export const userLocations = pgTable(
     name: text("name").notNull(), // e.g., "Home Gym", "Planet Fitness"
     type: text("type").notNull(), // home, commercial, school, outdoor, travel
     address: text("address"),
+    lat: real("lat"), // Latitude from Google Places
+    lng: real("lng"), // Longitude from Google Places
     isActive: boolean("is_active").default(false).notNull(), // Currently selected location
     visibility: text("visibility").default("private").notNull(), // "public" | "private"
     equipment: jsonb("equipment").$type<string[]>().default([]).notNull(), // Array of equipment IDs
@@ -2314,6 +2345,7 @@ export const badgeDefinitions = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (badge) => [
+    uniqueIndex("badge_definitions_name_idx").on(badge.name),
     index("badge_definitions_category_idx").on(badge.category),
     index("badge_definitions_tier_idx").on(badge.tier),
     index("badge_definitions_active_idx").on(badge.isActive),
@@ -2689,6 +2721,7 @@ export const circlePosts = pgTable(
     dueDate: timestamp("due_date", { withTimezone: true }), // Optional deadline
     
     isPinned: boolean("is_pinned").default(false).notNull(),
+    visibility: text("visibility").default("circle_only").notNull(), // "circle_only" | "public"
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -2698,6 +2731,7 @@ export const circlePosts = pgTable(
     index("circle_posts_type_idx").on(post.postType),
     index("circle_posts_created_idx").on(post.createdAt),
     index("circle_posts_pinned_idx").on(post.isPinned),
+    index("circle_posts_visibility_idx").on(post.visibility, post.createdAt),
   ]
 );
 
@@ -3160,6 +3194,154 @@ export const workoutTemplates = pgTable(
 );
 
 // ============================================================================
+// INDIVIDUAL POSTS (user-level, not circle-scoped)
+// ============================================================================
+
+/**
+ * Individual user posts - LinkedIn-style personal posts
+ * Separate from circlePosts (which are scoped to a circle).
+ * Posts appear in the global feed based on visibility + social graph.
+ */
+export const posts = pgTable(
+  "posts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    authorId: text("author_id").notNull(), // Neon Auth user ID
+    postType: text("post_type").notNull(), // "text", "image", "workout", "milestone", "pr"
+
+    // Content
+    content: text("content"), // Text content / caption
+    imageUrl: text("image_url"), // For image posts
+
+    // Optional linked entities
+    workoutPlanId: uuid("workout_plan_id").references(() => workoutPlans.id, { onDelete: "set null" }),
+    challengeId: uuid("challenge_id").references(() => challenges.id, { onDelete: "set null" }),
+    goalId: uuid("goal_id").references(() => goals.id, { onDelete: "set null" }),
+
+    // Visibility: who can see this in their feed
+    visibility: text("visibility").default("public").notNull(), // "public" | "followers" | "connections" | "private"
+
+    // Denormalized counts
+    likeCount: integer("like_count").default(0).notNull(),
+    commentCount: integer("comment_count").default(0).notNull(),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (post) => [
+    index("posts_author_idx").on(post.authorId),
+    index("posts_visibility_created_idx").on(post.visibility, post.createdAt),
+    index("posts_created_idx").on(post.createdAt),
+    index("posts_author_created_idx").on(post.authorId, post.createdAt),
+  ]
+);
+
+/**
+ * Post likes - individual post engagement
+ */
+export const postLikes = pgTable(
+  "post_likes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    postId: uuid("post_id")
+      .notNull()
+      .references(() => posts.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (like) => [
+    index("post_likes_post_idx").on(like.postId),
+    index("post_likes_user_idx").on(like.userId),
+    uniqueIndex("post_likes_unique_idx").on(like.postId, like.userId),
+  ]
+);
+
+/**
+ * Post comments - individual post engagement
+ */
+export const postComments = pgTable(
+  "post_comments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    postId: uuid("post_id")
+      .notNull()
+      .references(() => posts.id, { onDelete: "cascade" }),
+    authorId: text("author_id").notNull(),
+    content: text("content").notNull(),
+    imageUrl: text("image_url"),
+    likeCount: integer("like_count").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (comment) => [
+    index("post_comments_post_idx").on(comment.postId),
+    index("post_comments_author_idx").on(comment.authorId),
+  ]
+);
+
+/**
+ * Post comment likes
+ */
+export const postCommentLikes = pgTable(
+  "post_comment_likes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    commentId: uuid("comment_id")
+      .notNull()
+      .references(() => postComments.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (like) => [
+    index("post_comment_likes_comment_idx").on(like.commentId),
+    uniqueIndex("post_comment_likes_unique_idx").on(like.commentId, like.userId),
+  ]
+);
+
+// ============================================================================
+// INDIVIDUAL POSTS RELATIONS
+// ============================================================================
+
+export const postsRelations = relations(posts, ({ one, many }) => ({
+  workoutPlan: one(workoutPlans, {
+    fields: [posts.workoutPlanId],
+    references: [workoutPlans.id],
+  }),
+  challenge: one(challenges, {
+    fields: [posts.challengeId],
+    references: [challenges.id],
+  }),
+  goal: one(goals, {
+    fields: [posts.goalId],
+    references: [goals.id],
+  }),
+  likes: many(postLikes),
+  comments: many(postComments),
+}));
+
+export const postLikesRelations = relations(postLikes, ({ one }) => ({
+  post: one(posts, {
+    fields: [postLikes.postId],
+    references: [posts.id],
+  }),
+}));
+
+export const postCommentsRelations = relations(postComments, ({ one, many }) => ({
+  post: one(posts, {
+    fields: [postComments.postId],
+    references: [posts.id],
+  }),
+  likes: many(postCommentLikes),
+}));
+
+export const postCommentLikesRelations = relations(postCommentLikes, ({ one }) => ({
+  comment: one(postComments, {
+    fields: [postCommentLikes.commentId],
+    references: [postComments.id],
+  }),
+}));
+
+// ============================================================================
 // TYPE EXPORTS
 // ============================================================================
 
@@ -3297,3 +3479,13 @@ export type ProgressReport = typeof progressReports.$inferSelect;
 export type NewProgressReport = typeof progressReports.$inferInsert;
 export type WorkoutTemplate = typeof workoutTemplates.$inferSelect;
 export type NewWorkoutTemplate = typeof workoutTemplates.$inferInsert;
+
+// Individual Posts
+export type Post = typeof posts.$inferSelect;
+export type NewPost = typeof posts.$inferInsert;
+export type PostLike = typeof postLikes.$inferSelect;
+export type NewPostLike = typeof postLikes.$inferInsert;
+export type PostComment = typeof postComments.$inferSelect;
+export type NewPostComment = typeof postComments.$inferInsert;
+export type PostCommentLike = typeof postCommentLikes.$inferSelect;
+export type NewPostCommentLike = typeof postCommentLikes.$inferInsert;

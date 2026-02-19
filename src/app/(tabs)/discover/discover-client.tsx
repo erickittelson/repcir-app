@@ -2,6 +2,8 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { useBilling } from "@/hooks/use-billing";
+import { UpgradeSheet } from "@/components/billing/upgrade-sheet";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -313,6 +315,8 @@ export function DiscoverPage({
   workouts,
 }: DiscoverPageProps) {
   const router = useRouter();
+  const billing = useBilling();
+  const [showUpgradeSheet, setShowUpgradeSheet] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("workouts");
   const [searchQuery, setSearchQuery] = useState("");
   const [savingWorkouts, setSavingWorkouts] = useState<Set<string>>(new Set());
@@ -494,6 +498,17 @@ export function DiscoverPage({
 
   // Actions
   const handleSaveWorkout = async (workoutId: string) => {
+    // Gate: saving workouts requires Plus+
+    if (!billing.isLoading && billing.data && !billing.data.entitlements.hasSavedWorkouts) {
+      if (billing.canShowPaywall("save-workout")) {
+        setShowUpgradeSheet(true);
+        billing.recordPaywallShown("save-workout");
+      } else {
+        toast.error("Upgrade to Plus to save workouts");
+      }
+      return;
+    }
+
     setSavingWorkouts((prev) => new Set(prev).add(workoutId));
     try {
       await fetch(`/api/workouts/${workoutId}/save`, { method: "POST" });
@@ -510,6 +525,21 @@ export function DiscoverPage({
   };
 
   const handleJoinCircle = async (circleId: string) => {
+    // Gate: check circle join limit
+    if (!billing.isLoading && billing.data) {
+      const maxCircles = billing.data.entitlements.maxCircles;
+      const joinedCount = billing.data.usage.circlesJoined;
+      if (maxCircles < 999_999 && joinedCount >= maxCircles) {
+        if (billing.canShowPaywall("circle-limit")) {
+          setShowUpgradeSheet(true);
+          billing.recordPaywallShown("circle-limit");
+        } else {
+          toast.error(`You've reached your ${maxCircles} circle limit. Upgrade for more.`);
+        }
+        return;
+      }
+    }
+
     setJoiningCircles((prev) => new Set(prev).add(circleId));
     try {
       await fetch(`/api/circles/${circleId}/join`, { method: "POST" });
@@ -569,6 +599,13 @@ export function DiscoverPage({
 
   return (
     <div className="min-h-screen pb-24">
+      {/* Upgrade Sheet */}
+      <UpgradeSheet
+        open={showUpgradeSheet}
+        onOpenChange={setShowUpgradeSheet}
+        currentTier={billing.tier}
+      />
+
       {/* Header */}
       <div className="sticky top-0 z-20 bg-background border-b">
         <div className="px-4 pt-4 pb-3">

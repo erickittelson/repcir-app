@@ -73,11 +73,15 @@ import {
   X,
   Search,
   Camera,
+  MessageSquareText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/neon-auth/client";
 import { CompletenessCard } from "@/components/profile/completeness-card";
 import { generateRecommendations } from "@/components/profile/recommended-actions";
+import { useBilling } from "@/hooks/use-billing";
+import { UsageMeters } from "@/components/billing/usage-meters";
+import { CreditCard, Crown } from "lucide-react";
 import { DeleteConfirmDialog } from "@/components/ui/confirm-dialog";
 import { AchievementModal } from "@/components/badges/achievement-modal";
 import { ConnectionsSheet } from "@/components/social/connections-sheet";
@@ -201,6 +205,7 @@ interface ProfilePageProps {
     displayName?: string;
     profilePicture?: string;
     bio?: string;
+    personalContext?: string;
     birthMonth?: number;
     birthYear?: number;
     city?: string;
@@ -1435,6 +1440,21 @@ function LocationModal({ open, onOpenChange, location, onSave, onDelete, userCit
             </div>
           )}
 
+          {/* Map preview for non-home locations with lat/lng */}
+          {!isHome && lat && lng && (
+            <div className="rounded-lg overflow-hidden border border-border aspect-video max-h-32">
+              <iframe
+                title="Location preview"
+                width="100%"
+                height="100%"
+                style={{ border: 0 }}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                src={`https://www.google.com/maps/embed/v1/place?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&q=${lat},${lng}&zoom=15`}
+              />
+            </div>
+          )}
+
           {/* Per-location visibility */}
           <div className="space-y-2">
             <Label>Who can see this spot?</Label>
@@ -2631,6 +2651,7 @@ function formatLocationDisplay(profile: ProfilePageProps["profile"]): string | n
 export function ProfilePage({ user, profile, metrics, limitations, skills, locations, sports, circles, goals, workoutPlans, personalRecords, badges, featuredBadges, completeness }: ProfilePageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const billing = useBilling();
   const [showCompleteness, setShowCompleteness] = useState(completeness.overallPercent < 100);
 
   // Achievement modal state
@@ -2719,11 +2740,7 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
   };
   const handleDeletePR = async (id: string) => { await fetch(`/api/user/prs/${id}`, { method: "DELETE" }); router.refresh(); };
   const handleSaveLocation = async (data: Partial<LocationData>) => {
-    const payload: Record<string, unknown> = { ...data };
-    // Map lat/lng to API field names
-    if (data.lat !== undefined) { payload.workoutLocationLat = data.lat; delete payload.lat; }
-    if (data.lng !== undefined) { payload.workoutLocationLng = data.lng; delete payload.lng; }
-    const response = await fetch(data.id ? `/api/locations/${data.id}` : "/api/locations", { method: data.id ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const response = await fetch(data.id ? `/api/locations/${data.id}` : "/api/locations", { method: data.id ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
     if (!response.ok) throw new Error();
     router.refresh();
   };
@@ -3054,6 +3071,21 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
               </Button>
             )}
           </div>
+
+          {/* Personal Context (AI training notes) */}
+          {profile?.personalContext && (
+            <div className="mt-3 p-3 bg-muted/50 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <MessageSquareText className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">AI Context</span>
+                </div>
+                <Badge variant="outline" className="text-xs">Private</Badge>
+              </div>
+              <p className="text-sm text-muted-foreground line-clamp-3">{profile.personalContext}</p>
+              <p className="text-[10px] text-muted-foreground/60 mt-1">Only used by AI to personalize your workouts</p>
+            </div>
+          )}
 
           {/* Share Link CTA */}
           <div className="mt-3 p-3 bg-muted/50 rounded-lg">
@@ -3450,9 +3482,24 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
                         {isHome ? (
                           <HomeEquipmentInline location={l} onSave={handleSaveLocationEquipment} />
                         ) : (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {templateEquipment.length > 0 ? `Full gym equipment (~${templateEquipment.length} items)` : "Custom equipment"}
-                          </p>
+                          <>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {templateEquipment.length > 0 ? `Full gym equipment (~${templateEquipment.length} items)` : "Custom equipment"}
+                            </p>
+                            {l.lat && l.lng && (
+                              <div className="mt-2 rounded-lg overflow-hidden border border-border aspect-video max-h-32">
+                                <iframe
+                                  title={`${l.name} location`}
+                                  width="100%"
+                                  height="100%"
+                                  style={{ border: 0 }}
+                                  loading="lazy"
+                                  referrerPolicy="no-referrer-when-downgrade"
+                                  src={`https://www.google.com/maps/embed/v1/place?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&q=${l.lat},${l.lng}&zoom=15`}
+                                />
+                              </div>
+                            )}
+                          </>
                         )}
                       </ItemCard>
                     );
@@ -3486,6 +3533,112 @@ export function ProfilePage({ user, profile, metrics, limitations, skills, locat
                 </button>
               ))}
               <Button variant="outline" size="sm" className="w-full" onClick={() => router.push("/discover?tab=circles")}><Plus className="mr-1 h-4 w-4" />Join or Create Circle</Button>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Subscription */}
+        <AccordionItem value="subscription" data-section="subscription" className="!border rounded-xl px-4">
+          <AccordionTrigger className="hover:no-underline py-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand/20"><Crown className="h-4 w-4 text-brand" /></div>
+              <span className="font-medium text-sm">Subscription</span>
+              {!billing.isLoading && (
+                <Badge variant="secondary" className="ml-auto mr-2 text-xs capitalize">{billing.tier}</Badge>
+              )}
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pb-4">
+            <div className="space-y-3 pt-2">
+              {billing.isLoading ? (
+                <div className="animate-pulse space-y-2">
+                  <div className="h-4 bg-muted rounded w-1/3" />
+                  <div className="h-2 bg-muted rounded w-full" />
+                  <div className="h-2 bg-muted rounded w-full" />
+                </div>
+              ) : billing.data ? (
+                <>
+                  {/* Plan info */}
+                  <div className="rounded-lg bg-muted/50 p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium capitalize">{billing.tier} Plan</span>
+                      {billing.isTrialing && (
+                        <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300">
+                          Trial
+                        </Badge>
+                      )}
+                      {billing.isPastDue && (
+                        <Badge variant="destructive" className="text-[10px]">
+                          Payment Failed
+                        </Badge>
+                      )}
+                      {billing.isCanceling && (
+                        <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                          Cancels {billing.data.subscription.currentPeriodEnd
+                            ? new Date(billing.data.subscription.currentPeriodEnd).toLocaleDateString()
+                            : "soon"}
+                        </Badge>
+                      )}
+                    </div>
+                    {billing.isPaid && billing.data.subscription.currentPeriodEnd && !billing.isCanceling && (
+                      <p className="text-xs text-muted-foreground">
+                        Renews {new Date(billing.data.subscription.currentPeriodEnd).toLocaleDateString()}
+                        {billing.data.subscription.interval && ` (${billing.data.subscription.interval})`}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Usage meters */}
+                  <UsageMeters
+                    aiWorkouts={billing.data.usage.aiWorkouts}
+                    aiChats={billing.data.usage.aiChats}
+                    compact
+                  />
+
+                  {/* Actions */}
+                  <div className="space-y-2 pt-1">
+                    {billing.isPaid ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full justify-start"
+                          onClick={() => router.push("/you/plan")}
+                        >
+                          <CreditCard className="mr-2 h-4 w-4" />
+                          Manage Plan
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-start text-muted-foreground"
+                          onClick={async () => {
+                            try {
+                              const res = await fetch("/api/billing/portal", { method: "POST" });
+                              const data = await res.json();
+                              if (data.url) window.location.href = data.url;
+                            } catch {
+                              toast.error("Failed to open billing portal");
+                            }
+                          }}
+                        >
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          Billing History
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="w-full bg-brand hover:bg-brand/90 text-brand-foreground"
+                        onClick={() => router.push("/you/plan")}
+                      >
+                        <Crown className="mr-2 h-4 w-4" />
+                        Upgrade to Plus
+                      </Button>
+                    )}
+                  </div>
+                </>
+              ) : null}
             </div>
           </AccordionContent>
         </AccordionItem>
