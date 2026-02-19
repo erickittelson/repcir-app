@@ -1,58 +1,24 @@
 "use client";
 
-import { useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import L from "leaflet";
+import {
+  APIProvider,
+  Map,
+  AdvancedMarker,
+  Pin,
+} from "@vis.gl/react-google-maps";
 import { cn } from "@/lib/utils";
 import type { LocationDisplayProps } from "./types";
 
-// Custom marker icon to match the picker
-const createCustomIcon = () => {
-  if (typeof window === "undefined") return undefined;
-
-  return L.divIcon({
-    className: "custom-marker",
-    html: `
-      <div style="
-        width: 32px;
-        height: 32px;
-        background: linear-gradient(135deg, oklch(0.73 0.155 85) 0%, oklch(0.63 0.13 78) 100%);
-        border-radius: 50% 50% 50% 0;
-        transform: rotate(-45deg);
-        border: 3px solid white;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      ">
-        <div style="
-          width: 10px;
-          height: 10px;
-          background: white;
-          border-radius: 50%;
-          transform: rotate(45deg);
-        "></div>
-      </div>
-    `,
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-    popupAnchor: [0, -32],
-  });
-};
-
 const DEFAULT_ZOOM = 15;
+const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
 
-export function LocationDisplay({
+function LocationDisplayInner({
   lat,
   lng,
-  label,
   height = 200,
   className,
   zoom = DEFAULT_ZOOM,
 }: LocationDisplayProps) {
-  // Create custom icon (memoized, only runs on client)
-  const customIcon = useMemo(() => createCustomIcon(), []);
-
   return (
     <div
       className={cn(
@@ -61,36 +27,32 @@ export function LocationDisplay({
       )}
       style={{ height }}
     >
-      <MapContainer
-        center={[lat, lng]}
-        zoom={zoom}
-        style={{ height: "100%", width: "100%" }}
-        scrollWheelZoom={false}
-        dragging={false}
-        doubleClickZoom={false}
-        zoomControl={false}
-        attributionControl={false}
+      <Map
+        defaultCenter={{ lat, lng }}
+        defaultZoom={zoom}
+        gestureHandling="none"
+        disableDefaultUI={true}
+        mapId="location-display"
+        style={{ width: "100%", height: "100%" }}
       >
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        />
-        {customIcon && (
-          <Marker position={[lat, lng]} icon={customIcon}>
-            {label && (
-              <Popup>
-                <span className="text-sm font-medium">{label}</span>
-              </Popup>
-            )}
-          </Marker>
-        )}
-      </MapContainer>
-
-      {/* Attribution */}
-      <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-card/80 backdrop-blur rounded text-[10px] text-muted-foreground z-[500]">
-        OpenStreetMap
-      </div>
+        <AdvancedMarker position={{ lat, lng }}>
+          <Pin
+            background="oklch(0.73 0.155 85)"
+            borderColor="white"
+            glyphColor="white"
+            scale={1.2}
+          />
+        </AdvancedMarker>
+      </Map>
     </div>
+  );
+}
+
+export function LocationDisplay(props: LocationDisplayProps) {
+  return (
+    <APIProvider apiKey={API_KEY}>
+      <LocationDisplayInner {...props} />
+    </APIProvider>
   );
 }
 

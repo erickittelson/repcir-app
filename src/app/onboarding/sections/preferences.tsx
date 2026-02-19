@@ -10,7 +10,7 @@ import { OnboardingActions } from "./onboarding-actions";
 import type { SectionProps } from "./types";
 
 interface CityResult {
-  id: number;
+  id: string;
   label: string;
   city: string;
   state: string;

@@ -1,44 +1,17 @@
 "use client";
 
 /**
- * Example usage of map components with dynamic imports.
+ * Example usage of map components.
  * This file shows the recommended patterns for using the map components.
  */
 
 import { useState } from "react";
-import dynamic from "next/dynamic";
-import { Loader2 } from "lucide-react";
+import { LocationPicker } from "./location-picker";
+import { LocationDisplay } from "./location-display";
 import type { LocationValue } from "./types";
-
-// Loading component for maps
-const MapLoader = () => (
-  <div className="flex items-center justify-center h-[300px] bg-card rounded-lg border border-border">
-    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-  </div>
-);
-
-// Dynamic import of LocationPicker (SSR disabled - Leaflet needs window)
-const LocationPicker = dynamic(
-  () => import("./location-picker").then((mod) => mod.LocationPicker),
-  {
-    ssr: false,
-    loading: MapLoader,
-  }
-);
-
-// Dynamic import of LocationDisplay (SSR disabled - Leaflet needs window)
-const LocationDisplay = dynamic(
-  () => import("./location-display").then((mod) => mod.LocationDisplay),
-  {
-    ssr: false,
-    loading: MapLoader,
-  }
-);
 
 /**
  * Example: Location Picker Form
- *
- * Shows a location picker that can be used in forms.
  */
 export function LocationPickerExample() {
   const [location, setLocation] = useState<LocationValue | undefined>();
@@ -67,9 +40,7 @@ export function LocationPickerExample() {
 }
 
 /**
- * Example: Location Display
- *
- * Shows a read-only map with a fixed location.
+ * Example: Location Display (read-only)
  */
 export function LocationDisplayExample() {
   return (
@@ -89,8 +60,6 @@ export function LocationDisplayExample() {
 
 /**
  * Example: Controlled Location Picker
- *
- * Shows how to use the picker with external state management.
  */
 export function ControlledLocationPickerExample({
   initialLocation,
@@ -105,7 +74,7 @@ export function ControlledLocationPickerExample({
       onChange={onLocationChange}
       height={300}
       showSearch={true}
-      defaultCenter={{ lat: 37.7749, lng: -122.4194 }} // San Francisco
+      defaultCenter={{ lat: 37.7749, lng: -122.4194 }}
       defaultZoom={10}
     />
   );
@@ -113,8 +82,6 @@ export function ControlledLocationPickerExample({
 
 /**
  * Example: Minimal Display (no controls)
- *
- * Shows a simple map pin without any interaction.
  */
 export function MinimalLocationDisplayExample({ lat, lng }: { lat: number; lng: number }) {
   return (

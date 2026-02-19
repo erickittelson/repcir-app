@@ -5,11 +5,16 @@ import {
   useCallback,
   useEffect,
   useRef,
-  useMemo,
   type KeyboardEvent,
 } from "react";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
-import L from "leaflet";
+import {
+  APIProvider,
+  Map,
+  AdvancedMarker,
+  Pin,
+  useMap,
+  MapMouseEvent,
+} from "@vis.gl/react-google-maps";
 import { MapPin, Search, X, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "@/components/ui/input";
@@ -18,60 +23,14 @@ import { cn } from "@/lib/utils";
 import { useGeocoding } from "./use-geocoding";
 import type { LocationPickerProps, LocationValue } from "./types";
 
-// Custom marker icon to avoid the default Leaflet marker issue
-const createCustomIcon = () => {
-  if (typeof window === "undefined") return undefined;
-
-  return L.divIcon({
-    className: "custom-marker",
-    html: `
-      <div style="
-        width: 32px;
-        height: 32px;
-        background: linear-gradient(135deg, oklch(0.73 0.155 85) 0%, oklch(0.63 0.13 78) 100%);
-        border-radius: 50% 50% 50% 0;
-        transform: rotate(-45deg);
-        border: 3px solid white;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      ">
-        <div style="
-          width: 10px;
-          height: 10px;
-          background: white;
-          border-radius: 50%;
-          transform: rotate(45deg);
-        "></div>
-      </div>
-    `,
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-    popupAnchor: [0, -32],
-  });
-};
-
-// Component to handle map click events
-function MapClickHandler({
-  onLocationSelect,
-}: {
-  onLocationSelect: (lat: number, lng: number) => void;
-}) {
-  useMapEvents({
-    click: (e) => {
-      onLocationSelect(e.latlng.lat, e.latlng.lng);
-    },
-  });
-  return null;
-}
-
 // Default center (US center)
 const DEFAULT_CENTER = { lat: 39.8283, lng: -98.5795 };
 const DEFAULT_ZOOM = 4;
 const SELECTED_ZOOM = 15;
 
-export function LocationPicker({
+const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+
+function LocationPickerInner({
   value,
   onChange,
   height = 300,
@@ -83,12 +42,9 @@ export function LocationPicker({
 }: LocationPickerProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [showResults, setShowResults] = useState(false);
-  const mapRef = useRef<L.Map | null>(null);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Create custom icon (memoized, only runs on client)
-  const customIcon = useMemo(() => createCustomIcon(), []);
+  const map = useMap("location-picker");
 
   const {
     isSearching,
@@ -111,7 +67,6 @@ export function LocationPicker({
         setShowResults(true);
       }, 500);
     } else {
-      // Use a microtask to avoid synchronous setState in effect
       searchTimeoutRef.current = setTimeout(() => {
         clearSearch();
         setShowResults(false);
@@ -127,7 +82,13 @@ export function LocationPicker({
 
   // Handle map click
   const handleMapClick = useCallback(
-    async (lat: number, lng: number) => {
+    async (e: MapMouseEvent) => {
+      const latLng = e.detail.latLng;
+      if (!latLng) return;
+
+      const lat = latLng.lat;
+      const lng = latLng.lng;
+
       // First update with basic location
       onChange({ lat, lng });
 
@@ -138,11 +99,12 @@ export function LocationPicker({
       }
 
       // Pan map to clicked location
-      if (mapRef.current) {
-        mapRef.current.setView([lat, lng], SELECTED_ZOOM);
+      if (map) {
+        map.panTo({ lat, lng });
+        map.setZoom(SELECTED_ZOOM);
       }
     },
-    [onChange, reverseGeocode]
+    [onChange, reverseGeocode, map]
   );
 
   // Handle search result selection
@@ -154,11 +116,12 @@ export function LocationPicker({
       clearSearch();
 
       // Pan map to selected location
-      if (mapRef.current) {
-        mapRef.current.setView([location.lat, location.lng], SELECTED_ZOOM);
+      if (map && location.lat && location.lng) {
+        map.panTo({ lat: location.lat, lng: location.lng });
+        map.setZoom(SELECTED_ZOOM);
       }
     },
-    [onChange, clearSearch]
+    [onChange, clearSearch, map]
   );
 
   // Handle clear
@@ -169,13 +132,11 @@ export function LocationPicker({
     setShowResults(false);
 
     // Reset map view
-    if (mapRef.current) {
-      mapRef.current.setView(
-        [defaultCenter.lat, defaultCenter.lng],
-        defaultZoom
-      );
+    if (map) {
+      map.panTo(defaultCenter);
+      map.setZoom(defaultZoom);
     }
-  }, [onChange, clearSearch, defaultCenter, defaultZoom]);
+  }, [onChange, clearSearch, defaultCenter, defaultZoom, map]);
 
   // Handle keyboard navigation
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -266,25 +227,27 @@ export function LocationPicker({
         className="relative rounded-lg overflow-hidden border border-border"
         style={{ height }}
       >
-        <MapContainer
-          center={[center.lat, center.lng]}
-          zoom={value ? SELECTED_ZOOM : defaultZoom}
-          style={{ height: "100%", width: "100%" }}
-          ref={mapRef}
-          attributionControl={false}
+        <Map
+          id="location-picker"
+          defaultCenter={center}
+          defaultZoom={value ? SELECTED_ZOOM : defaultZoom}
+          gestureHandling="greedy"
+          disableDefaultUI={true}
+          mapId="location-picker"
+          onClick={handleMapClick}
+          style={{ width: "100%", height: "100%" }}
         >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          />
-          <MapClickHandler onLocationSelect={handleMapClick} />
-          {value && customIcon && (
-            <Marker
-              position={[value.lat, value.lng]}
-              icon={customIcon}
-            />
+          {value && (
+            <AdvancedMarker position={{ lat: value.lat, lng: value.lng }}>
+              <Pin
+                background="oklch(0.73 0.155 85)"
+                borderColor="white"
+                glyphColor="white"
+                scale={1.2}
+              />
+            </AdvancedMarker>
           )}
-        </MapContainer>
+        </Map>
 
         {/* Click hint overlay */}
         {!value && (
@@ -294,11 +257,6 @@ export function LocationPicker({
             </p>
           </div>
         )}
-
-        {/* Attribution */}
-        <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-card/80 backdrop-blur rounded text-[10px] text-muted-foreground z-[500]">
-          OpenStreetMap
-        </div>
       </div>
 
       {/* Selected location display */}
@@ -337,6 +295,14 @@ export function LocationPicker({
         </motion.div>
       )}
     </div>
+  );
+}
+
+export function LocationPicker(props: LocationPickerProps) {
+  return (
+    <APIProvider apiKey={API_KEY}>
+      <LocationPickerInner {...props} />
+    </APIProvider>
   );
 }
 

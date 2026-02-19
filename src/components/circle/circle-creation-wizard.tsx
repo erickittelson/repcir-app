@@ -42,10 +42,10 @@ import { PhotoEditor } from "@/components/media/photo-editor";
 import dynamic from "next/dynamic";
 import type { LocationValue } from "@/components/maps/types";
 
-// Dynamically import map components to avoid SSR issues with Leaflet
+// Dynamically import map components for code-splitting
 const LocationPicker = dynamic(
   () => import("@/components/maps/location-picker").then((mod) => mod.LocationPicker),
-  { ssr: false, loading: () => <div className="h-[200px] bg-muted rounded-lg animate-pulse" /> }
+  { loading: () => <div className="h-[200px] bg-muted rounded-lg animate-pulse" /> }
 );
 
 // ============================================================================

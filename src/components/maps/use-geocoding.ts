@@ -1,19 +1,11 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import type {
-  LocationValue,
-  NominatimSearchResult,
-  NominatimReverseResult,
-} from "./types";
-
-const NOMINATIM_BASE_URL = "https://nominatim.openstreetmap.org";
-
-// Rate limiting: Nominatim requires max 1 request per second
-// We use a simple queue/debounce approach
+import { useMapsLibrary } from "@vis.gl/react-google-maps";
+import type { LocationValue } from "./types";
 
 interface SearchResult {
-  id: number;
+  id: string;
   label: string;
   location: LocationValue;
 }
@@ -22,23 +14,21 @@ export function useGeocoding() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const lastRequestTime = useRef<number>(0);
+  const geocoderRef = useRef<google.maps.Geocoder | null>(null);
 
-  // Ensure we respect Nominatim's rate limit
-  const waitForRateLimit = useCallback(async () => {
-    const now = Date.now();
-    const timeSinceLastRequest = now - lastRequestTime.current;
-    const minDelay = 1100; // 1.1 seconds to be safe
+  // Load the geocoding library from Google Maps
+  const geocodingLib = useMapsLibrary("geocoding");
 
-    if (timeSinceLastRequest < minDelay) {
-      await new Promise((resolve) =>
-        setTimeout(resolve, minDelay - timeSinceLastRequest)
-      );
+  // Get or create geocoder instance
+  const getGeocoder = useCallback(() => {
+    if (!geocodingLib) return null;
+    if (!geocoderRef.current) {
+      geocoderRef.current = new geocodingLib.Geocoder();
     }
-    lastRequestTime.current = Date.now();
-  }, []);
+    return geocoderRef.current;
+  }, [geocodingLib]);
 
-  // Search for locations by query string
+  // Search for locations by query string (via our API route)
   const searchLocations = useCallback(
     async (query: string): Promise<SearchResult[]> => {
       if (!query.trim() || query.length < 3) {
@@ -50,42 +40,71 @@ export function useGeocoding() {
       setSearchError(null);
 
       try {
-        await waitForRateLimit();
-
-        const params = new URLSearchParams({
-          q: query,
-          format: "json",
-          addressdetails: "1",
-          limit: "5",
-        });
-
-        const response = await fetch(
-          `${NOMINATIM_BASE_URL}/search?${params.toString()}`,
-          {
-            headers: {
-              "User-Agent": "Repcir/1.0",
-            },
-          }
+        const res = await fetch(
+          `/api/geocode/search?q=${encodeURIComponent(query)}`
         );
 
-        if (!response.ok) {
+        if (!res.ok) {
           throw new Error("Search failed");
         }
 
-        const data: NominatimSearchResult[] = await response.json();
+        const data = await res.json();
 
-        const results: SearchResult[] = data.map((item) => ({
-          id: item.place_id,
-          label: item.display_name,
-          location: {
-            lat: parseFloat(item.lat),
-            lng: parseFloat(item.lon),
-            address: item.display_name,
-            city: item.address?.city || item.address?.town || item.address?.village,
-            state: item.address?.state,
-            country: item.address?.country,
-          },
-        }));
+        const results: SearchResult[] = data.map(
+          (item: {
+            id: string;
+            label: string;
+            city: string;
+            state: string;
+            country: string;
+          }) => {
+            // Extract lat/lng from the label isn't possible from our geocode route,
+            // so we do a secondary geocode for the selected result.
+            // For search results display, we parse from the geocode response.
+            return {
+              id: item.id,
+              label: item.label,
+              location: {
+                lat: 0, // Will be resolved on selection
+                lng: 0,
+                address: item.label,
+                city: item.city,
+                state: item.state,
+                country: item.country,
+              },
+            };
+          }
+        );
+
+        // If we have the geocoding library, resolve coordinates for each result
+        const geocoder = getGeocoder();
+        if (geocoder && results.length > 0) {
+          const resolved = await Promise.all(
+            results.map(async (result) => {
+              try {
+                const response = await geocoder.geocode({
+                  placeId: result.id,
+                });
+                if (response.results?.[0]) {
+                  const loc = response.results[0].geometry.location;
+                  return {
+                    ...result,
+                    location: {
+                      ...result.location,
+                      lat: loc.lat(),
+                      lng: loc.lng(),
+                    },
+                  };
+                }
+              } catch {
+                // Fall through
+              }
+              return result;
+            })
+          );
+          setSearchResults(resolved);
+          return resolved;
+        }
 
         setSearchResults(results);
         return results;
@@ -99,55 +118,54 @@ export function useGeocoding() {
         setIsSearching(false);
       }
     },
-    [waitForRateLimit]
+    [getGeocoder]
   );
 
   // Reverse geocode a lat/lng to get address details
   const reverseGeocode = useCallback(
     async (lat: number, lng: number): Promise<LocationValue | null> => {
-      try {
-        await waitForRateLimit();
+      const geocoder = getGeocoder();
+      if (!geocoder) {
+        return { lat, lng };
+      }
 
-        const params = new URLSearchParams({
-          lat: lat.toString(),
-          lon: lng.toString(),
-          format: "json",
-          addressdetails: "1",
+      try {
+        const response = await geocoder.geocode({
+          location: { lat, lng },
         });
 
-        const response = await fetch(
-          `${NOMINATIM_BASE_URL}/reverse?${params.toString()}`,
-          {
-            headers: {
-              "User-Agent": "Repcir/1.0",
-            },
-          }
-        );
+        if (response.results?.[0]) {
+          const result = response.results[0];
+          const components = result.address_components || [];
 
-        if (!response.ok) {
-          throw new Error("Reverse geocoding failed");
+          const city =
+            components.find((c) => c.types.includes("locality"))?.long_name ||
+            components.find((c) => c.types.includes("sublocality"))
+              ?.long_name;
+          const state = components.find((c) =>
+            c.types.includes("administrative_area_level_1")
+          )?.long_name;
+          const country = components.find((c) =>
+            c.types.includes("country")
+          )?.long_name;
+
+          return {
+            lat,
+            lng,
+            address: result.formatted_address,
+            city,
+            state,
+            country,
+          };
         }
 
-        const data: NominatimReverseResult = await response.json();
-
-        return {
-          lat,
-          lng,
-          address: data.display_name,
-          city:
-            data.address?.city ||
-            data.address?.town ||
-            data.address?.village,
-          state: data.address?.state,
-          country: data.address?.country,
-        };
+        return { lat, lng };
       } catch (error) {
         console.error("Reverse geocoding error:", error);
-        // Return basic location without address details
         return { lat, lng };
       }
     },
-    [waitForRateLimit]
+    [getGeocoder]
   );
 
   const clearSearch = useCallback(() => {
