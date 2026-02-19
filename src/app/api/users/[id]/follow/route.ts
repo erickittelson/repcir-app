@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { userFollows } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
+import { getBlockedUserIds } from "@/lib/social";
 
 export async function POST(
   request: NextRequest,
@@ -20,6 +21,12 @@ export async function POST(
   }
 
   try {
+    // Check blocked status (bidirectional)
+    const blockedIds = await getBlockedUserIds(session.user.id);
+    if (blockedIds.includes(targetUserId)) {
+      return NextResponse.json({ error: "Cannot follow this user" }, { status: 403 });
+    }
+
     // Check if already following
     const existing = await db.query.userFollows.findFirst({
       where: and(

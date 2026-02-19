@@ -38,6 +38,16 @@ import {
   coachConversations,
   coachMessages,
   memberEmbeddings,
+  connections,
+  circlePosts,
+  circlePostLikes,
+  circlePostComments,
+  circleJoinRequests,
+  userPrivacySettings,
+  posts,
+  postLikes,
+  postComments,
+  postCommentLikes,
 } from "@/lib/db/schema";
 import { eq, or, inArray } from "drizzle-orm";
 import { logAuditEventFromRequest } from "@/lib/audit-log";
@@ -181,6 +191,67 @@ export async function DELETE(request: Request) {
       deletionResults.followers = { deleted: result.rowCount || 0 };
     } catch (e) {
       deletionResults.followers = { deleted: 0, error: "Failed" };
+    }
+
+    // 4b. Delete connections (both directions)
+    try {
+      const result = await db.delete(connections).where(
+        or(eq(connections.requesterId, userId), eq(connections.addresseeId, userId))
+      );
+      deletionResults.connections = { deleted: result.rowCount || 0 };
+    } catch (e) {
+      deletionResults.connections = { deleted: 0, error: "Failed" };
+    }
+
+    // 4c. Delete individual posts and related data
+    try {
+      // Get post IDs first for cascading deletes
+      const userPosts = await db
+        .select({ id: posts.id })
+        .from(posts)
+        .where(eq(posts.authorId, userId));
+      const postIds = userPosts.map((p) => p.id);
+
+      if (postIds.length > 0) {
+        // Delete comment likes on comments on user's posts
+        const userPostComments = await db
+          .select({ id: postComments.id })
+          .from(postComments)
+          .where(inArray(postComments.postId, postIds));
+        const commentIds = userPostComments.map((c) => c.id);
+        if (commentIds.length > 0) {
+          await db.delete(postCommentLikes).where(inArray(postCommentLikes.commentId, commentIds));
+        }
+        await db.delete(postComments).where(inArray(postComments.postId, postIds));
+        await db.delete(postLikes).where(inArray(postLikes.postId, postIds));
+      }
+      // Also delete likes/comments the user made on OTHER posts
+      await db.delete(postCommentLikes).where(eq(postCommentLikes.userId, userId));
+      await db.delete(postComments).where(eq(postComments.authorId, userId));
+      await db.delete(postLikes).where(eq(postLikes.userId, userId));
+      // Delete the user's posts themselves
+      const result = await db.delete(posts).where(eq(posts.authorId, userId));
+      deletionResults.individualPosts = { deleted: result.rowCount || 0 };
+    } catch (e) {
+      deletionResults.individualPosts = { deleted: 0, error: "Failed" };
+    }
+
+    // 4d. Delete circle post interactions and posts
+    try {
+      await db.delete(circlePostLikes).where(eq(circlePostLikes.userId, userId));
+      await db.delete(circlePostComments).where(eq(circlePostComments.authorId, userId));
+      await db.delete(circlePosts).where(eq(circlePosts.authorId, userId));
+      deletionResults.circlePosts = { deleted: 1 };
+    } catch (e) {
+      deletionResults.circlePosts = { deleted: 0, error: "Failed" };
+    }
+
+    // 4e. Delete circle join requests
+    try {
+      const result = await db.delete(circleJoinRequests).where(eq(circleJoinRequests.userId, userId));
+      deletionResults.circleJoinRequests = { deleted: result.rowCount || 0 };
+    } catch (e) {
+      deletionResults.circleJoinRequests = { deleted: 0, error: "Failed" };
     }
 
     // 5. Delete content interactions
@@ -337,6 +408,14 @@ export async function DELETE(request: Request) {
       await db.delete(profileCompletenessCache).where(eq(profileCompletenessCache.userId, userId));
     } catch {
       // Silent fail - cache table may not exist
+    }
+
+    // 12b. Delete privacy settings
+    try {
+      await db.delete(userPrivacySettings).where(eq(userPrivacySettings.userId, userId));
+      deletionResults.privacySettings = { deleted: 1 };
+    } catch (e) {
+      deletionResults.privacySettings = { deleted: 0, error: "Failed" };
     }
 
     // 13. Finally, delete user profile

@@ -105,25 +105,25 @@ export async function PUT(request: Request) {
       }
     }
 
-    // Upsert settings
+    // Upsert settings — defaults must match DEFAULT_SETTINGS (privacy-first)
     await db
       .insert(userPrivacySettings)
       .values({
         userId: session.user.id,
-        nameVisibility: body.nameVisibility || "public",
-        profilePictureVisibility: body.profilePictureVisibility || "public",
-        cityVisibility: body.cityVisibility || "circle",
-        ageVisibility: body.ageVisibility || "private",
-        weightVisibility: body.weightVisibility || "private",
-        bodyFatVisibility: body.bodyFatVisibility || "private",
-        fitnessLevelVisibility: body.fitnessLevelVisibility || "circle",
-        goalsVisibility: body.goalsVisibility || "circle",
-        limitationsVisibility: body.limitationsVisibility || "private",
-        workoutHistoryVisibility: body.workoutHistoryVisibility || "circle",
-        personalRecordsVisibility: body.personalRecordsVisibility || "circle",
-        badgesVisibility: body.badgesVisibility || "public",
-        sportsVisibility: body.sportsVisibility || "public",
-        capabilitiesVisibility: body.capabilitiesVisibility || "private",
+        nameVisibility: body.nameVisibility || DEFAULT_SETTINGS.nameVisibility,
+        profilePictureVisibility: body.profilePictureVisibility || DEFAULT_SETTINGS.profilePictureVisibility,
+        cityVisibility: body.cityVisibility || DEFAULT_SETTINGS.cityVisibility,
+        ageVisibility: body.ageVisibility || DEFAULT_SETTINGS.ageVisibility,
+        weightVisibility: body.weightVisibility || DEFAULT_SETTINGS.weightVisibility,
+        bodyFatVisibility: body.bodyFatVisibility || DEFAULT_SETTINGS.bodyFatVisibility,
+        fitnessLevelVisibility: body.fitnessLevelVisibility || DEFAULT_SETTINGS.fitnessLevelVisibility,
+        goalsVisibility: body.goalsVisibility || DEFAULT_SETTINGS.goalsVisibility,
+        limitationsVisibility: body.limitationsVisibility || DEFAULT_SETTINGS.limitationsVisibility,
+        workoutHistoryVisibility: body.workoutHistoryVisibility || DEFAULT_SETTINGS.workoutHistoryVisibility,
+        personalRecordsVisibility: body.personalRecordsVisibility || DEFAULT_SETTINGS.personalRecordsVisibility,
+        badgesVisibility: body.badgesVisibility || DEFAULT_SETTINGS.badgesVisibility,
+        sportsVisibility: body.sportsVisibility || DEFAULT_SETTINGS.sportsVisibility,
+        capabilitiesVisibility: body.capabilitiesVisibility || DEFAULT_SETTINGS.capabilitiesVisibility,
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({

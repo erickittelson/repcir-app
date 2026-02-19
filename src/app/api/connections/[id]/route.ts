@@ -144,6 +144,14 @@ export async function DELETE(
           { status: 403 }
         );
       }
+    } else if (connection.status === "blocked") {
+      // Only the blocker (requesterId on blocked connections) can unblock
+      if (connection.requesterId !== userId) {
+        return NextResponse.json(
+          { error: "Connection not found" },
+          { status: 404 }
+        );
+      }
     }
 
     // For accepted or rejected connections, either party can delete

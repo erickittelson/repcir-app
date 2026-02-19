@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { circleMembers, userFollows, userProfiles } from "@/lib/db/schema";
 import { eq, ne, and, notInArray, inArray } from "drizzle-orm";
 import { sql } from "drizzle-orm";
+import { getBlockedUserIds } from "@/lib/social";
 
 export async function GET() {
   const session = await auth();
@@ -12,11 +13,15 @@ export async function GET() {
   }
 
   try {
-    // Get users the current user is already following
-    const following = await db.query.userFollows.findMany({
-      where: eq(userFollows.followerId, session.user.id),
-    });
+    // Get users the current user is already following and blocked users in parallel
+    const [following, blockedIds] = await Promise.all([
+      db.query.userFollows.findMany({
+        where: eq(userFollows.followerId, session.user.id),
+      }),
+      getBlockedUserIds(session.user.id),
+    ]);
     const followingIds = following.map((f) => f.followingId);
+    const blockedSet = new Set(blockedIds);
 
     // Get suggested users (members from public circles that the user isn't following)
     // For now, just get members from circles, excluding the current user
@@ -25,10 +30,10 @@ export async function GET() {
       limit: 50,
     });
 
-    // Filter out already-followed users and dedupe by userId
+    // Filter out already-followed users, blocked users, and dedupe by userId
     const userMap = new Map<string, typeof allMembers[0]>();
     for (const member of allMembers) {
-      if (member.userId && !followingIds.includes(member.userId) && !userMap.has(member.userId)) {
+      if (member.userId && !followingIds.includes(member.userId) && !blockedSet.has(member.userId) && !userMap.has(member.userId)) {
         userMap.set(member.userId, member);
       }
     }

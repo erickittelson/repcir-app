@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/neon-auth";
 import { db } from "@/lib/db";
 import { userProfiles, connections, userSports } from "@/lib/db/schema";
-import { ilike, or, ne, and, sql, eq, inArray, isNotNull, desc, asc } from "drizzle-orm";
+import { ilike, or, ne, and, sql, eq, inArray, isNotNull, desc, asc, notInArray } from "drizzle-orm";
+import { getBlockedUserIds } from "@/lib/social";
 
 export const runtime = "nodejs";
 
@@ -47,6 +48,9 @@ export async function GET(request: Request) {
     const connectedOnly = searchParams.get("connectedOnly") === "true";
 
     const userId = session.user.id;
+
+    // Get blocked users and connections in parallel
+    const blockedIds = await getBlockedUserIds(userId);
 
     // Get all connections for the current user to build connection status map
     const userConnections = await db
@@ -94,9 +98,13 @@ export async function GET(request: Request) {
       };
     };
 
+    // Filter blocked users from connected user IDs
+    const blockedSet = new Set(blockedIds);
+    const filteredConnectedUserIds = connectedUserIds.filter((id) => !blockedSet.has(id));
+
     // If connectedOnly, we filter to only connected users
     if (connectedOnly) {
-      if (connectedUserIds.length === 0) {
+      if (filteredConnectedUserIds.length === 0) {
         return NextResponse.json({ users: [] });
       }
 
@@ -120,7 +128,7 @@ export async function GET(request: Request) {
           .from(userProfiles)
           .where(
             and(
-              inArray(userProfiles.userId, connectedUserIds),
+              inArray(userProfiles.userId, filteredConnectedUserIds),
               or(
                 ilike(userProfiles.displayName, searchPattern),
                 ilike(userProfiles.handle, searchPattern)
@@ -224,6 +232,8 @@ export async function GET(request: Request) {
         .where(
           and(
             ne(userProfiles.userId, userId),
+            // Exclude blocked users
+            blockedIds.length > 0 ? notInArray(userProfiles.userId, blockedIds) : undefined,
             // Must be public profile OR have a handle (discoverable)
             or(
               sql`${userProfiles.visibility} = 'public'`,
@@ -277,6 +287,8 @@ export async function GET(request: Request) {
       .where(
         and(
           ne(userProfiles.userId, userId),
+          // Exclude blocked users
+          blockedIds.length > 0 ? notInArray(userProfiles.userId, blockedIds) : undefined,
           // Must be discoverable (public or has handle)
           or(
             sql`${userProfiles.visibility} = 'public'`,

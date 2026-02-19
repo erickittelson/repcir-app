@@ -7,7 +7,8 @@ import {
   challenges,
   circles,
 } from "@/lib/db/schema";
-import { sql, ilike, or, eq, and } from "drizzle-orm";
+import { sql, ilike, or, eq, and, notInArray } from "drizzle-orm";
+import { getBlockedUserIds } from "@/lib/social";
 
 export async function GET(request: Request) {
   try {
@@ -42,6 +43,9 @@ export async function GET(request: Request) {
       circles: [],
     };
 
+    // Fetch blocked users for filtering
+    const blockedIds = await getBlockedUserIds(session.user.id);
+
     // Search users (if not filtered or type is users)
     if (!type || type === "users" || type === "all") {
       const users = await db
@@ -55,6 +59,8 @@ export async function GET(request: Request) {
         .where(
           and(
             eq(userProfiles.visibility, "public"),
+            // Exclude blocked users
+            blockedIds.length > 0 ? notInArray(userProfiles.userId, blockedIds) : undefined,
             or(
               ilike(userProfiles.displayName, searchPattern),
               ilike(userProfiles.city, searchPattern)

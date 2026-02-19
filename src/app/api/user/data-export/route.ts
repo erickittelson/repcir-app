@@ -34,6 +34,13 @@ import {
   coachConversations,
   coachMessages,
   onboardingProgress,
+  connections,
+  circlePosts,
+  circlePostComments,
+  circlePostLikes,
+  posts,
+  postLikes,
+  postComments,
 } from "@/lib/db/schema";
 import { eq, desc, or, inArray } from "drizzle-orm";
 
@@ -93,6 +100,13 @@ export async function GET(request: NextRequest) {
       comments,
       aiConversations,
       onboarding,
+      userConnections,
+      userCirclePosts,
+      userCirclePostLikes,
+      userCirclePostComments,
+      userIndividualPosts,
+      userPostLikes,
+      userPostComments,
     ] = await Promise.all([
       // Profile data
       db.query.userProfiles.findFirst({
@@ -292,6 +306,50 @@ export async function GET(request: NextRequest) {
       db.query.onboardingProgress.findFirst({
         where: eq(onboardingProgress.userId, userId),
       }),
+
+      // Connections (all directions)
+      db
+        .select()
+        .from(connections)
+        .where(or(eq(connections.requesterId, userId), eq(connections.addresseeId, userId))),
+
+      // Circle posts authored by user
+      db.query.circlePosts.findMany({
+        where: eq(circlePosts.authorId, userId),
+        orderBy: desc(circlePosts.createdAt),
+        limit: 1000,
+      }),
+
+      // Circle post likes by user
+      db
+        .select()
+        .from(circlePostLikes)
+        .where(eq(circlePostLikes.userId, userId)),
+
+      // Circle post comments by user
+      db
+        .select()
+        .from(circlePostComments)
+        .where(eq(circlePostComments.authorId, userId)),
+
+      // Individual posts authored by user
+      db.query.posts.findMany({
+        where: eq(posts.authorId, userId),
+        orderBy: desc(posts.createdAt),
+        limit: 1000,
+      }),
+
+      // Individual post likes by user
+      db
+        .select()
+        .from(postLikes)
+        .where(eq(postLikes.userId, userId)),
+
+      // Individual post comments by user
+      db
+        .select()
+        .from(postComments)
+        .where(eq(postComments.authorId, userId)),
     ]);
 
     // Compile export data
@@ -479,8 +537,21 @@ export async function GET(request: NextRequest) {
       } : null,
 
       socialConnections: {
-        followerCount: followers.length,
-        followingCount: following.length,
+        followers: followers.map(f => ({
+          followerId: f.followerId,
+          createdAt: f.createdAt,
+        })),
+        following: following.map(f => ({
+          followingId: f.followingId,
+          createdAt: f.createdAt,
+        })),
+        connections: userConnections.map(c => ({
+          otherUserId: c.requesterId === userId ? c.addresseeId : c.requesterId,
+          direction: c.requesterId === userId ? "outgoing" : "incoming",
+          status: c.status,
+          createdAt: c.createdAt,
+          updatedAt: c.updatedAt,
+        })),
       },
 
       activityFeed: activity.map(a => ({
@@ -514,6 +585,49 @@ export async function GET(request: NextRequest) {
           createdAt: m.createdAt,
         })) || [],
       })),
+
+      circlePosts: userCirclePosts.map(p => ({
+        circleId: p.circleId,
+        content: p.content,
+        imageUrl: p.imageUrl ? "[URL REDACTED]" : null,
+        visibility: p.visibility,
+        likeCount: p.likeCount,
+        commentCount: p.commentCount,
+        createdAt: p.createdAt,
+      })),
+
+      circlePostInteractions: {
+        likes: userCirclePostLikes.map(l => ({
+          postId: l.postId,
+          createdAt: l.createdAt,
+        })),
+        comments: userCirclePostComments.map(c => ({
+          postId: c.postId,
+          content: c.content,
+          createdAt: c.createdAt,
+        })),
+      },
+
+      individualPosts: userIndividualPosts.map(p => ({
+        content: p.content,
+        imageUrl: p.imageUrl ? "[URL REDACTED]" : null,
+        visibility: p.visibility,
+        likeCount: p.likeCount,
+        commentCount: p.commentCount,
+        createdAt: p.createdAt,
+      })),
+
+      individualPostInteractions: {
+        likes: userPostLikes.map(l => ({
+          postId: l.postId,
+          createdAt: l.createdAt,
+        })),
+        comments: userPostComments.map(c => ({
+          postId: c.postId,
+          content: c.content,
+          createdAt: c.createdAt,
+        })),
+      },
 
       onboardingData: onboarding ? {
         currentPhase: onboarding.currentPhase,
