@@ -19,8 +19,11 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { Shield, Check } from "lucide-react";
+import { Shield, Check, Crown } from "lucide-react";
 import { ClarificationChips } from "@/components/chat/clarification-chips";
+import { useBilling } from "@/hooks/use-billing";
+import { UpgradeSheet } from "@/components/billing/upgrade-sheet";
+import { QuotaExhausted } from "@/components/billing/quota-exhausted";
 import { WorkoutCard } from "@/components/chat/workout-card";
 import { WorkoutConfigForm } from "@/components/chat/workout-config-form";
 import { GenerationLoadingCard } from "@/components/chat/generation-loading-card";
@@ -105,9 +108,12 @@ export function CoachChat({ memberId }: CoachChatProps) {
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [consentLoading, setConsentLoading] = useState(false);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const [showUpgradeSheet, setShowUpgradeSheet] = useState(false);
+  const [quotaExhaustedType, setQuotaExhaustedType] = useState<"chat" | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const billing = useBilling();
 
   // Auto-scroll to bottom when messages change
   const scrollToBottom = useCallback(() => {
@@ -196,7 +202,16 @@ export function CoachChat({ memberId }: CoachChatProps) {
         if (errorText.includes("CONSENT_REQUIRED")) {
           setPendingMessage(text);
           setShowConsentModal(true);
-          // Remove the user message we just added since we can't process it yet
+          setMessages((prev) => prev.filter((m) => m.id !== userMessage.id));
+          return;
+        }
+        // Check for quota exceeded — show upgrade sheet
+        if (response.status === 429) {
+          setQuotaExhaustedType("chat");
+          if (billing.canShowPaywall("chat-quota")) {
+            setShowUpgradeSheet(true);
+            billing.recordPaywallShown("chat-quota");
+          }
           setMessages((prev) => prev.filter((m) => m.id !== userMessage.id));
           return;
         }
@@ -547,6 +562,14 @@ export function CoachChat({ memberId }: CoachChatProps) {
 
   return (
     <div className="relative">
+      {/* Upgrade Sheet */}
+      <UpgradeSheet
+        open={showUpgradeSheet}
+        onOpenChange={setShowUpgradeSheet}
+        currentTier={billing.tier}
+        trigger="chat-quota"
+      />
+
       {/* AI Consent Modal */}
       <AnimatePresence>
         {showConsentModal && (
@@ -742,6 +765,32 @@ export function CoachChat({ memberId }: CoachChatProps) {
         className="fixed left-0 right-0 z-20 border-t border-border/50 bg-background/95 backdrop-blur-lg px-4 py-3"
         style={{ bottom: "80px" }}
       >
+        {/* Quota exhausted card */}
+        {quotaExhaustedType === "chat" && billing.data && (
+          <div className="max-w-2xl mx-auto mb-2">
+            <QuotaExhausted
+              type="chat"
+              limit={billing.data.usage.aiChats.limit}
+              currentTier={billing.tier}
+              onUpgrade={() => setShowUpgradeSheet(true)}
+            />
+          </div>
+        )}
+
+        {/* Usage banner for free/plus users */}
+        {!billing.isLoading && billing.data && !billing.isPaid && billing.data.usage.aiChats.remaining <= 5 && billing.data.usage.aiChats.remaining > 0 && (
+          <div className="max-w-2xl mx-auto mb-2">
+            <button
+              onClick={() => setShowUpgradeSheet(true)}
+              className="flex items-center gap-2 w-full rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700 hover:bg-amber-100 transition-colors"
+            >
+              <Crown className="h-3.5 w-3.5 shrink-0" />
+              <span>{billing.data.usage.aiChats.remaining} AI coach messages left this month</span>
+              <span className="ml-auto text-[10px] font-medium">Upgrade</span>
+            </button>
+          </div>
+        )}
+
         <div className="max-w-2xl mx-auto flex items-end gap-2">
           {/* Voice input button */}
           <Button

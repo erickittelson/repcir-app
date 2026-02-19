@@ -47,7 +47,7 @@ export async function PUT(
 
   try {
     const body = await request.json();
-    const { name, type, address, equipment, equipmentDetails, visibility, isActive } = body;
+    const { name, type, address, lat, lng, equipment, equipmentDetails, visibility, isActive } = body;
 
     // Check if location exists and belongs to user
     const existingLocation = await db.query.userLocations.findFirst({
@@ -69,6 +69,8 @@ export async function PUT(
         name: name ?? existingLocation.name,
         type: resolvedType,
         address: resolvedType === "home" ? null : (address !== undefined ? address : existingLocation.address),
+        lat: resolvedType === "home" ? null : (lat !== undefined ? lat : existingLocation.lat),
+        lng: resolvedType === "home" ? null : (lng !== undefined ? lng : existingLocation.lng),
         equipment: equipment ?? existingLocation.equipment,
         equipmentDetails: equipmentDetails !== undefined ? equipmentDetails : existingLocation.equipmentDetails,
         visibility: visibility ?? existingLocation.visibility,

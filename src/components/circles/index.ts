@@ -10,3 +10,5 @@ export {
 } from "./member-management";
 
 export { CircleImageUpload } from "./circle-image-upload";
+
+export { QrInvite } from "./qr-invite";

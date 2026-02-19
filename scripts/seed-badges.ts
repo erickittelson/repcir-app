@@ -1,11 +1,14 @@
 /**
  * Seed Badge Definitions
- * 
+ *
  * Run with: npx tsx scripts/seed-badges.ts
+ *
+ * This will upsert all badges — safe to re-run to update icons, rarity, and unlockMessage.
  */
 
 import { db } from "../src/lib/db";
 import { badgeDefinitions } from "../src/lib/db/schema";
+import { sql } from "drizzle-orm";
 
 interface BadgeDefinition {
   name: string;
@@ -13,6 +16,8 @@ interface BadgeDefinition {
   icon: string;
   category: string;
   tier: "bronze" | "silver" | "gold" | "platinum";
+  rarity: "common" | "uncommon" | "rare" | "epic" | "legendary";
+  unlockMessage: string;
   criteria: Record<string, unknown>;
   criteriaDescription: string;
   isAutomatic: boolean;
@@ -21,16 +26,17 @@ interface BadgeDefinition {
 
 const BADGE_DEFINITIONS: BadgeDefinition[] = [
   // ============================================================================
-  // STRENGTH BADGES
+  // STRENGTH BADGES — Bench Press (💪 = upper body push)
   // ============================================================================
-  
-  // Bench Press
+
   {
     name: "135 Bench Club",
     description: "Bench press 135 lbs (1 plate)",
-    icon: "🏋️",
+    icon: "💪",
     category: "strength",
     tier: "bronze",
+    rarity: "uncommon",
+    unlockMessage: "One plate on each side — you're officially in the game!",
     criteria: { type: "pr_single", exercises: ["bench press"], singleValue: 135 },
     criteriaDescription: "Bench press 135 lbs for 1 rep",
     isAutomatic: true,
@@ -39,9 +45,11 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
   {
     name: "225 Bench Club",
     description: "Bench press 225 lbs (2 plates)",
-    icon: "🏋️",
+    icon: "💪",
     category: "strength",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "Two plates! You just entered an elite club.",
     criteria: { type: "pr_single", exercises: ["bench press"], singleValue: 225 },
     criteriaDescription: "Bench press 225 lbs for 1 rep",
     isAutomatic: true,
@@ -50,9 +58,11 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
   {
     name: "315 Bench Club",
     description: "Bench press 315 lbs (3 plates)",
-    icon: "🏋️",
+    icon: "💪",
     category: "strength",
     tier: "gold",
+    rarity: "epic",
+    unlockMessage: "Three plates on bench? That's seriously impressive.",
     criteria: { type: "pr_single", exercises: ["bench press"], singleValue: 315 },
     criteriaDescription: "Bench press 315 lbs for 1 rep",
     isAutomatic: true,
@@ -61,22 +71,29 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
   {
     name: "405 Bench Club",
     description: "Bench press 405 lbs (4 plates)",
-    icon: "🏋️",
+    icon: "💪",
     category: "strength",
     tier: "platinum",
+    rarity: "legendary",
+    unlockMessage: "Four plates. You are a freak of nature. Respect.",
     criteria: { type: "pr_single", exercises: ["bench press"], singleValue: 405 },
     criteriaDescription: "Bench press 405 lbs for 1 rep",
     isAutomatic: true,
     displayOrder: 4,
   },
 
-  // Squat
+  // ============================================================================
+  // STRENGTH BADGES — Squat (🦵 = legs)
+  // ============================================================================
+
   {
     name: "225 Squat Club",
     description: "Squat 225 lbs (2 plates)",
     icon: "🦵",
     category: "strength",
     tier: "bronze",
+    rarity: "uncommon",
+    unlockMessage: "Two plates deep — your legs are getting serious!",
     criteria: { type: "pr_single", exercises: ["squat", "back squat"], singleValue: 225 },
     criteriaDescription: "Squat 225 lbs for 1 rep",
     isAutomatic: true,
@@ -88,6 +105,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🦵",
     category: "strength",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "Three plates in the hole. Your legs don't skip leg day.",
     criteria: { type: "pr_single", exercises: ["squat", "back squat"], singleValue: 315 },
     criteriaDescription: "Squat 315 lbs for 1 rep",
     isAutomatic: true,
@@ -99,6 +118,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🦵",
     category: "strength",
     tier: "gold",
+    rarity: "epic",
+    unlockMessage: "Four plates ATG. That's powerlifter territory.",
     criteria: { type: "pr_single", exercises: ["squat", "back squat"], singleValue: 405 },
     criteriaDescription: "Squat 405 lbs for 1 rep",
     isAutomatic: true,
@@ -110,19 +131,26 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🦵",
     category: "strength",
     tier: "platinum",
+    rarity: "legendary",
+    unlockMessage: "Five plates. The bar is bending. You're built different.",
     criteria: { type: "pr_single", exercises: ["squat", "back squat"], singleValue: 495 },
     criteriaDescription: "Squat 495 lbs for 1 rep",
     isAutomatic: true,
     displayOrder: 13,
   },
 
-  // Deadlift
+  // ============================================================================
+  // STRENGTH BADGES — Deadlift (💀 = dead-lift pun)
+  // ============================================================================
+
   {
     name: "315 Deadlift Club",
     description: "Deadlift 315 lbs (3 plates)",
     icon: "💀",
     category: "strength",
     tier: "bronze",
+    rarity: "uncommon",
+    unlockMessage: "Three plates off the floor. The deadlift journey begins!",
     criteria: { type: "pr_single", exercises: ["deadlift"], singleValue: 315 },
     criteriaDescription: "Deadlift 315 lbs for 1 rep",
     isAutomatic: true,
@@ -134,6 +162,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "💀",
     category: "strength",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "Four plates. The earth trembles when you pull.",
     criteria: { type: "pr_single", exercises: ["deadlift"], singleValue: 405 },
     criteriaDescription: "Deadlift 405 lbs for 1 rep",
     isAutomatic: true,
@@ -145,6 +175,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "💀",
     category: "strength",
     tier: "gold",
+    rarity: "epic",
+    unlockMessage: "Five plates. You're pulling serious weight off this planet.",
     criteria: { type: "pr_single", exercises: ["deadlift"], singleValue: 495 },
     criteriaDescription: "Deadlift 495 lbs for 1 rep",
     isAutomatic: true,
@@ -156,19 +188,26 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "💀",
     category: "strength",
     tier: "platinum",
+    rarity: "legendary",
+    unlockMessage: "Six plates. You are genuinely superhuman.",
     criteria: { type: "pr_single", exercises: ["deadlift"], singleValue: 585 },
     criteriaDescription: "Deadlift 585 lbs for 1 rep",
     isAutomatic: true,
     displayOrder: 23,
   },
 
-  // Combined Totals
+  // ============================================================================
+  // STRENGTH BADGES — Combined Totals (🏆 = total achievement)
+  // ============================================================================
+
   {
     name: "500lb Club",
     description: "Combined squat, bench, deadlift total of 500 lbs",
     icon: "🏆",
     category: "strength",
     tier: "bronze",
+    rarity: "uncommon",
+    unlockMessage: "Your big three total is climbing. Keep pushing all three!",
     criteria: { type: "pr_total", exercises: ["squat", "back squat", "bench press", "deadlift"], totalValue: 500 },
     criteriaDescription: "Squat + Bench + Deadlift total = 500 lbs",
     isAutomatic: true,
@@ -180,6 +219,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏆",
     category: "strength",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "Welcome to the 1000lb Club. That's a lifetime milestone.",
     criteria: { type: "pr_total", exercises: ["squat", "back squat", "bench press", "deadlift"], totalValue: 1000 },
     criteriaDescription: "Squat + Bench + Deadlift total = 1000 lbs",
     isAutomatic: true,
@@ -191,6 +232,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏆",
     category: "strength",
     tier: "gold",
+    rarity: "epic",
+    unlockMessage: "1500 total. You're stronger than 99% of people alive.",
     criteria: { type: "pr_total", exercises: ["squat", "back squat", "bench press", "deadlift"], totalValue: 1500 },
     criteriaDescription: "Squat + Bench + Deadlift total = 1500 lbs",
     isAutomatic: true,
@@ -202,6 +245,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏆",
     category: "strength",
     tier: "platinum",
+    rarity: "legendary",
+    unlockMessage: "A literal TON. You're among the strongest humans on earth.",
     criteria: { type: "pr_total", exercises: ["squat", "back squat", "bench press", "deadlift"], totalValue: 2000 },
     criteriaDescription: "Squat + Bench + Deadlift total = 2000 lbs",
     isAutomatic: true,
@@ -209,16 +254,17 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
   },
 
   // ============================================================================
-  // SKILL BADGES
+  // SKILL BADGES — Gymnastics (🤸 = tumbling)
   // ============================================================================
-  
-  // Gymnastics
+
   {
     name: "Back Tuck",
     description: "Achieved a standing back tuck",
     icon: "🤸",
     category: "skill",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "You just flipped backwards in the air. That takes serious guts.",
     criteria: { type: "skill_achieved", skillName: "back_tuck", skillStatus: "achieved" },
     criteriaDescription: "Mark back tuck skill as achieved",
     isAutomatic: true,
@@ -230,6 +276,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🤸",
     category: "skill",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "Standing back handspring unlocked! Your power and courage are next level.",
     criteria: { type: "skill_achieved", skillName: "back_handspring", skillStatus: "achieved" },
     criteriaDescription: "Mark back handspring skill as achieved",
     isAutomatic: true,
@@ -241,19 +289,26 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🤸",
     category: "skill",
     tier: "gold",
+    rarity: "epic",
+    unlockMessage: "Full layout! You've got elite body control and air awareness.",
     criteria: { type: "skill_achieved", skillName: "back_layout", skillStatus: "achieved" },
     criteriaDescription: "Mark back layout skill as achieved",
     isAutomatic: true,
     displayOrder: 102,
   },
 
-  // Calisthenics
+  // ============================================================================
+  // SKILL BADGES — Calisthenics
+  // ============================================================================
+
   {
     name: "Handstand Hero",
     description: "Achieved a freestanding handstand",
     icon: "🙌",
     category: "skill",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "Balancing upside down like it's nothing. Gravity who?",
     criteria: { type: "skill_achieved", skillName: "handstand", skillStatus: "achieved" },
     criteriaDescription: "Mark handstand skill as achieved",
     isAutomatic: true,
@@ -265,6 +320,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🙌",
     category: "skill",
     tier: "gold",
+    rarity: "epic",
+    unlockMessage: "Walking on your hands? That's a whole different level of balance.",
     criteria: { type: "skill_achieved", skillName: "handstand_walk", skillStatus: "achieved" },
     criteriaDescription: "Mark handstand walk skill as achieved",
     isAutomatic: true,
@@ -273,9 +330,11 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
   {
     name: "Muscle Up Master",
     description: "Achieved a muscle up",
-    icon: "💪",
+    icon: "🔱",
     category: "skill",
     tier: "gold",
+    rarity: "epic",
+    unlockMessage: "The ultimate pull-to-push combo. You just defied the bar.",
     criteria: { type: "skill_achieved", skillName: "muscle_up", skillStatus: "achieved" },
     criteriaDescription: "Mark muscle up skill as achieved",
     isAutomatic: true,
@@ -284,9 +343,11 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
   {
     name: "Strict Muscle Up",
     description: "Achieved a strict muscle up",
-    icon: "💪",
+    icon: "🔱",
     category: "skill",
     tier: "platinum",
+    rarity: "legendary",
+    unlockMessage: "A strict muscle up. No kip, no momentum — pure strength. Legendary.",
     criteria: { type: "skill_achieved", skillName: "strict_muscle_up", skillStatus: "achieved" },
     criteriaDescription: "Mark strict muscle up skill as achieved",
     isAutomatic: true,
@@ -298,6 +359,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🦵",
     category: "skill",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "One leg, full depth. Your balance and strength are dialed.",
     criteria: { type: "skill_achieved", skillName: "pistol_squat", skillStatus: "achieved" },
     criteriaDescription: "Mark pistol squat skill as achieved",
     isAutomatic: true,
@@ -305,15 +368,17 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
   },
 
   // ============================================================================
-  // TRACK BADGES
+  // TRACK BADGES — Mile (🏃 = running)
   // ============================================================================
-  
+
   {
     name: "Sub-8 Minute Mile",
     description: "Run a mile in under 8 minutes",
     icon: "🏃",
     category: "track",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "Sub-8! You're faster than most people who hit the track.",
     criteria: { type: "track_time", trackDistance: 1609, trackTime: 480 },
     criteriaDescription: "Complete a mile run in under 8 minutes",
     isAutomatic: true,
@@ -325,6 +390,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏃",
     category: "track",
     tier: "silver",
+    rarity: "uncommon",
+    unlockMessage: "Sub-7 mile! Your cardio engine is running hot.",
     criteria: { type: "track_time", trackDistance: 1609, trackTime: 420 },
     criteriaDescription: "Complete a mile run in under 7 minutes",
     isAutomatic: true,
@@ -336,6 +403,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏃",
     category: "track",
     tier: "gold",
+    rarity: "rare",
+    unlockMessage: "Sub-6. You're outrunning most competitive runners. Speed demon!",
     criteria: { type: "track_time", trackDistance: 1609, trackTime: 360 },
     criteriaDescription: "Complete a mile run in under 6 minutes",
     isAutomatic: true,
@@ -347,6 +416,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏃",
     category: "track",
     tier: "platinum",
+    rarity: "legendary",
+    unlockMessage: "Sub-5 minute mile. That's elite D1 / professional speed. Incredible.",
     criteria: { type: "track_time", trackDistance: 1609, trackTime: 300 },
     criteriaDescription: "Complete a mile run in under 5 minutes",
     isAutomatic: true,
@@ -354,16 +425,17 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
   },
 
   // ============================================================================
-  // CONSISTENCY BADGES
+  // CONSISTENCY BADGES — Streaks (🔥 = streak fire)
   // ============================================================================
-  
-  // Streaks
+
   {
     name: "Week Warrior",
     description: "7 day workout streak",
     icon: "🔥",
     category: "consistency",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "7 days straight! Consistency is the real superpower.",
     criteria: { type: "streak", streakDays: 7 },
     criteriaDescription: "Work out for 7 consecutive days",
     isAutomatic: true,
@@ -375,6 +447,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🔥",
     category: "consistency",
     tier: "silver",
+    rarity: "uncommon",
+    unlockMessage: "30 days! You've turned working out into a habit.",
     criteria: { type: "streak", streakDays: 30 },
     criteriaDescription: "Work out for 30 consecutive days",
     isAutomatic: true,
@@ -386,6 +460,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🔥",
     category: "consistency",
     tier: "gold",
+    rarity: "epic",
+    unlockMessage: "100 days without missing. You're a machine.",
     criteria: { type: "streak", streakDays: 100 },
     criteriaDescription: "Work out for 100 consecutive days",
     isAutomatic: true,
@@ -397,19 +473,26 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🔥",
     category: "consistency",
     tier: "platinum",
+    rarity: "legendary",
+    unlockMessage: "365 straight days. A full year of never missing. Absolute legend.",
     criteria: { type: "streak", streakDays: 365 },
     criteriaDescription: "Work out for 365 consecutive days",
     isAutomatic: true,
     displayOrder: 303,
   },
 
-  // Workout Count
+  // ============================================================================
+  // CONSISTENCY BADGES — Workout Count (✅ = completed)
+  // ============================================================================
+
   {
     name: "First 10",
     description: "Complete 10 workouts",
     icon: "✅",
     category: "consistency",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "10 workouts logged! You're building momentum.",
     criteria: { type: "workout_count", workoutCount: 10 },
     criteriaDescription: "Complete 10 total workouts",
     isAutomatic: true,
@@ -421,6 +504,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "✅",
     category: "consistency",
     tier: "silver",
+    rarity: "uncommon",
+    unlockMessage: "50 workouts! Halfway to the century club.",
     criteria: { type: "workout_count", workoutCount: 50 },
     criteriaDescription: "Complete 50 total workouts",
     isAutomatic: true,
@@ -432,6 +517,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "✅",
     category: "consistency",
     tier: "gold",
+    rarity: "rare",
+    unlockMessage: "100 workouts. Triple digits. That's dedication personified.",
     criteria: { type: "workout_count", workoutCount: 100 },
     criteriaDescription: "Complete 100 total workouts",
     isAutomatic: true,
@@ -443,6 +530,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "✅",
     category: "consistency",
     tier: "platinum",
+    rarity: "epic",
+    unlockMessage: "500 workouts. You've put in more work than most people dream of.",
     criteria: { type: "workout_count", workoutCount: 500 },
     criteriaDescription: "Complete 500 total workouts",
     isAutomatic: true,
@@ -452,13 +541,15 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
   // ============================================================================
   // SOCIAL BADGES
   // ============================================================================
-  
+
   {
     name: "Circle Creator",
     description: "Create your first circle",
     icon: "👥",
     category: "social",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "Your first circle is live! Time to rally your crew.",
     criteria: { type: "circles_created", circleCount: 1 },
     criteriaDescription: "Create 1 circle",
     isAutomatic: true,
@@ -470,6 +561,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "👥",
     category: "social",
     tier: "silver",
+    rarity: "uncommon",
+    unlockMessage: "5 circles! You're building a fitness community.",
     criteria: { type: "circles_created", circleCount: 5 },
     criteriaDescription: "Create 5 circles",
     isAutomatic: true,
@@ -481,6 +574,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "⭐",
     category: "social",
     tier: "bronze",
+    rarity: "uncommon",
+    unlockMessage: "10 people are watching your journey. Keep inspiring!",
     criteria: { type: "followers", followerCount: 10 },
     criteriaDescription: "Have 10 followers",
     isAutomatic: true,
@@ -492,6 +587,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "⭐",
     category: "social",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "50 followers! Your fitness journey is motivating people.",
     criteria: { type: "followers", followerCount: 50 },
     criteriaDescription: "Have 50 followers",
     isAutomatic: true,
@@ -503,6 +600,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "⭐",
     category: "social",
     tier: "gold",
+    rarity: "epic",
+    unlockMessage: "100 followers. You're a fitness influencer now!",
     criteria: { type: "followers", followerCount: 100 },
     criteriaDescription: "Have 100 followers",
     isAutomatic: true,
@@ -510,15 +609,17 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
   },
 
   // ============================================================================
-  // SPORT BADGES
+  // SPORT BADGES — All sports use their sport emoji
   // ============================================================================
-  
+
   {
     name: "Baseball Player",
     description: "Baseball athlete",
     icon: "⚾",
     category: "sport",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "Play ball! Your baseball identity is locked in.",
     criteria: { type: "sport", sport: "baseball" },
     criteriaDescription: "Add baseball to your sports",
     isAutomatic: true,
@@ -530,6 +631,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏀",
     category: "sport",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "Hoops life! Ball is life.",
     criteria: { type: "sport", sport: "basketball" },
     criteriaDescription: "Add basketball to your sports",
     isAutomatic: true,
@@ -541,6 +644,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏈",
     category: "sport",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "Gridiron warrior! Friday night lights energy.",
     criteria: { type: "sport", sport: "football" },
     criteriaDescription: "Add football to your sports",
     isAutomatic: true,
@@ -552,6 +657,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "⚽",
     category: "sport",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "The beautiful game! Your pitch, your rules.",
     criteria: { type: "sport", sport: "soccer" },
     criteriaDescription: "Add soccer to your sports",
     isAutomatic: true,
@@ -563,6 +670,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏒",
     category: "sport",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "Ice or field, you bring the intensity!",
     criteria: { type: "sport", sport: "hockey" },
     criteriaDescription: "Add hockey to your sports",
     isAutomatic: true,
@@ -574,6 +683,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🎾",
     category: "sport",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "Game, set, match! Court warrior unlocked.",
     criteria: { type: "sport", sport: "tennis" },
     criteriaDescription: "Add tennis to your sports",
     isAutomatic: true,
@@ -585,6 +696,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "⛳",
     category: "sport",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "Fore! Time to work on that swing.",
     criteria: { type: "sport", sport: "golf" },
     criteriaDescription: "Add golf to your sports",
     isAutomatic: true,
@@ -596,6 +709,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏊",
     category: "sport",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "Dive in! The pool is your playground.",
     criteria: { type: "sport", sport: "swimming" },
     criteriaDescription: "Add swimming to your sports",
     isAutomatic: true,
@@ -604,9 +719,11 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
   {
     name: "CrossFit Athlete",
     description: "CrossFit practitioner",
-    icon: "🏋️",
+    icon: "⚡",
     category: "sport",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "WOD life! Ready for anything they throw at you.",
     criteria: { type: "sport", sport: "crossfit" },
     criteriaDescription: "Add CrossFit to your sports",
     isAutomatic: true,
@@ -615,9 +732,11 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
   {
     name: "Powerlifter",
     description: "Powerlifting athlete",
-    icon: "💪",
+    icon: "🏋️",
     category: "sport",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "Squat, bench, dead. The big three are your world.",
     criteria: { type: "sport", sport: "powerlifting" },
     criteriaDescription: "Add powerlifting to your sports",
     isAutomatic: true,
@@ -629,6 +748,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏃",
     category: "sport",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "Lace up! Every mile makes you stronger.",
     criteria: { type: "sport", sport: "running" },
     criteriaDescription: "Add running to your sports",
     isAutomatic: true,
@@ -640,6 +761,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🚴",
     category: "sport",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "Pedal power! Two wheels, endless roads.",
     criteria: { type: "sport", sport: "cycling" },
     criteriaDescription: "Add cycling to your sports",
     isAutomatic: true,
@@ -651,6 +774,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏊",
     category: "sport",
     tier: "silver",
+    rarity: "uncommon",
+    unlockMessage: "Swim, bike, run. You don't pick one — you do all three.",
     criteria: { type: "sport", sport: "triathlon" },
     criteriaDescription: "Add triathlon to your sports",
     isAutomatic: true,
@@ -662,6 +787,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🥋",
     category: "sport",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "Discipline, respect, power. The way of the warrior.",
     criteria: { type: "sport", sport: "martial_arts" },
     criteriaDescription: "Add martial arts to your sports",
     isAutomatic: true,
@@ -673,6 +800,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🧘",
     category: "sport",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "Namaste! Flexibility and mindfulness unlocked.",
     criteria: { type: "sport", sport: "yoga" },
     criteriaDescription: "Add yoga to your sports",
     isAutomatic: true,
@@ -684,6 +813,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏓",
     category: "sport",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "Dink! The fastest growing sport and you're in it.",
     criteria: { type: "sport", sport: "pickleball" },
     criteriaDescription: "Add pickleball to your sports",
     isAutomatic: true,
@@ -700,6 +831,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "⏱️",
     category: "challenge",
     tier: "bronze",
+    rarity: "uncommon",
+    unlockMessage: "Fran complete! 21-15-9 and you survived.",
     criteria: { type: "challenge_complete", challengeId: "fran" },
     criteriaDescription: "Complete Fran (21-15-9 Thrusters & Pull-ups)",
     isAutomatic: true,
@@ -711,6 +844,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "⚡",
     category: "challenge",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "Sub-5 Fran! That's competitive CrossFit pace.",
     criteria: { type: "challenge_complete", challengeId: "fran_sub5" },
     criteriaDescription: "Finish Fran in under 5 minutes",
     isAutomatic: true,
@@ -719,9 +854,11 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
   {
     name: "Fran Under 3",
     description: "Complete Fran in under 3 minutes",
-    icon: "🔥",
+    icon: "💎",
     category: "challenge",
     tier: "platinum",
+    rarity: "legendary",
+    unlockMessage: "Sub-3 Fran. Games-level athlete. Absolutely elite.",
     criteria: { type: "challenge_complete", challengeId: "fran_sub3" },
     criteriaDescription: "Finish Fran in under 3 minutes",
     isAutomatic: true,
@@ -733,6 +870,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "⏱️",
     category: "challenge",
     tier: "bronze",
+    rarity: "uncommon",
+    unlockMessage: "30 clean & jerks for time? You just Grace'd it.",
     criteria: { type: "challenge_complete", challengeId: "grace" },
     criteriaDescription: "Complete Grace (30 Clean & Jerks)",
     isAutomatic: true,
@@ -744,6 +883,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "⚡",
     category: "challenge",
     tier: "gold",
+    rarity: "epic",
+    unlockMessage: "Sub-3 Grace. 30 reps in under 3 minutes is insane speed.",
     criteria: { type: "challenge_complete", challengeId: "grace_sub3" },
     criteriaDescription: "Finish Grace in under 3 minutes",
     isAutomatic: true,
@@ -755,6 +896,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🎖️",
     category: "challenge",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "Murph complete. In honor of Lt. Michael Murphy. Respect.",
     criteria: { type: "challenge_complete", challengeId: "murph" },
     criteriaDescription: "Complete Murph (1 mi run, 100 pull-ups, 200 push-ups, 300 squats, 1 mi run)",
     isAutomatic: true,
@@ -763,9 +906,11 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
   {
     name: "Murph Under 60",
     description: "Complete Murph in under 60 minutes",
-    icon: "🏆",
+    icon: "🎖️",
     category: "challenge",
     tier: "gold",
+    rarity: "epic",
+    unlockMessage: "Sub-60 Murph! That takes serious conditioning and heart.",
     criteria: { type: "challenge_complete", challengeId: "murph_sub60" },
     criteriaDescription: "Finish Murph in under 60 minutes",
     isAutomatic: true,
@@ -777,6 +922,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "💎",
     category: "challenge",
     tier: "platinum",
+    rarity: "legendary",
+    unlockMessage: "Sub-45 Murph. You are an absolute warrior.",
     criteria: { type: "challenge_complete", challengeId: "murph_sub45" },
     criteriaDescription: "Finish Murph in under 45 minutes",
     isAutomatic: true,
@@ -788,6 +935,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🔄",
     category: "challenge",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "20+ rounds of Cindy! Your engine is relentless.",
     criteria: { type: "challenge_complete", challengeId: "cindy_20" },
     criteriaDescription: "20+ rounds of Cindy in 20 minutes",
     isAutomatic: true,
@@ -799,6 +948,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏃",
     category: "challenge",
     tier: "bronze",
+    rarity: "uncommon",
+    unlockMessage: "Helen complete! Run, swing, pull — the perfect combo.",
     criteria: { type: "challenge_complete", challengeId: "helen" },
     criteriaDescription: "Complete 3 rounds of Helen",
     isAutomatic: true,
@@ -810,6 +961,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "⏱️",
     category: "challenge",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "30 snatches for time. Fast, powerful, and technical.",
     criteria: { type: "challenge_complete", challengeId: "isabel" },
     criteriaDescription: "Complete Isabel (30 Snatches for time)",
     isAutomatic: true,
@@ -821,6 +974,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🎖️",
     category: "challenge",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "DT complete. A hero WOD that tests every ounce of grit.",
     criteria: { type: "challenge_complete", challengeId: "dt" },
     criteriaDescription: "Complete 5 rounds of DT",
     isAutomatic: true,
@@ -828,15 +983,17 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
   },
 
   // ============================================================================
-  // BODYWEIGHT/CALISTHENICS BADGES
+  // BODYWEIGHT / CALISTHENICS REP BADGES
   // ============================================================================
 
   {
     name: "Pull-Up Pro",
     description: "Complete 20 strict pull-ups unbroken",
-    icon: "💪",
+    icon: "🧗",
     category: "skill",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "20 strict pull-ups! Your back is a weapon.",
     criteria: { type: "pr_single", exercises: ["pull up", "pull-up"], singleValue: 20 },
     criteriaDescription: "20 strict pull-ups in a row",
     isAutomatic: true,
@@ -848,6 +1005,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "💪",
     category: "skill",
     tier: "silver",
+    rarity: "uncommon",
+    unlockMessage: "50 push-ups nonstop! Chest and triceps of steel.",
     criteria: { type: "pr_single", exercises: ["push up", "push-up"], singleValue: 50 },
     criteriaDescription: "50 push-ups in a row",
     isAutomatic: true,
@@ -859,6 +1018,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "💪",
     category: "skill",
     tier: "gold",
+    rarity: "epic",
+    unlockMessage: "100 push-ups without stopping. That's muscular endurance royalty.",
     criteria: { type: "pr_single", exercises: ["push up", "push-up"], singleValue: 100 },
     criteriaDescription: "100 push-ups in a row",
     isAutomatic: true,
@@ -867,9 +1028,11 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
   {
     name: "Dip Master",
     description: "Complete 30 dips unbroken",
-    icon: "💪",
+    icon: "⬇️",
     category: "skill",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "30 dips! Your triceps and chest are bulletproof.",
     criteria: { type: "pr_single", exercises: ["dip", "dips"], singleValue: 30 },
     criteriaDescription: "30 dips in a row",
     isAutomatic: true,
@@ -881,6 +1044,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🧘",
     category: "skill",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "30 second L-sit! Core strength and hip flexor power unlocked.",
     criteria: { type: "skill_achieved", skillName: "l_sit", skillStatus: "achieved" },
     criteriaDescription: "30 second L-sit hold",
     isAutomatic: true,
@@ -889,9 +1054,11 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
   {
     name: "Human Flag",
     description: "Achieve a human flag",
-    icon: "🏁",
+    icon: "🚩",
     category: "skill",
     tier: "platinum",
+    rarity: "legendary",
+    unlockMessage: "The human flag. You're literally defying gravity sideways.",
     criteria: { type: "skill_achieved", skillName: "human_flag", skillStatus: "achieved" },
     criteriaDescription: "Hold a full human flag",
     isAutomatic: true,
@@ -903,6 +1070,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🦸",
     category: "skill",
     tier: "platinum",
+    rarity: "legendary",
+    unlockMessage: "Full planche. You've mastered one of the hardest bodyweight skills alive.",
     criteria: { type: "skill_achieved", skillName: "planche", skillStatus: "achieved" },
     criteriaDescription: "Hold a full planche",
     isAutomatic: true,
@@ -914,6 +1083,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "📐",
     category: "skill",
     tier: "gold",
+    rarity: "epic",
+    unlockMessage: "Front lever locked! Insane lat and core strength.",
     criteria: { type: "skill_achieved", skillName: "front_lever", skillStatus: "achieved" },
     criteriaDescription: "Hold a full front lever",
     isAutomatic: true,
@@ -921,7 +1092,7 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
   },
 
   // ============================================================================
-  // BODYWEIGHT RATIO BADGES
+  // BODYWEIGHT RATIO BADGES (⚖️ = ratio/balance)
   // ============================================================================
 
   {
@@ -930,6 +1101,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "⚖️",
     category: "strength",
     tier: "bronze",
+    rarity: "uncommon",
+    unlockMessage: "You can bench your own bodyweight! Solid foundation.",
     criteria: { type: "pr_bodyweight_ratio", exercises: ["bench press"], bodyweightRatio: 1.0 },
     criteriaDescription: "Bench 1x your bodyweight",
     isAutomatic: true,
@@ -941,6 +1114,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "⚖️",
     category: "strength",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "1.5x bodyweight bench! That's truly strong for any weight class.",
     criteria: { type: "pr_bodyweight_ratio", exercises: ["bench press"], bodyweightRatio: 1.5 },
     criteriaDescription: "Bench 1.5x your bodyweight",
     isAutomatic: true,
@@ -952,6 +1127,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "⚖️",
     category: "strength",
     tier: "gold",
+    rarity: "epic",
+    unlockMessage: "Double bodyweight squat! You're squatting like an elite lifter.",
     criteria: { type: "pr_bodyweight_ratio", exercises: ["squat", "back squat"], bodyweightRatio: 2.0 },
     criteriaDescription: "Squat 2x your bodyweight",
     isAutomatic: true,
@@ -963,6 +1140,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "⚖️",
     category: "strength",
     tier: "gold",
+    rarity: "epic",
+    unlockMessage: "2.5x bodyweight deadlift. That's world-class relative strength.",
     criteria: { type: "pr_bodyweight_ratio", exercises: ["deadlift"], bodyweightRatio: 2.5 },
     criteriaDescription: "Deadlift 2.5x your bodyweight",
     isAutomatic: true,
@@ -974,6 +1153,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "⚖️",
     category: "strength",
     tier: "platinum",
+    rarity: "legendary",
+    unlockMessage: "3x bodyweight deadlift. You belong on a competition platform.",
     criteria: { type: "pr_bodyweight_ratio", exercises: ["deadlift"], bodyweightRatio: 3.0 },
     criteriaDescription: "Deadlift 3x your bodyweight",
     isAutomatic: true,
@@ -990,6 +1171,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏃",
     category: "track",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "Sub-60 quarter mile! That takes real speed endurance.",
     criteria: { type: "track_time", trackDistance: 400, trackTime: 60 },
     criteriaDescription: "Complete 400m in under 60 seconds",
     isAutomatic: true,
@@ -1001,6 +1184,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏃",
     category: "track",
     tier: "gold",
+    rarity: "epic",
+    unlockMessage: "Sub-55! You're running at a competitive track athlete pace.",
     criteria: { type: "track_time", trackDistance: 400, trackTime: 55 },
     criteriaDescription: "Complete 400m in under 55 seconds",
     isAutomatic: true,
@@ -1012,6 +1197,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏃",
     category: "track",
     tier: "platinum",
+    rarity: "legendary",
+    unlockMessage: "Sub-50 400m! That's collegiate / professional sprint speed.",
     criteria: { type: "track_time", trackDistance: 400, trackTime: 50 },
     criteriaDescription: "Complete 400m in under 50 seconds",
     isAutomatic: true,
@@ -1023,6 +1210,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "💨",
     category: "track",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "Sub-12! You've got genuine speed in those legs.",
     criteria: { type: "track_time", trackDistance: 100, trackTime: 12 },
     criteriaDescription: "Complete 100m sprint in under 12 seconds",
     isAutomatic: true,
@@ -1034,6 +1223,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "💨",
     category: "track",
     tier: "gold",
+    rarity: "epic",
+    unlockMessage: "Sub-11 hundred! You're in serious sprinter territory.",
     criteria: { type: "track_time", trackDistance: 100, trackTime: 11 },
     criteriaDescription: "Complete 100m sprint in under 11 seconds",
     isAutomatic: true,
@@ -1041,7 +1232,7 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
   },
 
   // ============================================================================
-  // PROGRAM COMPLETION BADGES  
+  // PROGRAM COMPLETION BADGES (🎓 = graduation)
   // ============================================================================
 
   {
@@ -1050,6 +1241,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🎓",
     category: "program",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "First program complete! Structured training pays off.",
     criteria: { type: "program_complete" },
     criteriaDescription: "Complete any training program",
     isAutomatic: true,
@@ -1061,6 +1254,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🎓",
     category: "program",
     tier: "silver",
+    rarity: "uncommon",
+    unlockMessage: "3 programs finished! You're building a diverse training base.",
     criteria: { type: "program_complete", programId: "3_programs" },
     criteriaDescription: "Complete 3 different programs",
     isAutomatic: true,
@@ -1072,6 +1267,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🎓",
     category: "program",
     tier: "gold",
+    rarity: "rare",
+    unlockMessage: "10 programs! You're a training methodology expert at this point.",
     criteria: { type: "program_complete", programId: "10_programs" },
     criteriaDescription: "Complete 10 different programs",
     isAutomatic: true,
@@ -1079,7 +1276,7 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
   },
 
   // ============================================================================
-  // OLYMPIC LIFTING BADGES
+  // OLYMPIC LIFTING BADGES (🏋️ = overhead lifting, correct for oly lifts)
   // ============================================================================
 
   {
@@ -1088,6 +1285,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏋️",
     category: "strength",
     tier: "bronze",
+    rarity: "uncommon",
+    unlockMessage: "135 C&J! You've got the technique and power to move weight overhead.",
     criteria: { type: "pr_single", exercises: ["clean and jerk", "clean & jerk"], singleValue: 135 },
     criteriaDescription: "Clean & Jerk 135 lbs",
     isAutomatic: true,
@@ -1099,6 +1298,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏋️",
     category: "strength",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "185 C&J. That's a serious amount of weight going overhead.",
     criteria: { type: "pr_single", exercises: ["clean and jerk", "clean & jerk"], singleValue: 185 },
     criteriaDescription: "Clean & Jerk 185 lbs",
     isAutomatic: true,
@@ -1110,6 +1311,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏋️",
     category: "strength",
     tier: "gold",
+    rarity: "epic",
+    unlockMessage: "225 C&J! Two plates overhead is an impressive feat of athletic power.",
     criteria: { type: "pr_single", exercises: ["clean and jerk", "clean & jerk"], singleValue: 225 },
     criteriaDescription: "Clean & Jerk 225 lbs",
     isAutomatic: true,
@@ -1121,6 +1324,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏋️",
     category: "strength",
     tier: "bronze",
+    rarity: "uncommon",
+    unlockMessage: "95 lb snatch! The most technical lift in the gym, and you're doing it.",
     criteria: { type: "pr_single", exercises: ["snatch"], singleValue: 95 },
     criteriaDescription: "Snatch 95 lbs",
     isAutomatic: true,
@@ -1132,6 +1337,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏋️",
     category: "strength",
     tier: "silver",
+    rarity: "rare",
+    unlockMessage: "135 snatch! One plate overhead from the floor in one motion. Athletic.",
     criteria: { type: "pr_single", exercises: ["snatch"], singleValue: 135 },
     criteriaDescription: "Snatch 135 lbs",
     isAutomatic: true,
@@ -1143,6 +1350,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🏋️",
     category: "strength",
     tier: "gold",
+    rarity: "epic",
+    unlockMessage: "185 snatch. That's competitive weightlifter level. Raw power and precision.",
     criteria: { type: "pr_single", exercises: ["snatch"], singleValue: 185 },
     criteriaDescription: "Snatch 185 lbs",
     isAutomatic: true,
@@ -1159,6 +1368,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🎉",
     category: "milestone",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "You're officially part of the Repcir community! Let's get to work.",
     criteria: { type: "onboarding_complete" },
     criteriaDescription: "Complete the onboarding process",
     isAutomatic: true,
@@ -1170,6 +1381,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "📋",
     category: "milestone",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "Profile is halfway there! More data means better AI workouts.",
     criteria: { type: "profile_complete", profilePercent: 50 },
     criteriaDescription: "Complete 50% of your profile",
     isAutomatic: true,
@@ -1181,6 +1394,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "⭐",
     category: "milestone",
     tier: "silver",
+    rarity: "uncommon",
+    unlockMessage: "100% profile complete! AI now has maximum context to personalize your training.",
     criteria: { type: "profile_complete", profilePercent: 100 },
     criteriaDescription: "Complete 100% of your profile",
     isAutomatic: true,
@@ -1192,6 +1407,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "🎯",
     category: "milestone",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "Goals set! Now you've got something to chase.",
     criteria: { type: "first_login" },
     criteriaDescription: "Set at least one fitness goal during onboarding",
     isAutomatic: true,
@@ -1203,6 +1420,8 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
     icon: "📈",
     category: "milestone",
     tier: "bronze",
+    rarity: "common",
+    unlockMessage: "First PR logged! Every journey starts with tracking where you are.",
     criteria: { type: "pr_single", exercises: [], singleValue: 1 },
     criteriaDescription: "Add any personal record to track your progress",
     isAutomatic: true,
@@ -1211,31 +1430,50 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
 ];
 
 async function seedBadges() {
-  console.log("🏅 Seeding badge definitions...\n");
+  console.log("Seeding badge definitions...\n");
 
   try {
-    // Insert badges
+    let created = 0;
+    let updated = 0;
+
     for (const badge of BADGE_DEFINITIONS) {
       try {
-        await db.insert(badgeDefinitions).values({
+        const result = await db.insert(badgeDefinitions).values({
           name: badge.name,
           description: badge.description,
           icon: badge.icon,
           category: badge.category,
           tier: badge.tier,
+          rarity: badge.rarity,
+          unlockMessage: badge.unlockMessage,
           criteria: badge.criteria as any,
           criteriaDescription: badge.criteriaDescription,
           isAutomatic: badge.isAutomatic,
           displayOrder: badge.displayOrder,
-        }).onConflictDoNothing();
-        
-        console.log(`  ✅ ${badge.icon} ${badge.name} (${badge.category} - ${badge.tier})`);
-      } catch (error) {
-        console.log(`  ⚠️ ${badge.name} - already exists or error`);
+        }).onConflictDoUpdate({
+          target: badgeDefinitions.name,
+          set: {
+            description: badge.description,
+            icon: badge.icon,
+            category: badge.category,
+            tier: badge.tier,
+            rarity: badge.rarity,
+            unlockMessage: badge.unlockMessage,
+            criteria: badge.criteria as any,
+            criteriaDescription: badge.criteriaDescription,
+            displayOrder: badge.displayOrder,
+          },
+        });
+
+        console.log(`  ${badge.icon} ${badge.name} (${badge.tier} / ${badge.rarity})`);
+        created++;
+      } catch (error: any) {
+        // If name conflict doesn't work (no unique constraint on name), try insert + ignore
+        console.log(`  [!] ${badge.name} - ${error.message?.slice(0, 60)}`);
       }
     }
 
-    console.log(`\n✨ Seeded ${BADGE_DEFINITIONS.length} badge definitions!`);
+    console.log(`\nDone! Processed ${BADGE_DEFINITIONS.length} badge definitions.`);
   } catch (error) {
     console.error("Failed to seed badges:", error);
     process.exit(1);

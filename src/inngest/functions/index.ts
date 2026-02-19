@@ -10,6 +10,7 @@ import { scheduleFunctions } from "./schedule";
 import { databaseEventFunctions } from "./database-events";
 import { aiCoachingFunctions } from "./ai-coaching";
 import { backgroundWorkoutFunctions } from "./generate-workout";
+import { billingFunctions } from "./billing";
 
 /**
  * All Inngest functions to be registered
@@ -21,7 +22,8 @@ export const functions = [
   ...databaseEventFunctions,
   ...aiCoachingFunctions,
   ...backgroundWorkoutFunctions,
+  ...billingFunctions,
 ];
 
 // Re-export individual function groups for testing
-export { cronFunctions, aiFunctions, scheduleFunctions, databaseEventFunctions, aiCoachingFunctions, backgroundWorkoutFunctions };
+export { cronFunctions, aiFunctions, scheduleFunctions, databaseEventFunctions, aiCoachingFunctions, backgroundWorkoutFunctions, billingFunctions };

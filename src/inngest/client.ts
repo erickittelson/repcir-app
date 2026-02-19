@@ -6,7 +6,8 @@
  * exceed Vercel's function timeout limits.
  */
 
-import { Inngest, EventSchemas } from "inngest";
+import { Inngest, EventSchemas, InngestMiddleware } from "inngest";
+import * as Sentry from "@sentry/nextjs";
 
 /**
  * Database row types for Postgres CDC events
@@ -307,6 +308,68 @@ type Events = {
   // Quota reset
   "cron/reset-ai-quotas": Record<string, never>;
 
+  // ===========================================
+  // Billing lifecycle events
+  // ===========================================
+  "billing/checkout.completed": {
+    data: {
+      userId: string;
+      tier: string;
+      interval: string;
+      sessionId: string;
+    };
+  };
+  "billing/subscription.created": {
+    data: {
+      userId: string;
+      tier: string;
+      interval: string;
+      isTrialing: boolean;
+      trialEnd: string | null;
+    };
+  };
+  "billing/subscription.canceled": {
+    data: {
+      userId: string;
+      previousTier: string;
+      canceledAt: string;
+    };
+  };
+  "billing/plan.changed": {
+    data: {
+      userId: string;
+      previousTier: string;
+      newTier: string;
+      interval: string;
+    };
+  };
+  "billing/trial.ending": {
+    data: {
+      userId: string;
+      trialEnd: string | null;
+    };
+  };
+  "billing/trial.converted": {
+    data: {
+      userId: string;
+      tier: string;
+    };
+  };
+  "billing/payment.failed": {
+    data: {
+      userId: string;
+      invoiceId: string;
+      attemptCount: number;
+    };
+  };
+  "billing/payment.action_required": {
+    data: {
+      userId: string;
+      invoiceId: string;
+      hostedInvoiceUrl: string | null;
+    };
+  };
+
   // Admin/system events
   "admin/migration": {
     data: {
@@ -324,6 +387,39 @@ type Events = {
 };
 
 /**
+ * Sentry middleware — captures errors from all Inngest functions
+ * with context (function name, event name, userId, jobId).
+ */
+const sentryMiddleware = new InngestMiddleware({
+  name: "Sentry Error Tracking",
+  init() {
+    return {
+      onFunctionRun({ ctx, fn }) {
+        return {
+          transformOutput({ result }) {
+            if (result.error) {
+              Sentry.withScope((scope) => {
+                const fnId = fn.id("");
+                scope.setTag("inngest.function", fnId);
+                scope.setTag("inngest.event", ctx.event.name);
+                scope.setContext("inngest", {
+                  functionId: fnId,
+                  eventName: ctx.event.name,
+                  runId: ctx.runId,
+                  userId: (ctx.event.data as Record<string, unknown>)?.userId,
+                  jobId: (ctx.event.data as Record<string, unknown>)?.jobId,
+                });
+                Sentry.captureException(result.error);
+              });
+            }
+          },
+        };
+      },
+    };
+  },
+});
+
+/**
  * Inngest client instance
  *
  * Use this client to:
@@ -333,6 +429,7 @@ type Events = {
 export const inngest = new Inngest({
   id: "repcir-app",
   schemas: new EventSchemas().fromRecord<Events>(),
+  middleware: [sentryMiddleware],
 });
 
 /**

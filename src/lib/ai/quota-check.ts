@@ -1,13 +1,16 @@
 /**
  * AI Quota Check - Enforces subscription-based AI usage limits.
  *
- * Free tier: 5 AI workouts/month, 100 coach chats/month
- * Pro tier: Unlimited
+ * Delegates to the centralized entitlements system for plan limits.
+ * Handles quota record lifecycle (create, reset, check).
  */
 
 import { db } from "@/lib/db";
 import { aiQuotas, subscriptions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { getUserTier } from "@/lib/billing/entitlements";
+import { getTierQuotaLimits } from "@/lib/billing/plans";
+import type { PlanTier } from "@/lib/billing/types";
 
 type QuotaType = "workout" | "chat";
 
@@ -19,11 +22,6 @@ interface QuotaCheckResult {
   upgradeRequired: boolean;
 }
 
-const PLAN_LIMITS = {
-  free: { monthlyWorkoutLimit: 5, monthlyChatLimit: 100 },
-  pro: { monthlyWorkoutLimit: 999999, monthlyChatLimit: 999999 },
-} as const;
-
 /**
  * Ensure a quota record exists for a user, creating one if needed.
  */
@@ -33,17 +31,8 @@ async function ensureQuota(userId: string): Promise<typeof aiQuotas.$inferSelect
   });
 
   if (!quota) {
-    // Determine plan from subscription (table may not exist yet)
-    let plan = "free";
-    try {
-      const sub = await db.query.subscriptions.findFirst({
-        where: eq(subscriptions.userId, userId),
-      });
-      if (sub?.plan === "pro") plan = "pro";
-    } catch {
-      // subscriptions table may not exist yet — default to free
-    }
-    const limits = PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS] || PLAN_LIMITS.free;
+    const tier = await getUserTier(userId);
+    const limits = getTierQuotaLimits(tier);
 
     const now = new Date();
     const periodEnd = new Date(now);
@@ -53,7 +42,7 @@ async function ensureQuota(userId: string): Promise<typeof aiQuotas.$inferSelect
       .insert(aiQuotas)
       .values({
         userId,
-        plan,
+        plan: tier,
         monthlyWorkoutLimit: limits.monthlyWorkoutLimit,
         monthlyChatLimit: limits.monthlyChatLimit,
         currentWorkoutCount: 0,
@@ -65,7 +54,6 @@ async function ensureQuota(userId: string): Promise<typeof aiQuotas.$inferSelect
       .onConflictDoNothing()
       .returning();
 
-    // If conflict (race condition), just fetch the existing one
     if (!created) {
       quota = await db.query.aiQuotas.findFirst({
         where: eq(aiQuotas.userId, userId),
@@ -77,6 +65,9 @@ async function ensureQuota(userId: string): Promise<typeof aiQuotas.$inferSelect
 
   // Reset counters if period has expired
   if (quota && new Date(quota.periodEnd) < new Date()) {
+    const tier = await getUserTier(userId);
+    const limits = getTierQuotaLimits(tier);
+
     const now = new Date();
     const newPeriodEnd = new Date(now);
     newPeriodEnd.setDate(newPeriodEnd.getDate() + 30);
@@ -84,6 +75,9 @@ async function ensureQuota(userId: string): Promise<typeof aiQuotas.$inferSelect
     const [updated] = await db
       .update(aiQuotas)
       .set({
+        plan: tier,
+        monthlyWorkoutLimit: limits.monthlyWorkoutLimit,
+        monthlyChatLimit: limits.monthlyChatLimit,
         currentWorkoutCount: 0,
         currentChatCount: 0,
         currentTokensUsed: 0,
@@ -101,6 +95,25 @@ async function ensureQuota(userId: string): Promise<typeof aiQuotas.$inferSelect
 }
 
 /**
+ * Sync a user's quota limits when their plan changes.
+ * Called from webhook processor after plan change.
+ */
+export async function syncQuotaLimits(userId: string): Promise<void> {
+  const tier = await getUserTier(userId);
+  const limits = getTierQuotaLimits(tier);
+
+  await db
+    .update(aiQuotas)
+    .set({
+      plan: tier,
+      monthlyWorkoutLimit: limits.monthlyWorkoutLimit,
+      monthlyChatLimit: limits.monthlyChatLimit,
+      updatedAt: new Date(),
+    })
+    .where(eq(aiQuotas.userId, userId));
+}
+
+/**
  * Check if a user has quota remaining for an AI operation.
  */
 export async function checkAIQuota(
@@ -108,14 +121,16 @@ export async function checkAIQuota(
   type: QuotaType
 ): Promise<QuotaCheckResult> {
   const quota = await ensureQuota(userId);
+  const tier = await getUserTier(userId);
 
-  // Pro users always allowed
-  if (quota.plan === "pro") {
+  // Unlimited tiers (pro and above)
+  const UNLIMITED = 999_999;
+  if (quota.monthlyWorkoutLimit >= UNLIMITED && quota.monthlyChatLimit >= UNLIMITED) {
     return {
       allowed: true,
-      remaining: 999999,
-      limit: 999999,
-      plan: "pro",
+      remaining: UNLIMITED,
+      limit: UNLIMITED,
+      plan: tier,
       upgradeRequired: false,
     };
   }
@@ -126,7 +141,7 @@ export async function checkAIQuota(
       allowed: remaining > 0,
       remaining,
       limit: quota.monthlyWorkoutLimit,
-      plan: quota.plan,
+      plan: tier,
       upgradeRequired: remaining === 0,
     };
   }
@@ -137,15 +152,34 @@ export async function checkAIQuota(
     allowed: remaining > 0,
     remaining,
     limit: quota.monthlyChatLimit,
-    plan: quota.plan,
+    plan: tier,
     upgradeRequired: remaining === 0,
   };
+}
+
+/**
+ * Get the next suggested upgrade tier for a user.
+ */
+function getUpgradeSuggestion(currentTier: PlanTier): { tier: PlanTier; name: string } {
+  switch (currentTier) {
+    case "free":
+      return { tier: "plus", name: "Plus" };
+    case "plus":
+      return { tier: "pro", name: "Pro" };
+    case "pro":
+      return { tier: "leader", name: "Circle Leader" };
+    default:
+      return { tier: "pro", name: "Pro" };
+  }
 }
 
 /**
  * Create a 429 response for quota exceeded.
  */
 export function createQuotaExceededResponse(result: QuotaCheckResult, type: QuotaType): Response {
+  const currentTier = result.plan as PlanTier;
+  const upgrade = getUpgradeSuggestion(currentTier);
+
   return new Response(
     JSON.stringify({
       error: "AI quota exceeded",
@@ -153,10 +187,11 @@ export function createQuotaExceededResponse(result: QuotaCheckResult, type: Quot
       plan: result.plan,
       limit: result.limit,
       upgradeRequired: result.upgradeRequired,
+      suggestedTier: upgrade.tier,
       message:
         type === "workout"
-          ? `You've used all ${result.limit} AI workout generations this month. Upgrade to Pro for unlimited.`
-          : `You've reached your ${result.limit} AI coach messages this month. Upgrade to Pro for unlimited.`,
+          ? `You've used all ${result.limit} AI workout generations this month. Upgrade to ${upgrade.name} for more.`
+          : `You've reached your ${result.limit} AI coach messages this month. Upgrade to ${upgrade.name} for more.`,
     }),
     {
       status: 429,

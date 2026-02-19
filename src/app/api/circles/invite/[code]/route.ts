@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { circleInvitations, circleMembers, circles } from "@/lib/db/schema";
+import { circleInvitations, circleMembers, circles, subscriptions } from "@/lib/db/schema";
 import { getSession } from "@/lib/neon-auth";
 import { eq, and, sql } from "drizzle-orm";
 
@@ -159,6 +159,42 @@ export async function POST(request: Request, { params }: RouteParams) {
       .set({ uses: invitation.uses + 1 })
       .where(eq(circleInvitations.id, invitation.id));
 
+    // Grant 7-day Plus trial to invited users on the free tier
+    let trialGranted = false;
+    const existingSub = await db.query.subscriptions.findFirst({
+      where: eq(subscriptions.userId, session.user.id),
+    });
+
+    if (!existingSub || existingSub.plan === "free") {
+      const now = new Date();
+      const trialEnd = new Date(now);
+      trialEnd.setDate(trialEnd.getDate() + 7);
+
+      if (existingSub) {
+        await db
+          .update(subscriptions)
+          .set({
+            plan: "plus",
+            status: "trialing",
+            trialEnd,
+            currentPeriodStart: now,
+            currentPeriodEnd: trialEnd,
+            updatedAt: now,
+          })
+          .where(eq(subscriptions.userId, session.user.id));
+      } else {
+        await db.insert(subscriptions).values({
+          userId: session.user.id,
+          plan: "plus",
+          status: "trialing",
+          trialEnd,
+          currentPeriodStart: now,
+          currentPeriodEnd: trialEnd,
+        });
+      }
+      trialGranted = true;
+    }
+
     return NextResponse.json({
       success: true,
       member: {
@@ -170,6 +206,7 @@ export async function POST(request: Request, { params }: RouteParams) {
         id: invitation.circle.id,
         name: invitation.circle.name,
       },
+      trialGranted,
     });
   } catch (error) {
     console.error("Failed to accept invitation:", error);

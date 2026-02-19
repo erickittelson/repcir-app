@@ -17,7 +17,10 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { CreateCircleExperience } from "@/components/circle";
+import { useBilling } from "@/hooks/use-billing";
+import { UpgradeSheet } from "@/components/billing/upgrade-sheet";
 
 interface CircleData {
   id: string;
@@ -39,8 +42,28 @@ interface CirclesClientProps {
 
 export function CirclesClient({ circles, userId }: CirclesClientProps) {
   const router = useRouter();
+  const billing = useBilling();
+  const [showUpgradeSheet, setShowUpgradeSheet] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateCircle, setShowCreateCircle] = useState(false);
+
+  const handleCreateCircle = () => {
+    // Gate: check circle creation limit
+    if (!billing.isLoading && billing.data) {
+      const maxOwned = billing.data.entitlements.maxCirclesOwned;
+      const ownedCount = billing.data.usage.circlesOwned;
+      if (maxOwned < 999_999 && ownedCount >= maxOwned) {
+        if (billing.canShowPaywall("create-circle")) {
+          setShowUpgradeSheet(true);
+          billing.recordPaywallShown("create-circle");
+        } else {
+          toast.error("Upgrade your plan to create more circles");
+        }
+        return;
+      }
+    }
+    setShowCreateCircle(true);
+  };
 
   const filteredCircles = circles.filter((circle) =>
     circle.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -80,11 +103,18 @@ export function CirclesClient({ circles, userId }: CirclesClientProps) {
 
   return (
     <div className="space-y-4 px-4 py-6 pb-20">
+      {/* Upgrade Sheet */}
+      <UpgradeSheet
+        open={showUpgradeSheet}
+        onOpenChange={setShowUpgradeSheet}
+        currentTier={billing.tier}
+      />
+
       {/* Header */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Circles</h1>
-          <Button size="sm" onClick={() => setShowCreateCircle(true)}>
+          <Button size="sm" onClick={handleCreateCircle}>
             <Plus className="h-4 w-4 mr-1" />
             Create
           </Button>

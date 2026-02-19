@@ -19,6 +19,9 @@ import {
   Trophy,
   Sparkles,
   MessageSquare,
+  Share2,
+  Copy,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -365,6 +368,11 @@ export default function WorkoutSessionPage() {
         </Card>
       )}
 
+      {/* Share Workout */}
+      {session.status === "completed" && (
+        <ShareWorkoutCard sessionId={session.id} sessionName={session.name} />
+      )}
+
       {/* Exercises */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -498,5 +506,78 @@ export default function WorkoutSessionPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function ShareWorkoutCard({
+  sessionId,
+  sessionName,
+}: {
+  sessionId: string;
+  sessionName: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  const shareUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/w/${sessionId}`;
+
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${sessionName} — Repcir`,
+          text: `Check out my workout: ${sessionName}`,
+          url: shareUrl,
+        });
+      } catch {
+        // User cancelled
+      }
+    } else {
+      handleCopy();
+    }
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      toast.success("Share link copied!");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy link");
+    }
+  };
+
+  return (
+    <Card className="bg-gradient-to-br from-brand/5 to-energy/5 border-brand/20">
+      <CardContent className="p-4">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-full bg-brand/20 flex items-center justify-center">
+            <Share2 className="h-5 w-5 text-brand" />
+          </div>
+          <div className="flex-1">
+            <p className="font-medium text-sm">Share your workout</p>
+            <p className="text-xs text-muted-foreground">
+              Let your circle see what you crushed
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleCopy}>
+              {copied ? (
+                <Check className="h-4 w-4" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+            </Button>
+            <Button
+              size="sm"
+              className="bg-brand hover:bg-brand/90 text-brand-foreground"
+              onClick={handleShare}
+            >
+              <Share2 className="h-4 w-4 mr-1" />
+              Share
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
