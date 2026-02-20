@@ -22,11 +22,23 @@ import {
   Globe,
   Users,
   Lock,
+  Medal,
+  Clock,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { compressImage } from "@/lib/image-compress";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { FeedSkeleton } from "./feed-skeleton";
+import { BadgeFlair } from "@/components/badges/badge-flair";
 
 type PostVisibility = "public" | "followers" | "connections" | "private";
 
@@ -35,6 +47,7 @@ interface ActivityFeedClientProps {
   userId?: string;
   userName?: string;
   userImage?: string | null;
+  circles?: Array<{ id: string; name: string }>;
 }
 
 export function ActivityFeedClient({
@@ -42,6 +55,7 @@ export function ActivityFeedClient({
   userId,
   userName,
   userImage,
+  circles,
 }: ActivityFeedClientProps) {
   const feed = useFeed();
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -84,6 +98,7 @@ export function ActivityFeedClient({
           userId={userId}
           userName={userName}
           userImage={userImage}
+          circles={circles || []}
           onPost={feed.refresh}
         />
       )}
@@ -281,6 +296,9 @@ function PostFeedItem({ item }: { item: FeedItem }) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className="font-medium">{item.actorName}</span>
+              {item.actorBadges && item.actorBadges.length > 0 && (
+                <BadgeFlair badges={item.actorBadges} />
+              )}
               {item.circleName && (
                 <span className="text-xs text-muted-foreground">
                   in {item.circleName}

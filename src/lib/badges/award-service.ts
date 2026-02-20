@@ -636,11 +636,25 @@ export async function awardBadge(
     return { success: false, alreadyEarned: true };
   }
 
+  // Check if user has fewer than 3 featured badges — auto-feature if so
+  const featuredCount = await db
+    .select({ count: count() })
+    .from(userBadges)
+    .where(
+      and(
+        eq(userBadges.userId, userId),
+        eq(userBadges.isFeatured, true)
+      )
+    );
+
+  const shouldAutoFeature = (featuredCount[0]?.count || 0) < 3;
+
   // Award the badge
   await db.insert(userBadges).values({
     userId,
     badgeId,
     metadata: metadata || {},
+    isFeatured: shouldAutoFeature,
   });
 
   return { success: true };

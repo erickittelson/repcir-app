@@ -148,7 +148,7 @@ export function UpgradeSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh]">
+      <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] border-t-0">
         <SheetHeader className="text-left pb-2">
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand/10 text-brand">

@@ -43,6 +43,7 @@ import { DeleteConfirmDialog } from "@/components/ui/confirm-dialog";
 import { VoiceInputWithTranscription } from "@/components/voice-input";
 import { haptics } from "@/lib/haptics";
 import { compressImage } from "@/lib/image-compress";
+import { BadgeFlair } from "@/components/badges/badge-flair";
 
 interface CirclePost {
   id: string;
@@ -63,6 +64,12 @@ interface CirclePost {
   authorName: string | null;
   authorImage: string | null;
   isLiked: boolean;
+  authorBadges?: Array<{
+    id: string;
+    icon: string | null;
+    name: string;
+    tier: string;
+  }>;
 }
 
 interface CircleFeedProps {
@@ -646,6 +653,9 @@ export function CircleFeed({ circleId, userId, userRole, userName, userImage }: 
                     <span className="font-medium text-sm">
                       {post.authorName || "Anonymous"}
                     </span>
+                    {post.authorBadges && post.authorBadges.length > 0 && (
+                      <BadgeFlair badges={post.authorBadges} />
+                    )}
                     {post.isPinned && (
                       <Badge variant="outline" className="text-[10px] gap-1">
                         <Pin className="h-2.5 w-2.5" />

@@ -21,8 +21,10 @@ import {
   posts,
   postLikes,
   userProfiles,
+  userBadges,
+  badgeDefinitions,
 } from "@/lib/db/schema";
-import { eq, and, lt, desc, inArray, or } from "drizzle-orm";
+import { eq, and, lt, desc, inArray, or, asc } from "drizzle-orm";
 import { getSocialGraph, getUserCircleIds } from "@/lib/social";
 import { getBlockedUserIds } from "@/lib/social";
 
@@ -35,6 +37,12 @@ export interface FeedItem {
   actorId: string;
   actorName: string;
   actorImage: string | null;
+  actorBadges: Array<{
+    id: string;
+    icon: string | null;
+    name: string;
+    tier: string;
+  }>;
   activityType: string;
   content: string | null;
   imageUrl: string | null;
@@ -46,6 +54,7 @@ export interface FeedItem {
   isLiked: boolean;
   createdAt: string;
   visibility: string | null;
+  challengeId: string | null;
 }
 
 export async function GET(request: NextRequest) {
@@ -94,13 +103,48 @@ export async function GET(request: NextRequest) {
   circlePostResults.forEach((p) => actorIds.add(p.authorId));
   individualPostResults.forEach((p) => actorIds.add(p.authorId));
 
-  const profiles = actorIds.size > 0
-    ? await db.query.userProfiles.findMany({
-        where: inArray(userProfiles.userId, Array.from(actorIds)),
-        columns: { userId: true, displayName: true, profilePicture: true },
-      })
-    : [];
+  const actorIdArray = Array.from(actorIds);
+
+  const [profiles, featuredBadges] = await Promise.all([
+    actorIds.size > 0
+      ? db.query.userProfiles.findMany({
+          where: inArray(userProfiles.userId, actorIdArray),
+          columns: { userId: true, displayName: true, profilePicture: true },
+        })
+      : Promise.resolve([]),
+    actorIds.size > 0
+      ? db
+          .select({
+            userId: userBadges.userId,
+            badgeId: badgeDefinitions.id,
+            icon: badgeDefinitions.icon,
+            name: badgeDefinitions.name,
+            tier: badgeDefinitions.tier,
+            displayOrder: userBadges.displayOrder,
+          })
+          .from(userBadges)
+          .innerJoin(badgeDefinitions, eq(userBadges.badgeId, badgeDefinitions.id))
+          .where(
+            and(
+              inArray(userBadges.userId, actorIdArray),
+              eq(userBadges.isFeatured, true)
+            )
+          )
+          .orderBy(asc(userBadges.displayOrder))
+      : Promise.resolve([]),
+  ]);
+
   const profileMap = new Map(profiles.map((p) => [p.userId, p]));
+
+  // Group badges by userId, max 3 per user
+  const badgeMap = new Map<string, typeof featuredBadges>();
+  for (const badge of featuredBadges) {
+    const existing = badgeMap.get(badge.userId) || [];
+    if (existing.length < 3) {
+      existing.push(badge);
+      badgeMap.set(badge.userId, existing);
+    }
+  }
 
   // Check which posts the user has liked (both circle + individual)
   const circlePostIds = circlePostResults.map((p) => p.id);
@@ -135,6 +179,15 @@ export async function GET(request: NextRequest) {
     session.circles.map((c) => [c.id, c.name])
   );
 
+  // Helper to get flair badges for a user
+  const getBadges = (userId: string) =>
+    (badgeMap.get(userId) || []).map((b) => ({
+      id: b.badgeId,
+      icon: b.icon,
+      name: b.name,
+      tier: b.tier,
+    }));
+
   // Transform and merge all items
   const feedItems: FeedItem[] = [];
 
@@ -147,6 +200,7 @@ export async function GET(request: NextRequest) {
       actorId: a.userId,
       actorName: profile?.displayName || session.user.name,
       actorImage: profile?.profilePicture || null,
+      actorBadges: getBadges(a.userId),
       activityType: a.activityType,
       content: null,
       imageUrl: null,
@@ -158,6 +212,7 @@ export async function GET(request: NextRequest) {
       isLiked: false,
       createdAt: a.createdAt.toISOString(),
       visibility: a.visibility,
+      challengeId: null,
     });
   }
 
@@ -170,6 +225,7 @@ export async function GET(request: NextRequest) {
       actorId: p.authorId,
       actorName: profile?.displayName || "Unknown",
       actorImage: profile?.profilePicture || null,
+      actorBadges: getBadges(p.authorId),
       activityType: p.postType,
       content: p.content,
       imageUrl: p.imageUrl,
@@ -181,6 +237,7 @@ export async function GET(request: NextRequest) {
       isLiked: likedCirclePostIds.has(p.id),
       createdAt: p.createdAt.toISOString(),
       visibility: p.visibility,
+      challengeId: p.challengeId || null,
     });
   }
 
@@ -193,6 +250,7 @@ export async function GET(request: NextRequest) {
       actorId: p.authorId,
       actorName: profile?.displayName || "Unknown",
       actorImage: profile?.profilePicture || null,
+      actorBadges: getBadges(p.authorId),
       activityType: p.postType,
       content: p.content,
       imageUrl: p.imageUrl,
@@ -204,6 +262,7 @@ export async function GET(request: NextRequest) {
       isLiked: likedIndividualPostIds.has(p.id),
       createdAt: p.createdAt.toISOString(),
       visibility: p.visibility,
+      challengeId: p.challengeId || null,
     });
   }
 

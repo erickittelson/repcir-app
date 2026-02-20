@@ -5,48 +5,22 @@
  * Replaces ad-hoc `if (plan === "pro")` checks scattered across the codebase.
  */
 
-import { db } from "@/lib/db";
-import { subscriptions, aiQuotas } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { cacheUserData, CACHE_CONFIG } from "@/lib/cache";
-import { PLAN_CATALOG, getEntitlements } from "./plans";
+// TODO: Re-enable these imports when billing is live
+// import { db } from "@/lib/db";
+// import { subscriptions, aiQuotas } from "@/lib/db/schema";
+// import { eq } from "drizzle-orm";
+// import { cacheUserData, CACHE_CONFIG } from "@/lib/cache";
+import { getEntitlements } from "./plans";
 import type { PlanTier, PlanEntitlements, UsageSummary } from "./types";
 
 /**
  * Get the effective plan tier for a user.
- * Active or trialing subscriptions return their tier.
- * Past due gets a grace period (keeps tier).
- * Everything else falls back to free.
- * Cached for 5 minutes, invalidated on webhook events.
+ *
+ * TODO: Re-enable billing checks when ready to launch paid tiers.
+ * For now, all users get "leader" (highest tier) to unlock all features.
  */
-export async function getUserTier(userId: string): Promise<PlanTier> {
-  return cacheUserData(
-    userId,
-    "billing:tier",
-    async () => {
-      const sub = await db.query.subscriptions.findFirst({
-        where: eq(subscriptions.userId, userId),
-      });
-
-      if (!sub) return "free";
-
-      const status = sub.status;
-      const plan = sub.plan as PlanTier;
-
-      // Active or trialing: use their plan
-      if (status === "active" || status === "trialing") {
-        return plan || "free";
-      }
-
-      // Past due: grace period -- keep their tier
-      if (status === "past_due") {
-        return plan || "free";
-      }
-
-      return "free";
-    },
-    CACHE_CONFIG.medium
-  );
+export async function getUserTier(_userId: string): Promise<PlanTier> {
+  return "leader";
 }
 
 /**
@@ -92,52 +66,40 @@ export async function checkLimit(
 
 /**
  * Get full usage summary for the billing status endpoint and UI.
+ *
+ * TODO: Re-enable billing checks when ready to launch paid tiers.
+ * For now, returns leader-tier entitlements with unlimited usage.
  */
-export async function getUsageSummary(userId: string): Promise<UsageSummary> {
-  const [sub, quota] = await Promise.all([
-    db.query.subscriptions.findFirst({
-      where: eq(subscriptions.userId, userId),
-    }),
-    db.query.aiQuotas.findFirst({
-      where: eq(aiQuotas.userId, userId),
-    }),
-  ]);
-
-  const tier: PlanTier = (sub?.plan as PlanTier) || "free";
+export async function getUsageSummary(_userId: string): Promise<UsageSummary> {
+  const tier: PlanTier = "leader";
   const entitlements = getEntitlements(tier);
-
-  const workoutsUsed = quota?.currentWorkoutCount ?? 0;
-  const chatsUsed = quota?.currentChatCount ?? 0;
 
   return {
     tier,
     entitlements,
     usage: {
       aiWorkouts: {
-        used: workoutsUsed,
+        used: 0,
         limit: entitlements.aiWorkoutsPerMonth,
-        remaining: Math.max(0, entitlements.aiWorkoutsPerMonth - workoutsUsed),
+        remaining: entitlements.aiWorkoutsPerMonth,
       },
       aiChats: {
-        used: chatsUsed,
+        used: 0,
         limit: entitlements.aiChatsPerMonth,
-        remaining: Math.max(0, entitlements.aiChatsPerMonth - chatsUsed),
+        remaining: entitlements.aiChatsPerMonth,
       },
-      circlesJoined: 0, // populated by caller if needed
-      circlesOwned: 0, // populated by caller if needed
-      tokensUsed: quota?.currentTokensUsed ?? 0,
+      circlesJoined: 0,
+      circlesOwned: 0,
+      tokensUsed: 0,
     },
     subscription: {
-      status: (sub?.status as UsageSummary["subscription"]["status"]) ?? null,
-      interval:
-        (sub?.billingInterval as UsageSummary["subscription"]["interval"]) ??
-        null,
-      currentPeriodEnd: sub?.currentPeriodEnd ?? null,
-      cancelAtPeriodEnd: sub?.cancelAtPeriodEnd ?? false,
-      trialEnd: sub?.trialEnd ?? null,
-      isTrialing: sub?.status === "trialing",
+      status: "active",
+      interval: null,
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+      trialEnd: null,
+      isTrialing: false,
     },
-    periodEnd:
-      quota?.periodEnd ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
   };
 }

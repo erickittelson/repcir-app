@@ -6,8 +6,10 @@ import {
   circlePostLikes,
   circleMembers,
   userProfiles,
+  userBadges,
+  badgeDefinitions,
 } from "@/lib/db/schema";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, asc } from "drizzle-orm";
 import { parseAndResolveMentions } from "@/lib/mentions";
 import { notifyMention, notifyCircleMention } from "@/lib/notifications";
 import { moderateText } from "@/lib/moderation";
@@ -88,25 +90,60 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .limit(limit)
       .offset(offset);
 
-    // Check which posts the current user has liked - using inArray for type safety
+    // Batch fetch likes and featured badges in parallel
     const postIds = posts.map((p) => p.id);
-    const userLikes = postIds.length > 0
-      ? await db
-          .select({ postId: circlePostLikes.postId })
-          .from(circlePostLikes)
-          .where(
-            and(
-              eq(circlePostLikes.userId, session.user.id),
-              inArray(circlePostLikes.postId, postIds)
+    const authorIds = [...new Set(posts.map((p) => p.authorId))];
+
+    const [userLikes, featuredBadges] = await Promise.all([
+      postIds.length > 0
+        ? db
+            .select({ postId: circlePostLikes.postId })
+            .from(circlePostLikes)
+            .where(
+              and(
+                eq(circlePostLikes.userId, session.user.id),
+                inArray(circlePostLikes.postId, postIds)
+              )
             )
-          )
-      : [];
+        : Promise.resolve([]),
+      authorIds.length > 0
+        ? db
+            .select({
+              userId: userBadges.userId,
+              badgeId: badgeDefinitions.id,
+              icon: badgeDefinitions.icon,
+              name: badgeDefinitions.name,
+              tier: badgeDefinitions.tier,
+              displayOrder: userBadges.displayOrder,
+            })
+            .from(userBadges)
+            .innerJoin(badgeDefinitions, eq(userBadges.badgeId, badgeDefinitions.id))
+            .where(
+              and(
+                inArray(userBadges.userId, authorIds),
+                eq(userBadges.isFeatured, true)
+              )
+            )
+            .orderBy(asc(userBadges.displayOrder))
+        : Promise.resolve([]),
+    ]);
 
     const likedPostIds = new Set(userLikes.map((l) => l.postId));
+
+    // Group badges by userId, max 3 per user
+    const badgeMap = new Map<string, Array<{ id: string; icon: string | null; name: string; tier: string }>>();
+    for (const badge of featuredBadges) {
+      const existing = badgeMap.get(badge.userId) || [];
+      if (existing.length < 3) {
+        existing.push({ id: badge.badgeId, icon: badge.icon, name: badge.name, tier: badge.tier });
+        badgeMap.set(badge.userId, existing);
+      }
+    }
 
     const enrichedPosts = posts.map((post) => ({
       ...post,
       isLiked: likedPostIds.has(post.id),
+      authorBadges: badgeMap.get(post.authorId) || [],
     }));
 
     return NextResponse.json({

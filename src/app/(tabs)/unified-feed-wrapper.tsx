@@ -19,6 +19,7 @@ interface UnifiedFeedWrapperProps {
   userId?: string;
   userName?: string;
   userImage?: string | null;
+  circles?: Array<{ id: string; name: string }>;
 }
 
 export function UnifiedFeedWrapper({
@@ -26,6 +27,7 @@ export function UnifiedFeedWrapper({
   userId,
   userName,
   userImage,
+  circles,
 }: UnifiedFeedWrapperProps) {
   return (
     <ActivityFeedClient
@@ -33,6 +35,7 @@ export function UnifiedFeedWrapper({
       userId={userId}
       userName={userName}
       userImage={userImage}
+      circles={circles}
     />
   );
 }

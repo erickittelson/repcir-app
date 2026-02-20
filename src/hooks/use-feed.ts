@@ -8,6 +8,12 @@ export interface FeedItem {
   actorId: string;
   actorName: string;
   actorImage: string | null;
+  actorBadges?: Array<{
+    id: string;
+    icon: string | null;
+    name: string;
+    tier: string;
+  }>;
   activityType: string;
   content: string | null;
   imageUrl: string | null;
@@ -19,6 +25,7 @@ export interface FeedItem {
   isLiked: boolean;
   createdAt: string;
   visibility?: string | null;
+  challengeId?: string | null;
 }
 
 interface FeedPage {

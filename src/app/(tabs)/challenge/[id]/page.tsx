@@ -95,6 +95,12 @@ export default async function ChallengePage({ params }: ChallengePageProps) {
     streak: row.participant.currentStreak || 0,
   }));
 
+  // Get user's circles for sharing
+  const userCircles = (session.circles || []).map((c) => ({
+    id: c.id,
+    name: c.name,
+  }));
+
   return (
     <ChallengeClient
       challenge={challenge}
@@ -102,6 +108,7 @@ export default async function ChallengePage({ params }: ChallengePageProps) {
       progress={progress}
       leaderboard={leaderboard}
       userId={session.user.id}
+      circles={userCircles}
     />
   );
 }

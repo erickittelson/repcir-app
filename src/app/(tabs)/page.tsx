@@ -49,6 +49,9 @@ export default async function HomePage() {
           userId={session.user.id}
           userName={profile.name}
           userImage={profile.image}
+          circles={session.circles
+            .filter((c) => !c.isSystemCircle)
+            .map((c) => ({ id: c.id, name: c.name }))}
         />
       </div>
     </div>

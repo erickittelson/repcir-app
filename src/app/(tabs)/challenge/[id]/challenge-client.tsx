@@ -17,10 +17,21 @@ import {
   Flame,
   Medal,
   Play,
+  Send,
+  Share2,
   Target,
   Trophy,
   Users,
+  Loader2,
 } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -61,6 +72,10 @@ interface ChallengeClientProps {
     streak: number;
   }>;
   userId: string;
+  circles?: Array<{
+    id: string;
+    name: string;
+  }>;
 }
 
 export function ChallengeClient({
@@ -69,9 +84,14 @@ export function ChallengeClient({
   progress,
   leaderboard,
   userId,
+  circles = [],
 }: ChallengeClientProps) {
   const router = useRouter();
   const [isJoining, setIsJoining] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareText, setShareText] = useState("");
+  const [shareCircleId, setShareCircleId] = useState<string>("");
+  const [isSharing, setIsSharing] = useState(false);
 
   const daysCompleted = progress.filter((p) => p.completed).length;
   const totalDays = challenge.durationDays || 30;
@@ -99,6 +119,38 @@ export function ChallengeClient({
 
   const handleCheckIn = () => {
     router.push(`/challenge/${challenge.id}/today`);
+  };
+
+  const handleShareToCircle = () => {
+    setShareText(`I just started the ${challenge.name} challenge!`);
+    setShareCircleId(circles[0]?.id || "");
+    setShareOpen(true);
+  };
+
+  const handleShareSubmit = async () => {
+    if (!shareCircleId || !shareText.trim()) return;
+    setIsSharing(true);
+    try {
+      const res = await fetch(`/api/circles/${shareCircleId}/posts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          postType: "challenge",
+          content: shareText.trim(),
+          challengeId: challenge.id,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to share");
+      }
+      toast.success("Shared to circle!");
+      setShareOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to share");
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   // Find user's rank
@@ -211,6 +263,18 @@ export function ChallengeClient({
             disabled={isJoining}
           >
             {isJoining ? "Joining..." : "Join Challenge"}
+          </Button>
+        )}
+
+        {/* Share to Circle */}
+        {circles.length > 0 && (
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={handleShareToCircle}
+          >
+            <Share2 className="h-4 w-4 mr-2" />
+            Share to Circle
           </Button>
         )}
 
@@ -327,6 +391,74 @@ export function ChallengeClient({
             </CardContent>
           </Card>
         </div>
+
+      {/* Share to Circle Sheet */}
+      <Sheet open={shareOpen} onOpenChange={setShareOpen}>
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[60vh] border-t-0">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <Share2 className="h-5 w-5 text-energy" />
+              Share to Circle
+            </SheetTitle>
+          </SheetHeader>
+          <div className="py-4 space-y-4">
+            {/* Challenge preview */}
+            <div className="p-3 bg-energy/10 rounded-lg border border-energy/20">
+              <div className="flex items-center gap-2">
+                <Trophy className="h-4 w-4 text-energy" />
+                <span className="font-medium text-sm">{challenge.name}</span>
+              </div>
+              <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+                <Badge variant="outline" className="text-[10px]">
+                  {challenge.difficulty}
+                </Badge>
+                <span>{challenge.durationDays} days</span>
+                <span>{challenge.participantCount} participants</span>
+              </div>
+            </div>
+
+            {/* Circle selector */}
+            {circles.length > 1 && (
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Post to</label>
+                <select
+                  value={shareCircleId}
+                  onChange={(e) => setShareCircleId(e.target.value)}
+                  className="w-full mt-1 px-3 py-2 bg-muted/50 rounded-lg text-sm"
+                >
+                  {circles.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Post text */}
+            <Textarea
+              value={shareText}
+              onChange={(e) => setShareText(e.target.value)}
+              placeholder="Say something about this challenge..."
+              className="min-h-[80px] resize-none"
+            />
+          </div>
+          <SheetFooter>
+            <Button
+              className="w-full bg-energy-gradient"
+              onClick={handleShareSubmit}
+              disabled={isSharing || !shareCircleId || !shareText.trim()}
+            >
+              {isSharing ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Send className="h-4 w-4 mr-2" />
+              )}
+              {isSharing ? "Sharing..." : "Share"}
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

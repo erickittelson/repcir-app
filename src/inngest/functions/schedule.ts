@@ -449,8 +449,9 @@ export const updateMemberSnapshotFunction = inngest.createFunction(
  * Export all schedule/notification functions
  */
 export const scheduleFunctions = [
-  autoRescheduleFunction,
-  missedWorkoutCheckCron,
+  // TODO: Re-enable when scheduled_workouts + user_program_schedules tables are pushed
+  // autoRescheduleFunction,
+  // missedWorkoutCheckCron,
   goalAchievedNotification,
   streakMilestoneNotification,
   updateMemberSnapshotFunction,
