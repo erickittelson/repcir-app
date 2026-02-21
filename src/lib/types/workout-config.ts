@@ -37,6 +37,7 @@ export interface WorkoutConfigFormData {
   goalIds?: string[]; // selected member goal IDs (multi-select)
   circleGoalIds?: string[]; // selected circle goal IDs
   locationId?: string;
+  focusAreas?: string[]; // e.g., ["upper_body", "chest", "shoulders"]
   intensity: WorkoutIntensity;
   includeWarmup?: boolean;
   includeCooldown?: boolean;

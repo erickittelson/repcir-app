@@ -13,7 +13,7 @@
 import { dbRead, parallelRead, cachedRead } from "@/lib/db";
 import { memberContextSnapshot, circleEquipment, exercises, circleMembers } from "@/lib/db/schema";
 import { eq, and, inArray, sql, desc } from "drizzle-orm";
-import { getProgrammingRulesForPrompt, getCoachingModeForPrompt } from "./schemas/loader";
+import { getProgrammingRulesForPrompt } from "./schemas/loader";
 
 // =============================================================================
 // TYPES
@@ -504,16 +504,10 @@ export function contextToPrompt(context: FastMemberContext): string {
 
   // PRs (for weight calculations)
   if (context.personalRecords.length > 0) {
-    const liftPRs = context.personalRecords.filter((pr) =>
-      ["bench press", "squat", "deadlift", "overhead press"].some((lift) =>
-        pr.exercise.toLowerCase().includes(lift)
-      )
-    );
-    if (liftPRs.length > 0) {
-      lines.push("\nLifting Maxes:");
-      for (const pr of liftPRs) {
-        lines.push(`- ${pr.exercise}: ${pr.value}${pr.unit}`);
-      }
+    lines.push("\nPersonal Records:");
+    for (const pr of context.personalRecords) {
+      const repLabel = pr.repMax && pr.repMax > 1 ? ` (${pr.repMax}RM)` : "";
+      lines.push(`- ${pr.exercise}: ${pr.value}${pr.unit}${repLabel}`);
     }
   }
 

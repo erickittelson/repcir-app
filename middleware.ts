@@ -17,6 +17,8 @@ const publicPatterns = [
   /^\/terms/,
   /^\/support/,
   /^\/invite\//,
+  /^\/u\//, // public profiles
+  /^\/@/, // @handle profiles (rewritten to /u/)
   /^\/_next\//,
   /^\/favicon\.ico/,
   /^\/manifest\.json/,

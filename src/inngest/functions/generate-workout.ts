@@ -21,10 +21,10 @@ import {
   circleMembers,
   userLocations,
 } from "@/lib/db/schema";
-import { eq, ilike, and, inArray } from "drizzle-orm";
+import { eq, ilike, and, or, inArray, sql } from "drizzle-orm";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { aiModel, aiModelPro } from "@/lib/ai";
+import { aiModel, aiModelPro, getTaskOptions } from "@/lib/ai";
 import { getFastMemberContext, contextToPrompt } from "@/lib/ai/fast-context";
 import {
   getProgrammingRulesForPrompt,
@@ -33,6 +33,124 @@ import {
 } from "@/lib/ai/schemas/loader";
 import { trackAIUsage } from "@/lib/ai/usage-tracking";
 import { calculateGenderRx, shouldUseGenderRx } from "@/lib/ai/rx-weights";
+import { PERCENT_OF_MAX, INDIVIDUAL_RX_THRESHOLD } from "@/lib/workout-contract";
+
+/**
+ * Match an AI-generated exercise name to an existing exercise in the database.
+ * Uses multi-step fuzzy matching to handle AI's tendency to add parenthetical
+ * qualifiers (e.g., "Barbell Hip Thrust (bench)" → "Barbell Hip Thrust").
+ * Prefers exercises that have images/descriptions (i.e., from the seed library).
+ */
+async function matchExerciseToDb(aiName: string): Promise<{ id: string; name: string } | null> {
+  // Helper: pick the best match from candidates, preferring library entries (with images)
+  function pickBest(candidates: { id: string; name: string; imageUrl: string | null }[]): { id: string; name: string } {
+    const withImage = candidates.find((c) => c.imageUrl);
+    const best = withImage || candidates[0];
+    return { id: best.id, name: best.name };
+  }
+
+  // Helper: check if ANY candidate has an image (i.e., is a rich library entry)
+  function hasRichCandidate(candidates: { imageUrl: string | null }[]): boolean {
+    return candidates.some((c) => c.imageUrl);
+  }
+
+  const stripped = aiName.replace(/\s*\([^)]*\)/g, "").trim();
+
+  // Build all name variants to search for
+  const withoutPrefix = stripped
+    .replace(/^(barbell|dumbbell|db|bb|cable|machine|smith machine|seated|standing|incline|decline)\s+/i, "")
+    .trim();
+
+  // Collect all variants (deduplicated)
+  const variants = [...new Set([aiName, stripped, withoutPrefix].filter(Boolean))];
+
+  // 1. Find ALL exact matches across all name variants, then pick the best one
+  const exactCandidates = await db
+    .select({ id: exercises.id, name: exercises.name, imageUrl: exercises.imageUrl })
+    .from(exercises)
+    .where(
+      or(...variants.map((v) => ilike(exercises.name, v)))
+    )
+    .limit(20);
+
+  // Only return exact match if we found a rich library entry; otherwise keep looking
+  if (exactCandidates.length > 0 && hasRichCandidate(exactCandidates)) {
+    return pickBest(exactCandidates);
+  }
+
+  // 2. Partial/fuzzy match — DB name contained in AI name or vice versa
+  const searchTerm = stripped.length >= 4 ? stripped : aiName;
+  const partialCandidates = await db
+    .select({ id: exercises.id, name: exercises.name, imageUrl: exercises.imageUrl })
+    .from(exercises)
+    .where(
+      or(
+        sql`${exercises.name} ILIKE ${"%" + searchTerm + "%"}`,
+        sql`${searchTerm} ILIKE '%' || ${exercises.name} || '%'`
+      )
+    )
+    .limit(20);
+
+  if (partialCandidates.length > 0 && hasRichCandidate(partialCandidates)) {
+    return pickBest(partialCandidates);
+  }
+
+  // 3. Last resort — try the prefix-stripped name as partial match
+  if (withoutPrefix && withoutPrefix !== searchTerm && withoutPrefix.length >= 4) {
+    const lastResort = await db
+      .select({ id: exercises.id, name: exercises.name, imageUrl: exercises.imageUrl })
+      .from(exercises)
+      .where(
+        or(
+          sql`${exercises.name} ILIKE ${"%" + withoutPrefix + "%"}`,
+          sql`${withoutPrefix} ILIKE '%' || ${exercises.name} || '%'`
+        )
+      )
+      .limit(20);
+
+    if (lastResort.length > 0 && hasRichCandidate(lastResort)) {
+      return pickBest(lastResort);
+    }
+  }
+
+  // 4. Keyword match — search by the most distinctive word(s)
+  //    Handles cases like "Farmer Carry" → "Farmer's Walk" where exact/partial fail
+  const stopWords = new Set([
+    "the", "a", "an", "with", "and", "or", "for", "to", "in", "on", "of",
+    "barbell", "dumbbell", "db", "bb", "cable", "machine", "seated", "standing",
+    "incline", "decline", "smith", "band", "kettlebell", "kb",
+  ]);
+  const keywords = stripped
+    .split(/\s+/)
+    .map((w) => w.replace(/[^a-zA-Z]/g, "").toLowerCase())
+    .filter((w) => w.length >= 3 && !stopWords.has(w));
+
+  if (keywords.length > 0) {
+    // Search for exercises matching the most distinctive keyword
+    const keywordConditions = keywords.map((kw) => sql`${exercises.name} ILIKE ${"%" + kw + "%"}`);
+    const keywordCandidates = await db
+      .select({ id: exercises.id, name: exercises.name, imageUrl: exercises.imageUrl })
+      .from(exercises)
+      .where(or(...keywordConditions))
+      .limit(30);
+
+    if (keywordCandidates.length > 0 && hasRichCandidate(keywordCandidates)) {
+      return pickBest(keywordCandidates);
+    }
+  }
+
+  // 5. Fall back to sparse exact match if we had one (better than creating a duplicate)
+  if (exactCandidates.length > 0) {
+    return pickBest(exactCandidates);
+  }
+
+  // Also check if partial or last-resort had any candidates at all
+  if (partialCandidates.length > 0) {
+    return pickBest(partialCandidates);
+  }
+
+  return null;
+}
 
 const workoutSchema = z.object({
   name: z.string(),
@@ -56,6 +174,7 @@ const workoutSchema = z.object({
             rpeTarget: z.number().nullable(),
             bodyweightMod: z.string().nullable(),
             cardioTarget: z.string().nullable(),
+            memberNotes: z.string().nullable(),
           })
         )
         .nullable(),
@@ -136,11 +255,18 @@ export const generateWorkoutBackground = inngest.createFunction(
           }
         }
 
+        // Fetch exercise library names so the AI uses canonical names
+        const libraryExercises = await db
+          .select({ name: exercises.name, category: exercises.category })
+          .from(exercises)
+          .where(eq(exercises.isCustom, false));
+
         return {
           memberContexts,
           circleGoalsList,
           locationEquipment,
           memberGenders,
+          libraryExercises,
         };
       });
 
@@ -212,10 +338,13 @@ export const generateWorkoutBackground = inngest.createFunction(
           equipmentSection = `\n## Available Equipment\n${contextData.locationEquipment.join(", ")}\nOnly use exercises that can be done with the available equipment.\n`;
         }
 
-        // Build Rx weight instructions for large groups
+        // Build weight prescription instructions from contract
+        const { strength, hypertrophy, endurance } = PERCENT_OF_MAX;
         let rxInstructions = "";
         if (useGenderRx) {
-          rxInstructions = `\n## Weight Prescription Format (Group of ${memberIds.length} members)\nSince this is a large group, use gender-based Rx weights instead of individual prescriptions.\nFor weighted exercises, suggest standard CrossFit-style weights appropriate for the movement.\nThe system will calculate specific Rx weights post-generation based on member PRs.\n`;
+          rxInstructions = `\n## Weight Prescription Format (Group of ${memberIds.length} members)\nSince this is a large group (>${INDIVIDUAL_RX_THRESHOLD} members), use gender-based Rx weights instead of individual prescriptions.\nFor weighted exercises, suggest standard CrossFit-style weights appropriate for the movement.\nThe system will calculate specific Rx weights post-generation based on member PRs.\n`;
+        } else {
+          rxInstructions = `\n## Individual Weight Prescription\nFor each member, prescribe specific weights in memberPrescriptions based on their Personal Records listed above.\n- For exercises matching a known PR, calculate the working weight as a percentage of their max:\n  - Strength/heavy sets (${strength.reps[0]}-${strength.reps[1]} reps): ${strength.percent[0]}-${strength.percent[1]}% of 1RM\n  - Hypertrophy sets (${hypertrophy.reps[0]}-${hypertrophy.reps[1]} reps): ${hypertrophy.percent[0]}-${hypertrophy.percent[1]}% of 1RM\n  - Endurance/high-rep sets (${endurance.reps[0]}+ reps): ${endurance.percent[0]}-${endurance.percent[1]}% of 1RM\n- For exercises without a direct PR, estimate based on related lifts (e.g., incline press ~80% of bench max).\n- If a member has no relevant PRs, set weight to null and add a note like "start light, find working weight".\n- Include rpeTarget (6-10) to guide effort level.\n- For bodyweight exercises, use bodyweightMod (e.g., "add 25lb vest", "band-assisted", "unweighted").\n- For cardio, use cardioTarget (e.g., "8:00/mile pace", "150 BPM").\n`;
         }
 
         return {
@@ -233,6 +362,16 @@ ${circleGoalsSection}${equipmentSection}${rxInstructions}
 ${workoutType ? `- Workout Type: ${workoutType}` : ""}
 ${trainingGoal ? `- Training Goal: ${trainingGoal}` : ""}
 
+## Exercise Naming Rules
+- You MUST use exercise names from our database. We have ${contextData.libraryExercises.length} exercises.
+- Use simple, canonical exercise names WITHOUT parenthetical qualifiers.
+- GOOD: "Barbell Hip Thrust", "Romanian Deadlift", "Pallof Press", "Farmer's Walk"
+- BAD: "Barbell Hip Thrust (bench)", "Romanian Deadlift (barbell)", "Farmer Carry"
+- Do NOT add equipment/variation hints in parentheses — put those in the notes field instead.
+- Use the EXACT name from our database when possible (e.g., "Farmer's Walk" not "Farmer Carry", "Barbell Squat" not "Back Squat").
+- Categories in our database: ${[...new Set(contextData.libraryExercises.map((e) => e.category))].join(", ")}
+- Key exercises: Barbell Squat, Barbell Deadlift, Barbell Bench Press, Overhead Press, Barbell Row, Pull-up, Dips - Chest Version, Dips - Triceps Version, Barbell Lunge, Romanian Deadlift, Barbell Hip Thrust, Farmer's Walk, Kettlebell Swing, Box Jump, Plank, Dead Bug, Pallof Press, Cable Russian Twists, Mountain Climbers, Goblet Squat, Trap Bar Deadlift, Front Squat (Clean Grip), Sumo Deadlift, Power Clean, Thruster
+
 Generate a comprehensive, personalized workout plan.
 You MUST generate at least ${recommendedExercises} exercises (ideally ${recommendedExercises}-${maxExercises}).`,
           recommendedExercises,
@@ -244,17 +383,28 @@ You MUST generate at least ${recommendedExercises} exercises (ideally ${recommen
       });
 
       // Step 3: Generate workout via AI
-      const workout = await step.run("generate-workout", async () => {
+      const generationResult = await step.run("generate-workout", async () => {
         const model = prompt.reasoningLevel === "max" ? aiModelPro : aiModel;
 
         const result = await generateObject({
           model,
           schema: workoutSchema,
           prompt: prompt.contextPrompt,
+          providerOptions: getTaskOptions("personalized_workout") as any,
         });
 
-        return result.object;
+        return {
+          workout: result.object,
+          usage: {
+            inputTokens: result.usage?.inputTokens ?? 0,
+            outputTokens: result.usage?.outputTokens ?? 0,
+            totalTokens: result.usage?.totalTokens ?? 0,
+            cachedTokens: result.usage?.inputTokenDetails?.cacheReadTokens ?? 0,
+          },
+        };
       });
+      const workout = generationResult.workout;
+      const aiUsage = generationResult.usage;
 
       // Step 4: Post-process Rx weights for large groups
       const rxWeightsMap = await step.run("calculate-rx-weights", async () => {
@@ -295,20 +445,19 @@ You MUST generate at least ${recommendedExercises} exercises (ideally ${recommen
             estimatedDuration: workout.estimatedDuration,
             structureType: prompt.workoutType || null,
             aiGenerated: true,
+            isDraft: true,
           })
           .returning({ id: workoutPlans.id });
 
-        // Match exercises to existing ones or create
+        // Match exercises to existing ones (fuzzy) or create
         for (let i = 0; i < workout.exercises.length; i++) {
           const ex = workout.exercises[i];
 
           let exerciseId: string | null = null;
-          const existing = await db.query.exercises.findFirst({
-            where: ilike(exercises.name, ex.name),
-          });
+          const matched = await matchExerciseToDb(ex.name);
 
-          if (existing) {
-            exerciseId = existing.id;
+          if (matched) {
+            exerciseId = matched.id;
           } else {
             const [created] = await db
               .insert(exercises)
@@ -369,13 +518,17 @@ You MUST generate at least ${recommendedExercises} exercises (ideally ${recommen
         await trackAIUsage({
           userId,
           endpoint: "ai/generate-workout/background",
+          feature: "workout_generation",
           modelUsed: prompt.reasoningLevel === "max" ? "gpt-5.2-pro" : "gpt-5.2",
           reasoningLevel: prompt.reasoningLevel,
-          inputTokens: 0,
-          outputTokens: 0,
+          inputTokens: aiUsage.inputTokens,
+          outputTokens: aiUsage.outputTokens,
+          cachedTokens: aiUsage.cachedTokens,
+          cacheHit: aiUsage.cachedTokens > 0,
           metadata: {
             exerciseCount: workout.exercises.length,
             duration: workout.estimatedDuration,
+            totalTokens: aiUsage.totalTokens,
             background: true,
             chatTriggered: options.chatTriggered || false,
             workoutType: prompt.workoutType || "standard",

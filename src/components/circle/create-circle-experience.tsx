@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { CircleCreationWizard } from "./circle-creation-wizard";
@@ -70,8 +71,28 @@ export function CreateCircleExperience({
 
   // Handle wizard completion - fetch the circle data
   const handleWizardComplete = useCallback(async (circleId: string) => {
+    // Set fallback data and transition immediately to avoid wizard flash
+    const fallbackData: CircleData = {
+      id: circleId,
+      name: "My Circle",
+      description: null,
+      category: null,
+      visibility: "private",
+      focusArea: null,
+      targetDemographic: null,
+      activityType: null,
+      scheduleType: null,
+      maxMembers: null,
+      joinType: "request",
+      rules: [],
+      tags: [],
+      imageUrl: null,
+    };
+    setCircleData(fallbackData);
+    setPhase("celebration");
+
+    // Then enrich with real data from the server
     try {
-      // Fetch the circle data to get all the details
       const response = await fetch(`/api/circles/${circleId}`);
       if (response.ok) {
         const data = await response.json();
@@ -91,46 +112,9 @@ export function CreateCircleExperience({
           tags: data.tags || [],
           imageUrl: data.imageUrl,
         });
-      } else {
-        // Fallback if fetch fails
-        setCircleData({
-          id: circleId,
-          name: "My Circle",
-          description: null,
-          category: null,
-          visibility: "private",
-          focusArea: null,
-          targetDemographic: null,
-          activityType: null,
-          scheduleType: null,
-          maxMembers: null,
-          joinType: "request",
-          rules: [],
-          tags: [],
-          imageUrl: null,
-        });
       }
-      setPhase("celebration");
     } catch (error) {
       console.error("Failed to fetch circle data:", error);
-      // Continue with basic data
-      setCircleData({
-        id: circleId,
-        name: "My Circle",
-        description: null,
-        category: null,
-        visibility: "private",
-        focusArea: null,
-        targetDemographic: null,
-        activityType: null,
-        scheduleType: null,
-        maxMembers: null,
-        joinType: "request",
-        rules: [],
-        tags: [],
-        imageUrl: null,
-      });
-      setPhase("celebration");
     }
   }, []);
 
@@ -182,6 +166,9 @@ export function CreateCircleExperience({
         )}
         showCloseButton={phase === "members"}
       >
+        <DialogTitle className="sr-only">
+          {phase === "celebration" ? "Circle Created" : "Invite Members"}
+        </DialogTitle>
         {/* Phase indicator */}
         <div className="flex items-center justify-center gap-2 pt-6 pb-2">
           <PhaseIndicator

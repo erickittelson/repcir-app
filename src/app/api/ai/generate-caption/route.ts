@@ -1,7 +1,8 @@
 import { generateText } from "ai";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
-import { aiModelFast } from "@/lib/ai";
+import { aiModelFast, getReasoningOptions } from "@/lib/ai";
+import { trackAIUsage } from "@/lib/ai/usage-tracking";
 import { applyDistributedRateLimit as applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit-redis";
 
 export const runtime = "nodejs";
@@ -107,10 +108,24 @@ REQUIREMENTS:
 
 Generate ONLY the caption. No quotes. No explanations.`;
 
+    const startTime = Date.now();
     const result = await generateText({
       model: aiModelFast,
       prompt,
+      providerOptions: getReasoningOptions("none", { cacheKey: "caption-gen" }) as any,
     });
+
+    trackAIUsage({
+      userId: session.user.id,
+      endpoint: "/api/ai/generate-caption",
+      feature: "caption",
+      modelUsed: "gpt-5.2-chat-latest",
+      inputTokens: result.usage?.inputTokens ?? 0,
+      outputTokens: result.usage?.outputTokens ?? 0,
+      cachedTokens: result.usage?.inputTokenDetails?.cacheReadTokens ?? 0,
+      cacheHit: (result.usage?.inputTokenDetails?.cacheReadTokens ?? 0) > 0,
+      durationMs: Date.now() - startTime,
+    }).catch(() => {});
 
     return Response.json({
       caption: result.text.trim(),

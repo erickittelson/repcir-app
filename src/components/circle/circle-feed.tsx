@@ -115,6 +115,7 @@ export function CircleFeed({ circleId, userId, userRole, userName, userImage }: 
   const [loading, setLoading] = useState(true);
   const [newPostContent, setNewPostContent] = useState("");
   const [isPosting, setIsPosting] = useState(false);
+  const [isComposerExpanded, setIsComposerExpanded] = useState(false);
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<CirclePost | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -348,6 +349,7 @@ export function CircleFeed({ circleId, userId, userRole, userName, userImage }: 
         setPosts((prev) => [newPost, ...prev]);
         setNewPostContent("");
         clearAttachment();
+        setIsComposerExpanded(false);
         toast.success("Posted!");
         haptics.success();
       } else {
@@ -453,7 +455,7 @@ export function CircleFeed({ circleId, userId, userRole, userName, userImage }: 
     <div className="space-y-4">
       {/* Post Composer */}
       <Card>
-        <CardContent className="pt-4">
+        <CardContent className="p-4">
           <div className="flex gap-3">
             <Avatar className="h-10 w-10 flex-shrink-0">
               {userImage && <AvatarImage src={userImage} />}
@@ -461,164 +463,220 @@ export function CircleFeed({ circleId, userId, userRole, userName, userImage }: 
                 {userName?.charAt(0)?.toUpperCase() || "U"}
               </AvatarFallback>
             </Avatar>
-            <div className="flex-1">
-              <div className="relative">
-                <MentionInput
-                  placeholder="Share something with your circle... Use @ to mention users"
-                  value={newPostContent}
-                  onChange={setNewPostContent}
-                  className="min-h-[60px] resize-none pr-12"
-                  rows={2}
-                  disabled={isPosting}
-                />
-                {/* Voice input button */}
-                <div className="absolute right-2 top-2">
-                  <VoiceInputWithTranscription
-                    onSubmit={(text) => {
-                      setNewPostContent((prev) =>
-                        prev ? `${prev} ${text}` : text
-                      );
-                      haptics.success();
-                    }}
-                    disabled={isPosting}
-                  />
-                </div>
-              </div>
-              {/* Attachment Preview */}
-              {attachment && (
-                <div className="mt-3 relative">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-background border shadow-sm z-10"
-                    onClick={clearAttachment}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
 
-                  {attachment.type === "image" && (
-                    <div className="relative rounded-lg overflow-hidden bg-muted">
+            <div className="flex-1">
+              {!isComposerExpanded ? (
+                <button
+                  onClick={() => setIsComposerExpanded(true)}
+                  className="w-full text-left px-4 py-3 bg-muted/50 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  Share something with your circle...
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <div className="relative">
+                    <MentionInput
+                      placeholder="Share a win, ask for advice, or post an update..."
+                      value={newPostContent}
+                      onChange={setNewPostContent}
+                      className="min-h-[80px] resize-none pr-12"
+                      rows={3}
+                      disabled={isPosting}
+                    />
+                    {/* Voice input button */}
+                    <div className="absolute right-2 top-2">
+                      <VoiceInputWithTranscription
+                        onSubmit={(text) => {
+                          setNewPostContent((prev) =>
+                            prev ? `${prev} ${text}` : text
+                          );
+                          haptics.success();
+                        }}
+                        disabled={isPosting}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Image preview */}
+                  {attachment?.type === "image" && (
+                    <div className="relative inline-block">
                       {isUploading && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg">
                           <Loader2 className="h-6 w-6 animate-spin text-white" />
                         </div>
                       )}
                       <img
                         src={attachment.imagePreview}
                         alt="Upload preview"
-                        className="w-full max-h-48 object-cover"
+                        className="max-h-40 max-w-full rounded-lg object-contain"
                       />
+                      <button
+                        onClick={clearAttachment}
+                        className="absolute -top-2 -right-2 p-1 bg-destructive text-destructive-foreground rounded-full"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
                     </div>
                   )}
 
-                  {attachment.type === "workout" && attachment.workout && (
-                    <div className="p-3 bg-brand/10 rounded-lg border border-brand/20">
-                      <div className="flex items-center gap-2">
-                        <Dumbbell className="h-4 w-4 text-brand" />
-                        <span className="font-medium text-sm">{attachment.workout.name}</span>
-                      </div>
-                      {attachment.workout.description && (
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                          {attachment.workout.description}
-                        </p>
-                      )}
-                      <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
-                        {attachment.workout.difficulty && (
-                          <span className="capitalize">{attachment.workout.difficulty}</span>
+                  {/* Workout attachment preview */}
+                  {attachment?.type === "workout" && attachment.workout && (
+                    <div className="relative">
+                      <button
+                        onClick={clearAttachment}
+                        className="absolute -top-2 -right-2 z-10 p-1 bg-destructive text-destructive-foreground rounded-full"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                      <div className="p-3 bg-brand/10 rounded-lg border border-brand/20">
+                        <div className="flex items-center gap-2">
+                          <Dumbbell className="h-4 w-4 text-brand" />
+                          <span className="font-medium text-sm">{attachment.workout.name}</span>
+                        </div>
+                        {attachment.workout.description && (
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                            {attachment.workout.description}
+                          </p>
                         )}
-                        {attachment.workout.estimatedDuration && (
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {attachment.workout.estimatedDuration} min
-                          </span>
-                        )}
+                        <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+                          {attachment.workout.difficulty && (
+                            <span className="capitalize">{attachment.workout.difficulty}</span>
+                          )}
+                          {attachment.workout.estimatedDuration && (
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {attachment.workout.estimatedDuration} min
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
 
-                  {attachment.type === "challenge" && attachment.challenge && (
-                    <div className="p-3 bg-energy/10 rounded-lg border border-energy/20">
-                      <div className="flex items-center gap-2">
-                        <Trophy className="h-4 w-4 text-energy" />
-                        <span className="font-medium text-sm">{attachment.challenge.name}</span>
-                      </div>
-                      {attachment.challenge.shortDescription && (
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                          {attachment.challenge.shortDescription}
-                        </p>
-                      )}
-                      <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
-                        {attachment.challenge.difficulty && (
-                          <span className="capitalize">{attachment.challenge.difficulty}</span>
+                  {/* Challenge attachment preview */}
+                  {attachment?.type === "challenge" && attachment.challenge && (
+                    <div className="relative">
+                      <button
+                        onClick={clearAttachment}
+                        className="absolute -top-2 -right-2 z-10 p-1 bg-destructive text-destructive-foreground rounded-full"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                      <div className="p-3 bg-energy/10 rounded-lg border border-energy/20">
+                        <div className="flex items-center gap-2">
+                          <Trophy className="h-4 w-4 text-energy" />
+                          <span className="font-medium text-sm">{attachment.challenge.name}</span>
+                        </div>
+                        {attachment.challenge.shortDescription && (
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                            {attachment.challenge.shortDescription}
+                          </p>
                         )}
-                        {attachment.challenge.durationDays && (
-                          <span>{attachment.challenge.durationDays} days</span>
-                        )}
+                        <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+                          {attachment.challenge.difficulty && (
+                            <span className="capitalize">{attachment.challenge.difficulty}</span>
+                          )}
+                          {attachment.challenge.durationDays && (
+                            <span>{attachment.challenge.durationDays} days</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
+
+                  {/* Toolbar */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      {/* Hidden file input */}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif,image/webp"
+                        className="hidden"
+                        onChange={handleImageSelect}
+                      />
+                      <label
+                        onClick={() => fileInputRef.current?.click()}
+                        className={cn(
+                          "cursor-pointer p-2 rounded-lg transition-colors",
+                          attachment?.type === "image"
+                            ? "text-brand bg-brand/10"
+                            : "text-muted-foreground hover:bg-muted",
+                          isUploading && "opacity-50 pointer-events-none",
+                          attachment && attachment.type !== "image" && "opacity-50 pointer-events-none"
+                        )}
+                      >
+                        {isUploading ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <ImageIcon className="h-5 w-5" />
+                        )}
+                      </label>
+
+                      <button
+                        onClick={handleWorkoutClick}
+                        disabled={!!attachment}
+                        className={cn(
+                          "p-2 rounded-lg transition-colors",
+                          attachment?.type === "workout"
+                            ? "text-brand bg-brand/10"
+                            : "text-muted-foreground hover:bg-muted",
+                          attachment && attachment.type !== "workout" && "opacity-50"
+                        )}
+                        title="Attach workout"
+                      >
+                        <Dumbbell className="h-5 w-5" />
+                      </button>
+
+                      {isAdmin && (
+                        <button
+                          onClick={handleChallengeClick}
+                          disabled={!!attachment}
+                          className={cn(
+                            "p-2 rounded-lg transition-colors",
+                            attachment?.type === "challenge"
+                              ? "text-energy bg-energy/10"
+                              : "text-muted-foreground hover:bg-muted",
+                            attachment && attachment.type !== "challenge" && "opacity-50"
+                          )}
+                          title="Attach challenge"
+                        >
+                          <Trophy className="h-5 w-5" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setIsComposerExpanded(false);
+                          setNewPostContent("");
+                          clearAttachment();
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handlePost}
+                        disabled={(!newPostContent.trim() && !attachment) || isPosting || isUploading}
+                        className="bg-brand-gradient"
+                      >
+                        {isPosting ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Send className="h-4 w-4 mr-1" />
+                            Post
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               )}
-
-              <div className="flex items-center justify-between mt-3">
-                <div className="flex gap-2">
-                  {/* Hidden file input */}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/gif,image/webp"
-                    className="hidden"
-                    onChange={handleImageSelect}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading || !!attachment}
-                    className={cn(attachment?.type === "image" && "text-brand")}
-                  >
-                    {isUploading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <ImageIcon className="h-4 w-4" />
-                    )}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleWorkoutClick}
-                    disabled={!!attachment}
-                    className={cn(attachment?.type === "workout" && "text-brand")}
-                  >
-                    <Dumbbell className="h-4 w-4" />
-                  </Button>
-                  {isAdmin && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleChallengeClick}
-                      disabled={!!attachment}
-                      className={cn(attachment?.type === "challenge" && "text-energy")}
-                    >
-                      <Trophy className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-                <Button
-                  size="sm"
-                  onClick={handlePost}
-                  disabled={(!newPostContent.trim() && !attachment) || isPosting || isUploading}
-                >
-                  {isPosting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4 mr-1" />
-                      Post
-                    </>
-                  )}
-                </Button>
-              </div>
             </div>
           </div>
         </CardContent>

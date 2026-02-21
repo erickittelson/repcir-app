@@ -433,6 +433,7 @@ export const workoutConfigFormSchema = z.object({
   goalIds: z.array(uuidSchema).optional(),
   circleGoalIds: z.array(uuidSchema).optional(),
   locationId: uuidSchema.optional(),
+  focusAreas: z.array(z.string()).max(6).optional(),
   intensity: z.enum(["light", "moderate", "hard", "max"]),
   includeWarmup: z.boolean().optional().default(true),
   includeCooldown: z.boolean().optional().default(true),

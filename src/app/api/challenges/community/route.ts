@@ -7,11 +7,12 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { challenges } from "@/lib/db/schema";
-import { eq, and, desc, asc, sql } from "drizzle-orm";
+import { eq, and, desc, asc, sql, ilike, or } from "drizzle-orm";
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
+    const q = searchParams.get("q")?.trim();
     const category = searchParams.get("category");
     const difficulty = searchParams.get("difficulty");
     const sort = searchParams.get("sort") || "popular"; // popular, rating, newest, participants
@@ -25,6 +26,16 @@ export async function GET(request: Request) {
       eq(challenges.visibility, "public"),
     ];
 
+    if (q && q.length > 0) {
+      const pattern = `%${q}%`;
+      conditions.push(
+        or(
+          ilike(challenges.name, pattern),
+          ilike(challenges.shortDescription, pattern),
+          ilike(challenges.category, pattern),
+        )!
+      );
+    }
     if (category) {
       conditions.push(eq(challenges.category, category));
     }

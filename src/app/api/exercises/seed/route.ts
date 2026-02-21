@@ -355,6 +355,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userRole = session.activeCircle?.role;
+    if (userRole !== "admin" && userRole !== "owner") {
+      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+    }
+
     // Check if exercises already exist
     const existingCount = await db.query.exercises.findMany({
       columns: { id: true },

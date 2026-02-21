@@ -69,7 +69,7 @@ export async function DashboardSection({ session }: DashboardSectionProps) {
           label="Day Streak"
         />
       </Link>
-      <Link href="/challenges">
+      <Link href="/discover?tab=challenges">
         <StatCard
           icon={<Swords className="h-5 w-5 text-success" />}
           value={data.activeChallengesCount}

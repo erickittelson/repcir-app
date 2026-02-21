@@ -115,7 +115,10 @@ export default async function CirclePage({ params }: CirclePageProps) {
 
   return (
     <CircleClient
-      circle={circle}
+      circle={{
+        ...circle,
+        rules: (circle.rules as string[]) || [],
+      }}
       membership={membership || null}
       members={members}
       trainedTodayCount={trainedTodayCount}

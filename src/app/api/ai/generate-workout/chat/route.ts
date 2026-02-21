@@ -97,6 +97,7 @@ export async function POST(request: Request) {
         targetType: config.targetType,
         workoutType: config.workoutSections[0]?.workoutType ?? "standard",
         workoutSections: config.workoutSections,
+        focus: config.focusAreas?.join(", ") || "full_body",
         intensity: config.intensity,
         targetDuration: config.duration,
         goalIds: config.goalIds,

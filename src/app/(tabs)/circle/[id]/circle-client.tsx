@@ -14,15 +14,17 @@ import {
   Clock,
   Crown,
   Dumbbell,
+  Globe,
+  Lock,
   MessageCircle,
   Settings,
+  Shield,
   Trophy,
   UserPlus,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { formatDistanceToNow } from "date-fns";
 import { CircleFeed } from "@/components/circle";
 
 interface CircleClientProps {
@@ -30,10 +32,14 @@ interface CircleClientProps {
     id: string;
     name: string;
     description: string | null;
+    imageUrl: string | null;
     visibility: string;
     memberCount: number;
     createdAt: Date;
     joinType: string | null;
+    focusArea: string | null;
+    rules: string[];
+    maxMembers: number | null;
   };
   membership: {
     id: string;
@@ -95,13 +101,23 @@ export function CircleClient({
 
   return (
     <div className="p-4 space-y-6">
-      {/* Page title with settings button */}
+      {/* Page title with back and settings buttons */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{circle.name}</h1>
-          <p className="text-sm text-muted-foreground">
-            {circle.memberCount || members.length} members
-          </p>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.back()}
+            className="shrink-0"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold">{circle.name}</h1>
+            <p className="text-sm text-muted-foreground">
+              {circle.memberCount || members.length} members
+            </p>
+          </div>
         </div>
         {isAdmin && (
           <Button
@@ -118,9 +134,20 @@ export function CircleClient({
         <Card className="bg-gradient-to-br from-brand/10 to-success/10 border-brand/20">
           <CardContent className="pt-6">
             <div className="flex items-start gap-4">
-              <div className="h-16 w-16 rounded-xl bg-brand-gradient flex items-center justify-center">
-                <Users className="h-8 w-8 text-white" />
-              </div>
+              {circle.imageUrl ? (
+                <div className="h-16 w-16 rounded-xl overflow-hidden shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={circle.imageUrl}
+                    alt={circle.name}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="h-16 w-16 rounded-xl bg-brand-gradient flex items-center justify-center shrink-0">
+                  <Users className="h-8 w-8 text-white" />
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <h2 className="text-xl font-bold">{circle.name}</h2>
                 {circle.description && (
@@ -129,9 +156,28 @@ export function CircleClient({
                   </p>
                 )}
                 <div className="flex flex-wrap gap-2 mt-3">
-                  <Badge variant="secondary">
-                    {circle.visibility === "public" ? "Public" : "Private"}
+                  <Badge variant="secondary" className="gap-1">
+                    {circle.visibility === "public" ? (
+                      <Globe className="h-3 w-3" />
+                    ) : (
+                      <Lock className="h-3 w-3" />
+                    )}
+                    {circle.joinType === "open"
+                      ? "Public - Open"
+                      : circle.joinType === "request"
+                        ? "Public - Request"
+                        : "Private - Invite Only"}
                   </Badge>
+                  {circle.focusArea && (
+                    <Badge variant="outline">
+                      {circle.focusArea.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
+                    </Badge>
+                  )}
+                  {circle.maxMembers && (
+                    <Badge variant="outline">
+                      Max {circle.maxMembers}
+                    </Badge>
+                  )}
                 </div>
               </div>
             </div>
@@ -163,7 +209,7 @@ export function CircleClient({
             {membership ? (
               <div className="flex gap-2 mt-6">
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   className="flex-1"
                   onClick={copyInviteLink}
                 >
@@ -171,7 +217,7 @@ export function CircleClient({
                   Invite
                 </Button>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   className="flex-1"
                   onClick={() => router.push(`/messages`)}
                 >
@@ -191,6 +237,26 @@ export function CircleClient({
             )}
           </CardContent>
         </Card>
+
+        {/* Circle Guidelines */}
+        {circle.rules.length > 0 && (
+          <Card>
+            <CardContent className="pt-4">
+              <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                <Shield className="h-4 w-4 text-energy" />
+                Circle Guidelines
+              </h3>
+              <ul className="space-y-2">
+                {circle.rules.map((rule, idx) => (
+                  <li key={idx} className="flex items-start gap-2 text-sm">
+                    <span className="text-muted-foreground shrink-0">{idx + 1}.</span>
+                    <span>{rule}</span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>

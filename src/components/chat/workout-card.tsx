@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import type { GeneratedWorkout, ActionData } from "@/lib/ai/structured-chat";
 import { WorkoutFeedback } from "@/components/ai/workout-feedback";
+import { ExerciseDetailDialog, useExerciseDetail } from "@/components/workout/exercise-detail-dialog";
 
 interface WorkoutCardProps {
   workout: GeneratedWorkout;
@@ -40,39 +41,26 @@ export function WorkoutCard({
   const [isExpanded, setIsExpanded] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [savedPlanId, setSavedPlanId] = useState<string | null>(planId || null);
+  const [savedPlanId, setSavedPlanId] = useState<string | null>(null);
+  const exerciseDetail = useExerciseDetail();
 
-  // Save workout to database
+  // Save workout (undraft the existing plan created during generation)
   const saveWorkout = async (): Promise<string> => {
     if (savedPlanId) return savedPlanId;
+    if (!planId) throw new Error("No workout plan to save");
 
-    const response = await fetch("/api/workouts", {
-      method: "POST",
+    const response = await fetch(`/api/workout-plans/${planId}`, {
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: workout.name,
-        description: workout.description,
-        estimatedDuration: workout.estimatedDuration,
-        difficulty: workout.difficulty,
-        exercises: workout.exercises.map((ex, idx) => ({
-          name: ex.name,
-          sets: ex.sets,
-          reps: ex.reps,
-          restSeconds: ex.restSeconds,
-          notes: ex.notes,
-          order: idx,
-        })),
-        aiGenerated: true,
-      }),
+      body: JSON.stringify({ isDraft: false }),
     });
 
     if (!response.ok) {
       throw new Error("Failed to save workout");
     }
 
-    const data = await response.json();
-    setSavedPlanId(data.workoutPlan.id);
-    return data.workoutPlan.id;
+    setSavedPlanId(planId);
+    return planId;
   };
 
   // Start a workout session
@@ -118,16 +106,17 @@ export function WorkoutCard({
 
           const workoutPlanId = await saveWorkout();
 
-          toast.success("Workout saved to your profile!");
+          toast.success("Workout saved! Access it anytime from the Workouts tab.", { duration: 5000 });
           onAction?.(action, workoutPlanId);
           setIsSaving(false);
           break;
         }
 
         case "modify": {
-          // For now, just notify parent - could open a modal or navigate to builder
-          onAction?.(action, savedPlanId || undefined);
-          toast.info("Modification coming soon!");
+          // Save first so the builder can load the plan
+          const modifyPlanId = await saveWorkout();
+          onAction?.(action, modifyPlanId);
+          router.push(`/workout/${modifyPlanId}/edit`);
           break;
         }
 
@@ -235,7 +224,16 @@ export function WorkoutCard({
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{exercise.name}</span>
+                {exercise.exerciseId ? (
+                  <button
+                    onClick={() => exerciseDetail.showExercise(exercise.exerciseId!)}
+                    className="text-sm font-medium text-left underline decoration-dotted underline-offset-2 decoration-brand/40 hover:text-brand transition-colors"
+                  >
+                    {exercise.name}
+                  </button>
+                ) : (
+                  <span className="text-sm font-medium">{exercise.name}</span>
+                )}
                 {exercise.supersetGroup && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500">
                     Superset {exercise.supersetGroup}
@@ -262,12 +260,16 @@ export function WorkoutCard({
               {/* Individual member prescriptions (small groups) */}
               {exercise.memberPrescriptions && exercise.memberPrescriptions.length > 0 && !exercise.rxWeights && (
                 <div className="mt-1 space-y-0.5">
-                  {exercise.memberPrescriptions.map((rx, rxIdx) => (
-                    <div key={rxIdx} className="text-xs text-brand/80">
-                      {rx.memberName}: {rx.weight || rx.bodyweightMod || rx.cardioTarget || "standard"}
-                      {rx.rpeTarget && ` @ RPE ${rx.rpeTarget}`}
-                    </div>
-                  ))}
+                  {exercise.memberPrescriptions.map((rx, rxIdx) => {
+                    const isSolo = exercise.memberPrescriptions!.length === 1;
+                    const prescription = rx.weight || rx.bodyweightMod || rx.cardioTarget || "standard";
+                    const rpe = rx.rpeTarget ? ` @ RPE ${rx.rpeTarget}` : "";
+                    return (
+                      <div key={rxIdx} className="text-xs text-brand/80">
+                        {isSolo ? `${prescription}${rpe}` : `${rx.memberName}: ${prescription}${rpe}`}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
               {exercise.notes && (
@@ -356,7 +358,18 @@ export function WorkoutCard({
             ))}
           </div>
         )}
+        {/* Chat modification hint */}
+        <p className="text-[11px] text-muted-foreground/60 text-center pt-1">
+          Want changes? Just tell me what to adjust in the chat below.
+        </p>
       </div>
+
+      {/* Exercise detail dialog */}
+      <ExerciseDetailDialog
+        exercise={exerciseDetail.exercise}
+        open={exerciseDetail.open}
+        onOpenChange={exerciseDetail.setOpen}
+      />
     </motion.div>
   );
 }

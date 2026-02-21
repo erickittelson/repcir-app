@@ -37,6 +37,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import Cropper from "react-easy-crop";
+import type { Area, Point } from "react-easy-crop";
 import { cn } from "@/lib/utils";
 
 // ============================================================================
@@ -70,7 +72,7 @@ type EditorTool =
   | "draw"
   | null;
 
-type CropAspectRatio = "freeform" | "square" | "4:3" | "16:9";
+type CropAspectRatio = "original" | "square" | "4:5" | "16:9";
 
 interface FilterPreset {
   id: string;
@@ -115,18 +117,11 @@ interface DrawPath {
   brushSize: number;
 }
 
-interface CropArea {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
 interface EditorState {
   rotation: number;
   filter: string;
   adjustments: ImageAdjustments;
-  cropArea: CropArea | null;
+  cropPixels: Area | null;
   textOverlays: TextOverlay[];
   stickerOverlays: StickerOverlay[];
   drawPaths: DrawPath[];
@@ -226,10 +221,10 @@ const COLOR_PALETTE = [
   "#6B0F1A",
 ];
 
-const CROP_ASPECT_RATIOS: { id: CropAspectRatio; label: string; ratio: number | null }[] = [
-  { id: "freeform", label: "Free", ratio: null },
+const CROP_ASPECT_RATIOS: { id: CropAspectRatio; label: string; ratio: number }[] = [
+  { id: "original", label: "Original", ratio: 0 },
   { id: "square", label: "1:1", ratio: 1 },
-  { id: "4:3", label: "4:3", ratio: 4 / 3 },
+  { id: "4:5", label: "4:5", ratio: 4 / 5 },
   { id: "16:9", label: "16:9", ratio: 16 / 9 },
 ];
 
@@ -237,7 +232,7 @@ const DEFAULT_STATE: EditorState = {
   rotation: 0,
   filter: "original",
   adjustments: { brightness: 0, contrast: 0, saturation: 0, exposure: 0 },
-  cropArea: null,
+  cropPixels: null,
   textOverlays: [],
   stickerOverlays: [],
   drawPaths: [],
@@ -326,7 +321,7 @@ function EditorToolbar({
       </div>
 
       {/* Tool Icons - scrollable on small screens */}
-      <div className="flex items-center gap-1 overflow-x-auto pb-safe-area scrollbar-hide px-1">
+      <div className="flex items-center justify-center gap-0.5 overflow-x-auto pb-safe-area scrollbar-hide px-2">
         {tools.map((tool) => {
           const Icon = tool.icon;
           const isActive = activeTool === tool.id;
@@ -335,8 +330,8 @@ function EditorToolbar({
               key={tool.id}
               onClick={() => onToolSelect(isActive ? null : tool.id)}
               className={cn(
-                "flex flex-col items-center gap-0.5 p-2 rounded-lg transition-all flex-shrink-0",
-                "min-w-[48px] min-h-[48px]",
+                "flex flex-col items-center gap-0.5 rounded-lg transition-all flex-shrink-0",
+                "min-w-[44px] min-h-[44px] p-1.5",
                 isActive
                   ? "bg-brand/20 text-brand"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/50 active:bg-muted"
@@ -447,218 +442,6 @@ function AdjustmentSlider({
         onValueChange={([v]) => onChange(v)}
         className="touch-none"
       />
-    </div>
-  );
-}
-
-interface CropOverlayProps {
-  cropArea: CropArea;
-  aspectRatio: number | null;
-  onCropChange: (area: CropArea) => void;
-}
-
-function CropOverlay({
-  cropArea,
-  aspectRatio,
-  onCropChange,
-}: CropOverlayProps) {
-  const overlayRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [dragType, setDragType] = useState<
-    "move" | "nw" | "ne" | "sw" | "se" | "n" | "s" | "e" | "w" | null
-  >(null);
-
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent, type: typeof dragType) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsDragging(true);
-      setDragType(type);
-      setDragStart({ x: e.clientX, y: e.clientY });
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    },
-    []
-  );
-
-  const handlePointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (!isDragging || !dragType || !overlayRef.current) return;
-
-      const rect = overlayRef.current.getBoundingClientRect();
-      const deltaX = ((e.clientX - dragStart.x) / rect.width) * 100;
-      const deltaY = ((e.clientY - dragStart.y) / rect.height) * 100;
-
-      setDragStart({ x: e.clientX, y: e.clientY });
-
-      let newArea = { ...cropArea };
-
-      if (dragType === "move") {
-        newArea.x = Math.max(0, Math.min(100 - newArea.width, cropArea.x + deltaX));
-        newArea.y = Math.max(0, Math.min(100 - newArea.height, cropArea.y + deltaY));
-      } else {
-        // Handle resize with aspect ratio constraint
-        const applyAspectRatio = (area: CropArea): CropArea => {
-          if (!aspectRatio) return area;
-          const currentRatio = area.width / area.height;
-          if (currentRatio > aspectRatio) {
-            area.width = area.height * aspectRatio;
-          } else {
-            area.height = area.width / aspectRatio;
-          }
-          return area;
-        };
-
-        switch (dragType) {
-          case "nw":
-            newArea.x = Math.max(0, cropArea.x + deltaX);
-            newArea.y = Math.max(0, cropArea.y + deltaY);
-            newArea.width = Math.max(10, cropArea.width - deltaX);
-            newArea.height = Math.max(10, cropArea.height - deltaY);
-            break;
-          case "ne":
-            newArea.y = Math.max(0, cropArea.y + deltaY);
-            newArea.width = Math.min(100 - cropArea.x, Math.max(10, cropArea.width + deltaX));
-            newArea.height = Math.max(10, cropArea.height - deltaY);
-            break;
-          case "sw":
-            newArea.x = Math.max(0, cropArea.x + deltaX);
-            newArea.width = Math.max(10, cropArea.width - deltaX);
-            newArea.height = Math.min(100 - cropArea.y, Math.max(10, cropArea.height + deltaY));
-            break;
-          case "se":
-            newArea.width = Math.min(100 - cropArea.x, Math.max(10, cropArea.width + deltaX));
-            newArea.height = Math.min(100 - cropArea.y, Math.max(10, cropArea.height + deltaY));
-            break;
-          case "n":
-            newArea.y = Math.max(0, cropArea.y + deltaY);
-            newArea.height = Math.max(10, cropArea.height - deltaY);
-            break;
-          case "s":
-            newArea.height = Math.min(100 - cropArea.y, Math.max(10, cropArea.height + deltaY));
-            break;
-          case "e":
-            newArea.width = Math.min(100 - cropArea.x, Math.max(10, cropArea.width + deltaX));
-            break;
-          case "w":
-            newArea.x = Math.max(0, cropArea.x + deltaX);
-            newArea.width = Math.max(10, cropArea.width - deltaX);
-            break;
-        }
-
-        newArea = applyAspectRatio(newArea);
-      }
-
-      onCropChange(newArea);
-    },
-    [isDragging, dragType, dragStart, cropArea, aspectRatio, onCropChange]
-  );
-
-  const handlePointerUp = useCallback(() => {
-    setIsDragging(false);
-    setDragType(null);
-  }, []);
-
-  const handleStyle = "w-5 h-5 bg-brand rounded-full border-2 border-white shadow-md cursor-pointer";
-  const edgeHandleH = "w-10 h-4 bg-brand/80 rounded-full cursor-ns-resize";
-  const edgeHandleV = "w-4 h-10 bg-brand/80 rounded-full cursor-ew-resize";
-
-  return (
-    <div
-      ref={overlayRef}
-      className="absolute inset-0"
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
-    >
-      {/* Darkened areas outside crop */}
-      <div
-        className="absolute bg-black/60"
-        style={{ top: 0, left: 0, right: 0, height: `${cropArea.y}%` }}
-      />
-      <div
-        className="absolute bg-black/60"
-        style={{
-          top: `${cropArea.y + cropArea.height}%`,
-          left: 0,
-          right: 0,
-          bottom: 0,
-        }}
-      />
-      <div
-        className="absolute bg-black/60"
-        style={{
-          top: `${cropArea.y}%`,
-          left: 0,
-          width: `${cropArea.x}%`,
-          height: `${cropArea.height}%`,
-        }}
-      />
-      <div
-        className="absolute bg-black/60"
-        style={{
-          top: `${cropArea.y}%`,
-          left: `${cropArea.x + cropArea.width}%`,
-          right: 0,
-          height: `${cropArea.height}%`,
-        }}
-      />
-
-      {/* Crop area with grid */}
-      <div
-        className="absolute border-2 border-brand cursor-move"
-        style={{
-          left: `${cropArea.x}%`,
-          top: `${cropArea.y}%`,
-          width: `${cropArea.width}%`,
-          height: `${cropArea.height}%`,
-        }}
-        onPointerDown={(e) => handlePointerDown(e, "move")}
-      >
-        {/* Rule of thirds grid */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute left-1/3 top-0 bottom-0 w-px bg-white/30" />
-          <div className="absolute left-2/3 top-0 bottom-0 w-px bg-white/30" />
-          <div className="absolute top-1/3 left-0 right-0 h-px bg-white/30" />
-          <div className="absolute top-2/3 left-0 right-0 h-px bg-white/30" />
-        </div>
-
-        {/* Corner handles */}
-        <div
-          className={cn(handleStyle, "absolute -top-2.5 -left-2.5 cursor-nw-resize")}
-          onPointerDown={(e) => handlePointerDown(e, "nw")}
-        />
-        <div
-          className={cn(handleStyle, "absolute -top-2.5 -right-2.5 cursor-ne-resize")}
-          onPointerDown={(e) => handlePointerDown(e, "ne")}
-        />
-        <div
-          className={cn(handleStyle, "absolute -bottom-2.5 -left-2.5 cursor-sw-resize")}
-          onPointerDown={(e) => handlePointerDown(e, "sw")}
-        />
-        <div
-          className={cn(handleStyle, "absolute -bottom-2.5 -right-2.5 cursor-se-resize")}
-          onPointerDown={(e) => handlePointerDown(e, "se")}
-        />
-
-        {/* Edge handles */}
-        <div
-          className={cn(edgeHandleH, "absolute -top-2 left-1/2 -translate-x-1/2")}
-          onPointerDown={(e) => handlePointerDown(e, "n")}
-        />
-        <div
-          className={cn(edgeHandleH, "absolute -bottom-2 left-1/2 -translate-x-1/2")}
-          onPointerDown={(e) => handlePointerDown(e, "s")}
-        />
-        <div
-          className={cn(edgeHandleV, "absolute -left-2 top-1/2 -translate-y-1/2")}
-          onPointerDown={(e) => handlePointerDown(e, "w")}
-        />
-        <div
-          className={cn(edgeHandleV, "absolute -right-2 top-1/2 -translate-y-1/2")}
-          onPointerDown={(e) => handlePointerDown(e, "e")}
-        />
-      </div>
     </div>
   );
 }
@@ -1005,9 +788,14 @@ export function PhotoEditor({
   const [history, setHistory] = useState<EditorState[]>([DEFAULT_STATE]);
   const [historyIndex, setHistoryIndex] = useState(0);
 
+  // Crop state (for react-easy-crop)
+  const [cropPosition, setCropPosition] = useState<Point>({ x: 0, y: 0 });
+  const [cropZoom, setCropZoom] = useState(1);
+  const [croppedPreviewUrl, setCroppedPreviewUrl] = useState<string | null>(null);
+
   // Tool-specific state
   const [cropAspectRatio, setCropAspectRatio] = useState<CropAspectRatio>(
-    aspectRatio ? "square" : "freeform"
+    aspectRatio ? "square" : "original"
   );
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
   const [selectedStickerId, setSelectedStickerId] = useState<string | null>(null);
@@ -1053,22 +841,55 @@ export function PhotoEditor({
       imageRef.current = img;
       setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
       setImageLoaded(true);
-
-      // Set initial crop area
-      setState((prev) => ({
-        ...prev,
-        cropArea: prev.cropArea || { x: 10, y: 10, width: 80, height: 80 },
-      }));
     };
     img.src = imageSrc;
   }, [imageSrc]);
 
-  // Get current crop aspect ratio value
-  const currentAspectRatio = useMemo(() => {
+  // Get current crop aspect ratio for react-easy-crop (always a number)
+  const cropAspect = useMemo(() => {
     if (aspectRatio) return aspectRatio;
     const found = CROP_ASPECT_RATIOS.find((r) => r.id === cropAspectRatio);
-    return found?.ratio ?? null;
-  }, [aspectRatio, cropAspectRatio]);
+    if (!found || found.ratio === 0) {
+      // "Original" — use image's natural aspect ratio
+      return imageDimensions.width && imageDimensions.height
+        ? imageDimensions.width / imageDimensions.height
+        : 4 / 3;
+    }
+    return found.ratio;
+  }, [aspectRatio, cropAspectRatio, imageDimensions]);
+
+  // Generate cropped preview when exiting crop mode (syncs with undo/redo too)
+  useEffect(() => {
+    if (activeTool === "crop") return; // Cropper handles its own preview
+
+    if (!state.cropPixels || !imageRef.current) {
+      setCroppedPreviewUrl(null);
+      return;
+    }
+
+    const img = imageRef.current;
+    const { x, y, width, height } = state.cropPixels;
+    const maxPreview = 800;
+    let pw = width,
+      ph = height;
+    if (pw > maxPreview || ph > maxPreview) {
+      const s = maxPreview / Math.max(pw, ph);
+      pw = Math.round(pw * s);
+      ph = Math.round(ph * s);
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = pw;
+    canvas.height = ph;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      setCroppedPreviewUrl(null);
+      return;
+    }
+
+    ctx.drawImage(img, x, y, width, height, 0, 0, pw, ph);
+    setCroppedPreviewUrl(canvas.toDataURL("image/jpeg", 0.85));
+  }, [state.cropPixels, activeTool]);
 
   // Update history
   const pushHistory = useCallback((newState: EditorState) => {
@@ -1112,6 +933,9 @@ export function PhotoEditor({
     setState(DEFAULT_STATE);
     setHistory([DEFAULT_STATE]);
     setHistoryIndex(0);
+    setCropPosition({ x: 0, y: 0 });
+    setCropZoom(1);
+    setCroppedPreviewUrl(null);
   }, []);
 
   // Tool handlers
@@ -1145,14 +969,9 @@ export function PhotoEditor({
     [state.adjustments, updateState]
   );
 
-  const handleCropChange = useCallback((area: CropArea) => {
-    setState((prev) => ({ ...prev, cropArea: area }));
+  const onCropComplete = useCallback((_croppedArea: Area, croppedAreaPixels: Area) => {
+    setState((prev) => ({ ...prev, cropPixels: croppedAreaPixels }));
   }, []);
-
-  const handleCropConfirm = useCallback(() => {
-    pushHistory(state);
-    setActiveTool(null);
-  }, [pushHistory, state]);
 
   // Text overlay handlers
   const handleAddText = useCallback(() => {
@@ -1343,40 +1162,53 @@ export function PhotoEditor({
     try {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
-      if (!ctx) return;
+      if (!ctx) {
+        setIsSaving(false);
+        return;
+      }
 
       const img = imageRef.current;
-      let { width, height } = imageDimensions;
+      const { width, height } = imageDimensions;
 
-      // Apply crop
-      let cropX = 0,
-        cropY = 0,
-        cropW = width,
-        cropH = height;
-      if (state.cropArea) {
-        cropX = (state.cropArea.x / 100) * width;
-        cropY = (state.cropArea.y / 100) * height;
-        cropW = (state.cropArea.width / 100) * width;
-        cropH = (state.cropArea.height / 100) * height;
+      // Source crop rectangle (in natural image pixels from react-easy-crop)
+      let srcX = 0,
+        srcY = 0,
+        srcW = width,
+        srcH = height;
+      if (state.cropPixels) {
+        srcX = state.cropPixels.x;
+        srcY = state.cropPixels.y;
+        srcW = state.cropPixels.width;
+        srcH = state.cropPixels.height;
+      }
+
+      // Scale down to max output size (1200px longest edge)
+      const MAX_OUTPUT = 1200;
+      let outW = srcW;
+      let outH = srcH;
+      if (outW > MAX_OUTPUT || outH > MAX_OUTPUT) {
+        const scale = MAX_OUTPUT / Math.max(outW, outH);
+        outW = Math.round(outW * scale);
+        outH = Math.round(outH * scale);
       }
 
       // Handle rotation
       const isRotated90or270 = state.rotation === 90 || state.rotation === 270;
-      canvas.width = isRotated90or270 ? cropH : cropW;
-      canvas.height = isRotated90or270 ? cropW : cropH;
+      canvas.width = isRotated90or270 ? outH : outW;
+      canvas.height = isRotated90or270 ? outW : outH;
 
       ctx.save();
 
       // Translate to center for rotation
       ctx.translate(canvas.width / 2, canvas.height / 2);
       ctx.rotate((state.rotation * Math.PI) / 180);
-      ctx.translate(-cropW / 2, -cropH / 2);
+      ctx.translate(-outW / 2, -outH / 2);
 
       // Apply adjustments filter
       ctx.filter = getAdjustmentCSS(state.adjustments);
 
-      // Draw cropped image
-      ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+      // Draw cropped image scaled to output size
+      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, outW, outH);
 
       ctx.restore();
       ctx.filter = "none";
@@ -1507,39 +1339,81 @@ export function PhotoEditor({
     return getAdjustmentCSS(state.adjustments);
   }, [state.filter, state.adjustments]);
 
+  // Shared tool panel header with Done button on every panel
+  const toolPanelHeader = (title: string, onDone?: () => void) => (
+    <div className="flex items-center justify-between">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setActiveTool(null)}
+        className="h-9 min-w-[60px]"
+      >
+        <ChevronLeft className="h-4 w-4 mr-1" />
+        Back
+      </Button>
+      <span className="font-medium">{title}</span>
+      <Button
+        size="sm"
+        onClick={() => {
+          onDone?.();
+          setActiveTool(null);
+        }}
+        className="h-9 min-w-[60px] bg-brand text-brand-foreground"
+      >
+        <Check className="h-4 w-4 mr-1" />
+        Done
+      </Button>
+    </div>
+  );
+
   // Render tool panel
   const renderToolPanel = () => {
     switch (activeTool) {
       case "crop":
         return (
-          <div className="flex flex-col gap-4 p-4">
-            <div className="flex items-center justify-between">
-              <Button variant="ghost" size="sm" onClick={() => setActiveTool(null)}>
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Back
-              </Button>
-              <span className="font-medium">Crop</span>
-              <Button size="sm" onClick={handleCropConfirm} className="bg-brand text-brand-foreground">
-                Done
-              </Button>
-            </div>
-            <div className="flex justify-center gap-2">
-              {CROP_ASPECT_RATIOS.map((ratio) => (
-                <button
-                  key={ratio.id}
-                  onClick={() => setCropAspectRatio(ratio.id)}
-                  disabled={!!aspectRatio}
-                  className={cn(
-                    "px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                    cropAspectRatio === ratio.id
-                      ? "bg-brand text-brand-foreground"
-                      : "bg-muted text-foreground hover:bg-muted/80",
-                    aspectRatio && "opacity-50 cursor-not-allowed"
-                  )}
-                >
-                  {ratio.label}
-                </button>
-              ))}
+          <div className="flex flex-col gap-3 p-4">
+            {toolPanelHeader("Crop", () => pushHistory(state))}
+            {!aspectRatio && (
+              <div className="flex justify-center gap-2">
+                {CROP_ASPECT_RATIOS.map((ratio) => (
+                  <button
+                    key={ratio.id}
+                    onClick={() => {
+                      setCropAspectRatio(ratio.id);
+                      // Reset position when changing aspect ratio
+                      setCropPosition({ x: 0, y: 0 });
+                      setCropZoom(1);
+                    }}
+                    className={cn(
+                      "px-3 py-2 rounded-lg text-sm font-medium transition-colors min-h-[40px]",
+                      cropAspectRatio === ratio.id
+                        ? "bg-brand text-brand-foreground"
+                        : "bg-muted text-foreground hover:bg-muted/80"
+                    )}
+                  >
+                    {ratio.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {aspectRatio && (
+              <p className="text-sm text-muted-foreground text-center">
+                Fixed {aspectRatio === 1 ? "square" : `${aspectRatio}:1`} crop
+              </p>
+            )}
+            <div className="flex items-center gap-3 px-2">
+              <span className="text-xs text-muted-foreground w-10">Zoom</span>
+              <Slider
+                value={[cropZoom]}
+                min={1}
+                max={3}
+                step={0.1}
+                onValueChange={([v]) => setCropZoom(v)}
+                className="flex-1"
+              />
+              <span className="text-xs text-muted-foreground w-10 text-right">
+                {cropZoom.toFixed(1)}x
+              </span>
             </div>
           </div>
         );
@@ -1547,14 +1421,7 @@ export function PhotoEditor({
       case "rotate":
         return (
           <div className="flex flex-col gap-4 p-4">
-            <div className="flex items-center justify-between">
-              <Button variant="ghost" size="sm" onClick={() => setActiveTool(null)}>
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Back
-              </Button>
-              <span className="font-medium">Rotate</span>
-              <div className="w-16" />
-            </div>
+            {toolPanelHeader("Rotate")}
             <div className="flex justify-center gap-4">
               <Button
                 variant="outline"
@@ -1584,14 +1451,7 @@ export function PhotoEditor({
       case "filter":
         return (
           <div className="flex flex-col gap-4 p-4">
-            <div className="flex items-center justify-between">
-              <Button variant="ghost" size="sm" onClick={() => setActiveTool(null)}>
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Back
-              </Button>
-              <span className="font-medium">Filters</span>
-              <div className="w-16" />
-            </div>
+            {toolPanelHeader("Filters")}
             <FilterStrip
               filters={FILTER_PRESETS}
               activeFilter={state.filter}
@@ -1604,13 +1464,8 @@ export function PhotoEditor({
       case "adjust":
         return (
           <div className="flex flex-col gap-4 p-4 max-h-[300px] overflow-y-auto">
-            <div className="flex items-center justify-between sticky top-0 bg-background pb-2 z-10">
-              <Button variant="ghost" size="sm" onClick={() => setActiveTool(null)}>
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Back
-              </Button>
-              <span className="font-medium">Adjustments</span>
-              <div className="w-16" />
+            <div className="sticky top-0 bg-background pb-2 z-10">
+              {toolPanelHeader("Adjustments")}
             </div>
             <AdjustmentSlider
               label="Brightness"
@@ -1646,13 +1501,8 @@ export function PhotoEditor({
       case "text":
         return (
           <div className="flex flex-col gap-4 p-4 max-h-[300px] overflow-y-auto">
-            <div className="flex items-center justify-between sticky top-0 bg-background pb-2 z-10">
-              <Button variant="ghost" size="sm" onClick={() => setActiveTool(null)}>
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Back
-              </Button>
-              <span className="font-medium">Text</span>
-              <div className="w-16" />
+            <div className="sticky top-0 bg-background pb-2 z-10">
+              {toolPanelHeader("Text")}
             </div>
             <TextEditorPanel
               textOverlays={state.textOverlays}
@@ -1668,13 +1518,8 @@ export function PhotoEditor({
       case "sticker":
         return (
           <div className="flex flex-col gap-4 p-4 max-h-[300px] overflow-y-auto">
-            <div className="flex items-center justify-between sticky top-0 bg-background pb-2 z-10">
-              <Button variant="ghost" size="sm" onClick={() => setActiveTool(null)}>
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Back
-              </Button>
-              <span className="font-medium">Stickers</span>
-              <div className="w-16" />
+            <div className="sticky top-0 bg-background pb-2 z-10">
+              {toolPanelHeader("Stickers")}
             </div>
             <StickerPanel
               stickerOverlays={state.stickerOverlays}
@@ -1690,14 +1535,7 @@ export function PhotoEditor({
       case "draw":
         return (
           <div className="flex flex-col gap-4 p-4">
-            <div className="flex items-center justify-between">
-              <Button variant="ghost" size="sm" onClick={() => setActiveTool(null)}>
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Back
-              </Button>
-              <span className="font-medium">Draw</span>
-              <div className="w-16" />
-            </div>
+            {toolPanelHeader("Draw")}
             <DrawPanel
               brushSize={brushSize}
               brushColor={brushColor}
@@ -1723,20 +1561,28 @@ export function PhotoEditor({
     <Sheet open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <SheetContent
         side="bottom"
-        className="h-[95vh] rounded-t-2xl p-0 flex flex-col"
+        className="h-[95dvh] sm:h-[85dvh] rounded-t-2xl p-0 flex flex-col"
+        hideClose
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <Button variant="ghost" size="sm" onClick={handleClose}>
+        <div className="relative flex items-center justify-between px-3 py-2.5 border-b border-border min-h-[48px] shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleClose}
+            className="h-9 min-w-[72px] text-sm"
+          >
             <X className="h-4 w-4 mr-1" />
             {isLegacyMode ? "Skip" : "Cancel"}
           </Button>
-          <SheetTitle className="text-base font-semibold">Edit Photo</SheetTitle>
+          <SheetTitle className="text-base font-semibold absolute left-1/2 -translate-x-1/2">
+            Edit Photo
+          </SheetTitle>
           <Button
             size="sm"
             onClick={handleSave}
             disabled={isSaving}
-            className="bg-energy-gradient text-white font-semibold"
+            className="h-9 min-w-[72px] bg-energy-gradient text-white font-semibold text-sm"
           >
             {isSaving ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -1755,7 +1601,7 @@ export function PhotoEditor({
         {/* Image Preview */}
         <div
           ref={containerRef}
-          className="flex-1 relative bg-black overflow-hidden"
+          className="flex-1 min-h-0 relative bg-black overflow-hidden"
           onPointerDown={handleDrawStart}
           onPointerMove={(e) => {
             handleDrawMove(e);
@@ -1770,32 +1616,37 @@ export function PhotoEditor({
             handleOverlayPointerUp();
           }}
         >
-          {imageLoaded && (
-            <div className="absolute inset-4 flex items-center justify-center">
-              <div
-                className="relative max-w-full max-h-full"
+          {/* Crop mode: show react-easy-crop */}
+          {imageLoaded && activeTool === "crop" && imageSrc && (
+            <Cropper
+              image={imageSrc}
+              crop={cropPosition}
+              zoom={cropZoom}
+              aspect={cropAspect}
+              rotation={state.rotation}
+              onCropChange={setCropPosition}
+              onZoomChange={setCropZoom}
+              onCropComplete={onCropComplete}
+              style={{
+                containerStyle: { position: "absolute", inset: 0 },
+              }}
+            />
+          )}
+
+          {/* Normal mode: show image preview */}
+          {imageLoaded && activeTool !== "crop" && (
+            <div className="absolute inset-0 p-2 sm:p-4">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={croppedPreviewUrl || imageSrc}
+                alt="Editor preview"
+                className="w-full h-full object-contain"
                 style={{
+                  filter: previewFilter,
                   transform: `rotate(${state.rotation}deg)`,
                   transition: "transform 0.3s ease",
                 }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={imageSrc}
-                  alt="Editor preview"
-                  className="max-w-full max-h-full object-contain"
-                  style={{ filter: previewFilter }}
-                />
-
-                {/* Crop Overlay */}
-                {activeTool === "crop" && state.cropArea && (
-                  <CropOverlay
-                    cropArea={state.cropArea}
-                    aspectRatio={currentAspectRatio}
-                    onCropChange={handleCropChange}
-                  />
-                )}
-              </div>
+              />
             </div>
           )}
 
@@ -1901,7 +1752,7 @@ export function PhotoEditor({
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 100, opacity: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="bg-background border-t border-border"
+              className="shrink-0 bg-background border-t border-border"
             >
               {renderToolPanel()}
             </motion.div>
@@ -1912,7 +1763,7 @@ export function PhotoEditor({
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 100, opacity: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="bg-background border-t border-border p-4"
+              className="shrink-0 bg-background border-t border-border px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
             >
               <EditorToolbar
                 activeTool={activeTool}

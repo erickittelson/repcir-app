@@ -5,7 +5,8 @@ import { getSession } from "@/lib/neon-auth";
 import { db } from "@/lib/db";
 import { exercises } from "@/lib/db/schema";
 import { applyDistributedRateLimit as applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit-redis";
-import { aiModel } from "@/lib/ai";
+import { aiModel, getReasoningOptions } from "@/lib/ai";
+import { trackAIUsage } from "@/lib/ai/usage-tracking";
 import { sql } from "drizzle-orm";
 
 export const runtime = "nodejs";
@@ -262,6 +263,7 @@ export async function POST(request: Request) {
     }
 
     // Generate parsed workout using AI
+    const startTime = Date.now();
     const result = await generateObject({
       model: aiModel,
       schema: ParsedWorkoutSchema,
@@ -271,7 +273,20 @@ export async function POST(request: Request) {
 "${transcript}"
 
 Parse this workout description into structured data. Be thorough and extract all exercises mentioned.`,
+      providerOptions: getReasoningOptions("quick", { cacheKey: "parse-workout" }) as any,
     });
+
+    trackAIUsage({
+      userId: session.user.id,
+      endpoint: "/api/ai/parse-workout",
+      feature: "parse_workout",
+      modelUsed: "gpt-5.2",
+      inputTokens: result.usage?.inputTokens ?? 0,
+      outputTokens: result.usage?.outputTokens ?? 0,
+      cachedTokens: result.usage?.inputTokenDetails?.cacheReadTokens ?? 0,
+      cacheHit: (result.usage?.inputTokenDetails?.cacheReadTokens ?? 0) > 0,
+      durationMs: Date.now() - startTime,
+    }).catch(() => {});
 
     const parsedWorkout = result.object as ParsedWorkout;
 

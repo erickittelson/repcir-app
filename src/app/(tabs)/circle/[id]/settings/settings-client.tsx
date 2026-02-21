@@ -6,9 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -16,13 +14,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,17 +31,15 @@ import {
   Lock,
   Globe,
   UserPlus,
-  Target,
   Scroll,
-  Hash,
   X,
   Plus,
   AlertTriangle,
   Trash2,
-  Image as ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { CircleImageUpload } from "@/components/circles/circle-image-upload";
 
 // ============================================================================
 // TYPES & CONSTANTS
@@ -62,36 +51,16 @@ interface CircleData {
   description: string | null;
   imageUrl: string | null;
   visibility: "public" | "private";
-  category: string | null;
   focusArea: string | null;
-  targetDemographic: string | null;
-  activityType: string | null;
-  scheduleType: string | null;
   maxMembers: number | null;
   joinType: "open" | "request" | "invite_only" | null;
   rules: string[];
-  tags: string[];
 }
 
 interface SettingsClientProps {
   circle: CircleData;
   userRole: "owner" | "admin";
 }
-
-const CATEGORIES = [
-  { value: "fitness", label: "General Fitness" },
-  { value: "strength", label: "Strength Training" },
-  { value: "running", label: "Running" },
-  { value: "crossfit", label: "CrossFit" },
-  { value: "yoga", label: "Yoga" },
-  { value: "cycling", label: "Cycling" },
-  { value: "swimming", label: "Swimming" },
-  { value: "martial_arts", label: "Martial Arts" },
-  { value: "sports", label: "Sports" },
-  { value: "weight_loss", label: "Weight Loss" },
-  { value: "family", label: "Family" },
-  { value: "other", label: "Other" },
-];
 
 const FOCUS_AREAS = [
   { value: "strength", label: "Build Strength" },
@@ -104,43 +73,28 @@ const FOCUS_AREAS = [
   { value: "general", label: "General Health" },
 ];
 
-const TARGET_DEMOGRAPHICS = [
-  { value: "beginners", label: "Beginners" },
-  { value: "intermediate", label: "Intermediate" },
-  { value: "advanced", label: "Advanced" },
-  { value: "seniors", label: "Seniors (55+)" },
-  { value: "women", label: "Women" },
-  { value: "men", label: "Men" },
-  { value: "teens", label: "Teens" },
-  { value: "parents", label: "Parents" },
-  { value: "all", label: "Everyone Welcome" },
-];
-
-const ACTIVITY_TYPES = [
-  { value: "challenges", label: "Challenges", desc: "Group challenges & competitions" },
-  { value: "workout_plans", label: "Workout Plans", desc: "Follow structured programs together" },
-  { value: "accountability", label: "Accountability", desc: "Daily check-ins & support" },
-  { value: "social", label: "Social", desc: "Casual fitness community" },
-  { value: "coaching", label: "Coaching", desc: "Guided training & feedback" },
-];
-
-const SCHEDULE_TYPES = [
-  { value: "daily_challenges", label: "Daily Challenges" },
-  { value: "weekly_workouts", label: "Weekly Workouts" },
-  { value: "monthly_goals", label: "Monthly Goals" },
-  { value: "self_paced", label: "Self-Paced" },
-];
-
-const JOIN_TYPES = [
-  { value: "open", label: "Open", desc: "Anyone can join immediately", icon: Globe },
-  { value: "request", label: "Request to Join", desc: "Approval required", icon: UserPlus },
-  { value: "invite_only", label: "Invite Only", desc: "By invitation only", icon: Lock },
-];
-
-const SUGGESTED_TAGS = [
-  "morning", "evening", "weekend", "daily", "accountability",
-  "beginners", "competitive", "supportive", "challenge",
-  "HIIT", "weightlifting", "cardio", "calisthenics", "outdoor",
+const JOIN_OPTIONS = [
+  {
+    value: "open" as const,
+    label: "Public - Open",
+    desc: "Anyone can discover and join instantly",
+    icon: Globe,
+    visibility: "public" as const,
+  },
+  {
+    value: "request" as const,
+    label: "Public - Request",
+    desc: "Anyone can discover, approval required to join",
+    icon: UserPlus,
+    visibility: "public" as const,
+  },
+  {
+    value: "invite_only" as const,
+    label: "Private - Invite Only",
+    desc: "Hidden from discovery, invitation required",
+    icon: Lock,
+    visibility: "private" as const,
+  },
 ];
 
 // ============================================================================
@@ -151,7 +105,6 @@ export function SettingsClient({ circle, userRole }: SettingsClientProps) {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [newTag, setNewTag] = useState("");
   const [newRule, setNewRule] = useState("");
 
   // Form state initialized from circle data
@@ -160,15 +113,10 @@ export function SettingsClient({ circle, userRole }: SettingsClientProps) {
     description: circle.description || "",
     imageUrl: circle.imageUrl || "",
     visibility: circle.visibility,
-    category: circle.category || "",
     focusArea: circle.focusArea || "",
-    targetDemographic: circle.targetDemographic || "",
-    activityType: circle.activityType || "",
-    scheduleType: circle.scheduleType || "",
     maxMembers: circle.maxMembers,
     joinType: circle.joinType || "request",
     rules: circle.rules,
-    tags: circle.tags,
   });
 
   const updateField = <K extends keyof typeof formData>(
@@ -176,18 +124,6 @@ export function SettingsClient({ circle, userRole }: SettingsClientProps) {
     value: (typeof formData)[K]
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const addTag = (tag: string) => {
-    const trimmed = tag.trim().toLowerCase();
-    if (trimmed && !formData.tags.includes(trimmed) && formData.tags.length < 10) {
-      updateField("tags", [...formData.tags, trimmed]);
-      setNewTag("");
-    }
-  };
-
-  const removeTag = (tag: string) => {
-    updateField("tags", formData.tags.filter((t) => t !== tag));
   };
 
   const addRule = () => {
@@ -218,15 +154,10 @@ export function SettingsClient({ circle, userRole }: SettingsClientProps) {
           description: formData.description.trim() || null,
           imageUrl: formData.imageUrl.trim() || null,
           visibility: formData.visibility,
-          category: formData.category || null,
           focusArea: formData.focusArea || null,
-          targetDemographic: formData.targetDemographic || null,
-          activityType: formData.activityType || null,
-          scheduleType: formData.scheduleType || null,
           maxMembers: formData.maxMembers,
           joinType: formData.joinType,
           rules: formData.rules,
-          tags: formData.tags,
         }),
       });
 
@@ -269,11 +200,21 @@ export function SettingsClient({ circle, userRole }: SettingsClientProps) {
 
   return (
     <div className="p-4 space-y-6 max-w-2xl mx-auto">
-      {/* Page title with save button */}
+      {/* Page title with back and save buttons */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Circle Settings</h1>
-          <p className="text-sm text-muted-foreground">{circle.name}</p>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push(`/circle/${circle.id}`)}
+            className="shrink-0"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold">Circle Settings</h1>
+            <p className="text-sm text-muted-foreground">{circle.name}</p>
+          </div>
         </div>
         <Button onClick={handleSave} disabled={isSaving}>
           {isSaving ? (
@@ -317,144 +258,87 @@ export function SettingsClient({ circle, userRole }: SettingsClientProps) {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="imageUrl">Cover Image URL</Label>
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <Input
-                      id="imageUrl"
-                      value={formData.imageUrl}
-                      onChange={(e) => updateField("imageUrl", e.target.value)}
-                      placeholder="https://example.com/image.jpg"
-                    />
-                  </div>
-                  {formData.imageUrl && (
-                    <div className="h-10 w-10 rounded border bg-muted overflow-hidden">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={formData.imageUrl}
-                        alt="Preview"
-                        className="h-full w-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  <ImageIcon className="h-3 w-3 inline mr-1" />
-                  Enter an image URL or leave blank for default
-                </p>
+                <Label>Circle Image</Label>
+                <CircleImageUpload
+                  currentImage={formData.imageUrl || undefined}
+                  circleId={circle.id}
+                  onImageChange={(url) => updateField("imageUrl", url)}
+                  size="lg"
+                />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Category</Label>
-                  <Select
-                    value={formData.category}
-                    onValueChange={(v) => updateField("category", v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CATEGORIES.map((cat) => (
-                        <SelectItem key={cat.value} value={cat.value}>
-                          {cat.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Focus Area</Label>
-                  <Select
-                    value={formData.focusArea}
-                    onValueChange={(v) => updateField("focusArea", v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select focus" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {FOCUS_AREAS.map((area) => (
-                        <SelectItem key={area.value} value={area.value}>
-                          {area.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-2">
+                <Label>Focus Area</Label>
+                <Select
+                  value={formData.focusArea}
+                  onValueChange={(v) => updateField("focusArea", v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select focus" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FOCUS_AREAS.map((area) => (
+                      <SelectItem key={area.value} value={area.value}>
+                        {area.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </CardContent>
           </Card>
 
-          {/* Visibility & Join Settings */}
+          {/* Privacy & Access */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Visibility & Join Settings</CardTitle>
-              <CardDescription>Control who can find and join your circle</CardDescription>
+              <CardTitle className="text-lg">Privacy & Access</CardTitle>
+              <CardDescription>Choose who can find and join your circle</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-4 rounded-lg bg-muted">
-                <div className="flex items-center gap-3">
-                  {formData.visibility === "public" ? (
-                    <Globe className="h-5 w-5 text-brand" />
-                  ) : (
-                    <Lock className="h-5 w-5 text-muted-foreground" />
-                  )}
-                  <div>
-                    <p className="font-medium text-sm">
-                      {formData.visibility === "public" ? "Public Circle" : "Private Circle"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formData.visibility === "public"
-                        ? "Appears in discovery, anyone can find it"
-                        : "Hidden from discovery, invite only"}
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={formData.visibility === "public"}
-                  onCheckedChange={(v) => updateField("visibility", v ? "public" : "private")}
-                />
+              <div className="space-y-3">
+                {JOIN_OPTIONS.map((option) => {
+                  const Icon = option.icon;
+                  const isSelected = formData.joinType === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => {
+                        updateField("joinType", option.value);
+                        updateField("visibility", option.visibility);
+                      }}
+                      className={cn(
+                        "w-full p-4 rounded-xl border-2 transition-all duration-200",
+                        "flex items-center gap-4 text-left",
+                        isSelected
+                          ? "border-brand bg-brand/5"
+                          : "border-border hover:border-brand/50"
+                      )}
+                    >
+                      <div className={cn(
+                        "p-3 rounded-full transition-colors",
+                        isSelected ? "bg-brand/20" : "bg-muted"
+                      )}>
+                        <Icon className={cn(
+                          "h-5 w-5 transition-colors",
+                          isSelected ? "text-brand" : "text-muted-foreground"
+                        )} />
+                      </div>
+                      <div className="flex-1">
+                        <p className={cn(
+                          "font-medium transition-colors",
+                          isSelected ? "text-foreground" : "text-muted-foreground"
+                        )}>
+                          {option.label}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {option.desc}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
-
-              {formData.visibility === "public" && (
-                <div className="space-y-2">
-                  <Label>How can people join?</Label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {JOIN_TYPES.map((type) => {
-                      const Icon = type.icon;
-                      return (
-                        <button
-                          key={type.value}
-                          type="button"
-                          onClick={() =>
-                            updateField("joinType", type.value as typeof formData.joinType)
-                          }
-                          className={cn(
-                            "p-3 rounded-lg border text-left transition-colors",
-                            formData.joinType === type.value
-                              ? "border-brand bg-brand/5"
-                              : "border-border hover:border-brand/50"
-                          )}
-                        >
-                          <Icon
-                            className={cn(
-                              "h-4 w-4 mb-1",
-                              formData.joinType === type.value
-                                ? "text-brand"
-                                : "text-muted-foreground"
-                            )}
-                          />
-                          <p className="text-xs font-medium">{type.label}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
 
               <div className="space-y-2">
                 <Label>Max Members (optional)</Label>
@@ -475,200 +359,53 @@ export function SettingsClient({ circle, userRole }: SettingsClientProps) {
             </CardContent>
           </Card>
 
-          {/* Advanced Options */}
+          {/* Circle Guidelines */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Advanced Options</CardTitle>
-              <CardDescription>Target audience, activity type, rules, and tags</CardDescription>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Scroll className="h-5 w-5" />
+                Circle Guidelines
+              </CardTitle>
+              <CardDescription>
+                Set expectations for your circle members (max 10)
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <Accordion type="single" collapsible className="w-full">
-                <AccordionItem value="demographics">
-                  <AccordionTrigger className="text-sm">
-                    <div className="flex items-center gap-2">
-                      <Target className="h-4 w-4" />
-                      Target Audience & Activity
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent className="space-y-4 pt-4">
-                    <div className="space-y-2">
-                      <Label>Target Demographic</Label>
-                      <Select
-                        value={formData.targetDemographic}
-                        onValueChange={(v) => updateField("targetDemographic", v)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Who is this circle for?" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {TARGET_DEMOGRAPHICS.map((demo) => (
-                            <SelectItem key={demo.value} value={demo.value}>
-                              {demo.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+            <CardContent className="space-y-3">
+              {formData.rules.map((rule, index) => (
+                <div key={index} className="flex items-start gap-2 p-2 bg-muted rounded">
+                  <span className="text-sm text-muted-foreground">{index + 1}.</span>
+                  <p className="flex-1 text-sm">{rule}</p>
+                  <button
+                    type="button"
+                    onClick={() => removeRule(index)}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
 
-                    <div className="space-y-2">
-                      <Label>Activity Type</Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {ACTIVITY_TYPES.map((type) => (
-                          <button
-                            key={type.value}
-                            type="button"
-                            onClick={() => updateField("activityType", type.value)}
-                            className={cn(
-                              "p-3 rounded-lg border text-left transition-colors",
-                              formData.activityType === type.value
-                                ? "border-brand bg-brand/5"
-                                : "border-border hover:border-brand/50"
-                            )}
-                          >
-                            <p className="text-sm font-medium">{type.label}</p>
-                            <p className="text-xs text-muted-foreground">{type.desc}</p>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+              {formData.rules.length < 10 && (
+                <div className="flex gap-2">
+                  <Input
+                    value={newRule}
+                    onChange={(e) => setNewRule(e.target.value)}
+                    placeholder="Add a guideline..."
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && (e.preventDefault(), addRule())
+                    }
+                  />
+                  <Button type="button" variant="outline" size="icon" onClick={addRule}>
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
 
-                    <div className="space-y-2">
-                      <Label>Schedule Type</Label>
-                      <Select
-                        value={formData.scheduleType}
-                        onValueChange={(v) => updateField("scheduleType", v)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="How often do activities happen?" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {SCHEDULE_TYPES.map((schedule) => (
-                            <SelectItem key={schedule.value} value={schedule.value}>
-                              {schedule.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-
-                <AccordionItem value="rules">
-                  <AccordionTrigger className="text-sm">
-                    <div className="flex items-center gap-2">
-                      <Scroll className="h-4 w-4" />
-                      Circle Rules ({formData.rules.length})
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent className="space-y-4 pt-4">
-                    <p className="text-sm text-muted-foreground">
-                      Set expectations for your circle members (max 10 rules)
-                    </p>
-
-                    {formData.rules.map((rule, index) => (
-                      <div key={index} className="flex items-start gap-2 p-2 bg-muted rounded">
-                        <span className="text-sm text-muted-foreground">{index + 1}.</span>
-                        <p className="flex-1 text-sm">{rule}</p>
-                        <button
-                          type="button"
-                          onClick={() => removeRule(index)}
-                          className="text-muted-foreground hover:text-destructive"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ))}
-
-                    {formData.rules.length < 10 && (
-                      <div className="flex gap-2">
-                        <Input
-                          value={newRule}
-                          onChange={(e) => setNewRule(e.target.value)}
-                          placeholder="Add a rule..."
-                          onKeyDown={(e) =>
-                            e.key === "Enter" && (e.preventDefault(), addRule())
-                          }
-                        />
-                        <Button type="button" variant="outline" size="icon" onClick={addRule}>
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
-                  </AccordionContent>
-                </AccordionItem>
-
-                <AccordionItem value="tags">
-                  <AccordionTrigger className="text-sm">
-                    <div className="flex items-center gap-2">
-                      <Hash className="h-4 w-4" />
-                      Tags ({formData.tags.length})
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent className="space-y-4 pt-4">
-                    <p className="text-sm text-muted-foreground">
-                      Add tags to help people find your circle (max 10)
-                    </p>
-
-                    <div className="flex flex-wrap gap-1">
-                      {formData.tags.map((tag) => (
-                        <Badge key={tag} variant="secondary" className="gap-1">
-                          #{tag}
-                          <button
-                            type="button"
-                            onClick={() => removeTag(tag)}
-                            className="hover:text-destructive"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-
-                    {formData.tags.length < 10 && (
-                      <>
-                        <div className="flex gap-2">
-                          <Input
-                            value={newTag}
-                            onChange={(e) =>
-                              setNewTag(e.target.value.replace(/[^a-zA-Z0-9]/g, ""))
-                            }
-                            placeholder="Add a tag..."
-                            onKeyDown={(e) =>
-                              e.key === "Enter" && (e.preventDefault(), addTag(newTag))
-                            }
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            onClick={() => addTag(newTag)}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </div>
-
-                        <div className="space-y-2">
-                          <p className="text-xs text-muted-foreground">Suggested tags:</p>
-                          <div className="flex flex-wrap gap-1">
-                            {SUGGESTED_TAGS.filter((t) => !formData.tags.includes(t))
-                              .slice(0, 8)
-                              .map((tag) => (
-                                <Badge
-                                  key={tag}
-                                  variant="outline"
-                                  className="cursor-pointer hover:bg-muted"
-                                  onClick={() => addTag(tag)}
-                                >
-                                  #{tag}
-                                </Badge>
-                              ))}
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
+              {formData.rules.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No guidelines yet. Add rules members should follow.
+                </p>
+              )}
             </CardContent>
           </Card>
 

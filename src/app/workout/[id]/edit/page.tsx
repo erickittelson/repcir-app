@@ -38,5 +38,5 @@ export default async function EditWorkoutPage({ params }: EditWorkoutPageProps) 
   }
 
   // Redirect to the workout builder with this plan
-  redirect(`/workouts/builder?planId=${planId}`);
+  redirect(`/workouts/builder?edit=${planId}`);
 }

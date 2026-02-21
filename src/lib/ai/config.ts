@@ -233,7 +233,7 @@ export function getModelPricing(model: string) {
 }
 
 /**
- * Calculate estimated cost for a request
+ * Calculate estimated cost for a request (legacy binary cache flag)
  */
 export function estimateCost(
   inputTokens: number,
@@ -245,6 +245,23 @@ export function estimateCost(
   const inputCost = (inputTokens / 1_000_000) * (usedCache ? pricing.cachedInputPer1M : pricing.inputPer1M);
   const outputCost = (outputTokens / 1_000_000) * pricing.outputPer1M;
   return inputCost + outputCost;
+}
+
+/**
+ * Calculate cost with proportional cached/uncached input token pricing.
+ * More accurate than estimateCost() when cache token counts are available.
+ */
+export function estimateCostDetailed(
+  uncachedInputTokens: number,
+  cachedInputTokens: number,
+  outputTokens: number,
+  model: string
+): number {
+  const pricing = getModelPricing(model);
+  const uncachedCost = (uncachedInputTokens / 1_000_000) * pricing.inputPer1M;
+  const cachedCost = (cachedInputTokens / 1_000_000) * pricing.cachedInputPer1M;
+  const outputCost = (outputTokens / 1_000_000) * pricing.outputPer1M;
+  return uncachedCost + cachedCost + outputCost;
 }
 
 /**

@@ -33,7 +33,8 @@ import { eq, and, desc, inArray } from "drizzle-orm";
 import { embed, generateObject } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
-import { aiModel } from "@/lib/ai";
+import { aiModel, getTaskOptions } from "@/lib/ai";
+import { trackAIUsage } from "@/lib/ai/usage-tracking";
 
 /**
  * Generate Member Embeddings (Background)
@@ -313,7 +314,20 @@ Requirements:
 5. Final milestone should be at or near the goal
 
 Member context: ${data.member.name}`,
+          providerOptions: getTaskOptions("milestone_generation") as any,
         });
+
+        trackAIUsage({
+          userId,
+          memberId,
+          endpoint: "inngest/ai-generate-milestones",
+          feature: "milestones",
+          modelUsed: "gpt-5.2",
+          inputTokens: result.usage?.inputTokens ?? 0,
+          outputTokens: result.usage?.outputTokens ?? 0,
+          cachedTokens: result.usage?.inputTokenDetails?.cacheReadTokens ?? 0,
+          cacheHit: (result.usage?.inputTokenDetails?.cacheReadTokens ?? 0) > 0,
+        }).catch(() => {});
 
         return result.object.milestones;
       });

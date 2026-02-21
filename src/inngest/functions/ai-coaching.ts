@@ -26,7 +26,9 @@ import {
 import { eq, and, desc, gte, sql, lte } from "drizzle-orm";
 import { generateObject, generateText } from "ai";
 import { z } from "zod";
-import { aiModel } from "@/lib/ai";
+import { aiModel, getReasoningOptions } from "@/lib/ai";
+import { trackAIUsage } from "@/lib/ai/usage-tracking";
+import { validateMemoryNote } from "@/lib/ai/memory-guardrails";
 
 // ============================================================================
 // POST-WORKOUT AI ANALYSIS
@@ -60,7 +62,7 @@ export const analyzeWorkoutFunction = inngest.createFunction(
 
     if (!session) return { skipped: true, reason: "Session not found" };
 
-    // Step 2: Fetch recent context for comparison
+    // Step 2: Fetch recent context for comparison + session PRs
     const recentContext = await step.run("fetch-context", async () => {
       const recentSessions = await db.query.workoutSessions.findMany({
         where: and(
@@ -77,7 +79,16 @@ export const analyzeWorkoutFunction = inngest.createFunction(
         limit: 5,
       });
 
-      return { recentSessions, recentNotes };
+      // Fetch PRs detected for this specific session (set by inline PR detection)
+      const sessionPRs = await db.query.personalRecords.findMany({
+        where: and(
+          eq(personalRecords.memberId, memberId),
+          eq(personalRecords.sessionId, sessionId),
+        ),
+        with: { exercise: true },
+      });
+
+      return { recentSessions, recentNotes, sessionPRs };
     });
 
     // Step 3: Generate AI analysis
@@ -92,6 +103,13 @@ export const analyzeWorkoutFunction = inngest.createFunction(
 
         return `${ex.exercise?.name || "Unknown"}: ${completedSets}/${totalSets} sets, max ${maxWeight}lbs, avg ${avgReps} reps`;
       }).join("\n") || "No exercises recorded";
+
+      const prSummary = recentContext.sessionPRs.length > 0
+        ? `\nNEW PERSONAL RECORDS SET THIS SESSION:\n${recentContext.sessionPRs.map((pr: any) => {
+            const repMaxText = pr.repMax ? ` (${pr.repMax}RM)` : "";
+            return `- ${pr.exercise?.name || "Unknown"}: ${pr.value} ${pr.unit}${repMaxText}`;
+          }).join("\n")}`
+        : "";
 
       const result = await generateObject({
         model: aiModel,
@@ -113,27 +131,65 @@ Rating: ${session.rating || "not rated"}/5
 
 Exercises:
 ${exerciseSummary}
+${prSummary}
 
 Recent mood/energy from notes:
 ${recentContext.recentNotes.map((n: any) => `${n.mood || "unknown"} mood, energy ${n.energyLevel}/5`).join(", ") || "None"}
 
 Recent workout count: ${recentContext.recentSessions.length} sessions this week
 
-Provide a brief, encouraging analysis with actionable recovery and next-session recommendations.`,
+Provide a brief, encouraging analysis with actionable recovery and next-session recommendations. If new PRs were set, celebrate them!`,
+        providerOptions: getReasoningOptions("standard", { cacheKey: "workout-analysis" }) as any,
       });
+
+      // Look up userId from member for tracking
+      const member = await db.query.circleMembers.findFirst({
+        where: eq(circleMembers.id, memberId),
+        columns: { userId: true },
+      });
+      if (member?.userId) {
+        trackAIUsage({
+          userId: member.userId,
+          memberId,
+          endpoint: "inngest/ai-analyze-workout",
+          feature: "session_summary",
+          modelUsed: "gpt-5.2",
+          inputTokens: result.usage?.inputTokens ?? 0,
+          outputTokens: result.usage?.outputTokens ?? 0,
+          cachedTokens: result.usage?.inputTokenDetails?.cacheReadTokens ?? 0,
+          cacheHit: (result.usage?.inputTokenDetails?.cacheReadTokens ?? 0) > 0,
+        }).catch(() => {});
+      }
 
       return result.object;
     });
 
-    // Step 4: Save analysis as a context note
+    // Step 4: Save analysis as context note AND update workoutSessions.aiFeedback
     await step.run("save-analysis", async () => {
+      const analysisContent = `AI Analysis: ${analysis.volumeAssessment}\n\nProgress: ${analysis.progressNotes.join("; ")}\n\nRecovery: ${analysis.recoveryRecommendation}\n\nNext session: ${analysis.nextWorkoutSuggestion}`;
+
+      // Save structured analysis as contextNote (for AI memory/future context)
       await db.insert(contextNotes).values({
         memberId,
         entityType: "workout_session",
         entityId: sessionId,
-        content: `AI Analysis: ${analysis.volumeAssessment}\n\nProgress: ${analysis.progressNotes.join("; ")}\n\nRecovery: ${analysis.recoveryRecommendation}\n\nNext session: ${analysis.nextWorkoutSuggestion}`,
+        content: analysisContent,
         tags: ["ai_analysis", "post_workout"],
       });
+
+      // Save user-friendly text to aiFeedback column (for UI display)
+      const feedbackText = [
+        analysis.highlights.length > 0 ? analysis.highlights.join(". ") + "." : "",
+        analysis.volumeAssessment,
+        analysis.progressNotes.length > 0 ? analysis.progressNotes.join(". ") + "." : "",
+        analysis.recoveryRecommendation ? `Recovery: ${analysis.recoveryRecommendation}` : "",
+        analysis.nextWorkoutSuggestion ? `Next session: ${analysis.nextWorkoutSuggestion}` : "",
+      ].filter(Boolean).join("\n\n");
+
+      await db
+        .update(workoutSessions)
+        .set({ aiFeedback: feedbackText })
+        .where(eq(workoutSessions.id, sessionId));
     });
 
     return { success: true, sessionId, analysis };
@@ -209,17 +265,48 @@ Extract the most important insights that should be remembered for future coachin
 - Preferences expressed (exercise types, workout styles, coaching tone)
 
 Only extract genuinely useful insights. Skip generic conversation filler.`,
+        providerOptions: getReasoningOptions("standard", { cacheKey: "memory-extraction" }) as any,
       });
+
+      // Look up userId from member for tracking
+      const member = await db.query.circleMembers.findFirst({
+        where: eq(circleMembers.id, memberId),
+        columns: { userId: true },
+      });
+      if (member?.userId) {
+        trackAIUsage({
+          userId: member.userId,
+          memberId,
+          endpoint: "inngest/ai-extract-coaching-memory",
+          feature: "coaching_memory",
+          modelUsed: "gpt-5.2",
+          inputTokens: result.usage?.inputTokens ?? 0,
+          outputTokens: result.usage?.outputTokens ?? 0,
+          cachedTokens: result.usage?.inputTokenDetails?.cacheReadTokens ?? 0,
+          cacheHit: (result.usage?.inputTokenDetails?.cacheReadTokens ?? 0) > 0,
+        }).catch(() => {});
+      }
 
       return result.object;
     });
 
-    // Step 3: Save memories to database
+    // Step 3: Validate and save memories to database
     await step.run("save-memories", async () => {
       if (insights.memories.length === 0) return;
 
+      // Filter through guardrails before persisting
+      const validMemories = insights.memories
+        .map((m) => {
+          const validation = validateMemoryNote(m.content);
+          if (!validation.safe) return null;
+          return { ...m, content: validation.sanitized! };
+        })
+        .filter((m): m is NonNullable<typeof m> => m !== null);
+
+      if (validMemories.length === 0) return;
+
       await db.insert(coachingMemory).values(
-        insights.memories.map((m) => ({
+        validMemories.map((m) => ({
           memberId,
           conversationId,
           category: m.category,
@@ -359,7 +446,27 @@ This week's stats:
 
 Write 3-4 sentences summarizing the week, highlighting wins, and suggesting focus for next week.
 Keep it positive, specific, and actionable. No generic platitudes.`,
+    providerOptions: getReasoningOptions("standard", { cacheKey: "progress-report" }) as any,
   });
+
+  // Track usage
+  const member = await db.query.circleMembers.findFirst({
+    where: eq(circleMembers.id, memberId),
+    columns: { userId: true },
+  });
+  if (member?.userId) {
+    trackAIUsage({
+      userId: member.userId,
+      memberId,
+      endpoint: "inngest/weekly-progress-report",
+      feature: "session_summary",
+      modelUsed: "gpt-5.2",
+      inputTokens: result.usage?.inputTokens ?? 0,
+      outputTokens: result.usage?.outputTokens ?? 0,
+      cachedTokens: result.usage?.inputTokenDetails?.cacheReadTokens ?? 0,
+      cacheHit: (result.usage?.inputTokenDetails?.cacheReadTokens ?? 0) > 0,
+    }).catch(() => {});
+  }
 
   // Save the report
   await db.insert(progressReports).values({

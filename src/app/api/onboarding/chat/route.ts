@@ -14,6 +14,7 @@ import { getSession } from "@/lib/neon-auth";
 import { db } from "@/lib/db";
 import { onboardingProgress } from "@/lib/db/schema";
 import { aiModel, aiModelFast } from "@/lib/ai";
+import { trackAIUsage } from "@/lib/ai/usage-tracking";
 import {
   getOnboardingSchema,
   getOnboardingPhaseOrder,
@@ -755,13 +756,26 @@ export async function POST(request: Request) {
 
     // Variables to capture for database save
     const userId = session.user.id;
+    const streamStartTime = Date.now();
 
     // Stream the AI response
     const result = streamText({
       model: aiModelFast,
       system: systemPrompt,
       messages,
-      onFinish: async ({ text }) => {
+      onFinish: async ({ text, usage }) => {
+        // Track AI usage
+        trackAIUsage({
+          userId,
+          endpoint: "/api/onboarding/chat",
+          feature: "onboarding",
+          modelUsed: "gpt-5.2-chat-latest",
+          inputTokens: usage?.inputTokens ?? 0,
+          outputTokens: usage?.outputTokens ?? 0,
+          cachedTokens: usage?.inputTokenDetails?.cacheReadTokens ?? 0,
+          cacheHit: (usage?.inputTokenDetails?.cacheReadTokens ?? 0) > 0,
+          durationMs: Date.now() - streamStartTime,
+        }).catch(() => {});
         // Debug logging for AI response
         if (text.length === 0) {
           console.warn("[Onboarding] WARNING: Empty AI response!");

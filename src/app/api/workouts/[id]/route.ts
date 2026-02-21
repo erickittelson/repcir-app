@@ -9,8 +9,12 @@ import {
   savedWorkouts,
   communityPrograms,
   programWorkouts,
+  circleMembers,
+  userProfiles,
+  CONTENT_VISIBILITY,
 } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
+import { z } from "zod";
 
 export async function GET(
   request: NextRequest,
@@ -104,6 +108,25 @@ export async function GET(
           .where(eq(programWorkouts.workoutPlanId, workoutPlan.id))
       : [];
 
+    // Fetch creator profile
+    const creatorUserId = sharedWorkout?.userId || (workoutPlan?.createdByMemberId
+      ? (await db.query.circleMembers.findFirst({
+          where: eq(circleMembers.id, workoutPlan.createdByMemberId),
+          columns: { userId: true },
+        }))?.userId
+      : null);
+
+    const creatorProfile = creatorUserId
+      ? await db.query.userProfiles.findFirst({
+          where: eq(userProfiles.userId, creatorUserId),
+          columns: {
+            displayName: true,
+            handle: true,
+            profilePicture: true,
+          },
+        })
+      : null;
+
     // Deduplicate programs by ID (a workout can appear multiple times in a program across different weeks)
     const programsMap = new Map<string, { id: string; name: string }>();
     programWorkoutLinks
@@ -134,6 +157,13 @@ export async function GET(
       reviewCount: sharedWorkout?.reviewCount || 0,
       isOfficial: sharedWorkout?.isFeatured || false,
       isFeatured: sharedWorkout?.isFeatured || false,
+      creator: creatorProfile
+        ? {
+            displayName: creatorProfile.displayName || null,
+            handle: creatorProfile.handle || null,
+            profilePicture: creatorProfile.profilePicture || null,
+          }
+        : null,
       isSaved: !!savedEntry,
       exercises: workoutExercises.map((e) => ({
         id: e.id,
@@ -157,6 +187,123 @@ export async function GET(
     console.error("Error fetching workout:", error);
     return NextResponse.json(
       { error: "Failed to fetch workout" },
+      { status: 500 }
+    );
+  }
+}
+
+const updateWorkoutSchema = z.object({
+  visibility: z.enum(CONTENT_VISIBILITY),
+  description: z.string().max(500).optional(),
+});
+
+// PATCH /api/workouts/[id] - Update workout visibility
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+
+  try {
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    const validation = updateWorkoutSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json({ error: "Invalid visibility value" }, { status: 400 });
+    }
+
+    const { visibility, description } = validation.data;
+
+    // Verify the user owns this workout plan (via circle membership)
+    const plan = await db.query.workoutPlans.findFirst({
+      where: eq(workoutPlans.id, id),
+      columns: {
+        id: true,
+        createdByMemberId: true,
+        name: true,
+        description: true,
+        category: true,
+        difficulty: true,
+        estimatedDuration: true,
+      },
+    });
+
+    if (!plan) {
+      return NextResponse.json({ error: "Workout not found" }, { status: 404 });
+    }
+
+    // Check ownership: user must be the creator via their circle membership
+    if (plan.createdByMemberId) {
+      const membership = await db.query.circleMembers.findFirst({
+        where: and(
+          eq(circleMembers.id, plan.createdByMemberId),
+          eq(circleMembers.userId, session.user.id)
+        ),
+        columns: { id: true },
+      });
+
+      if (!membership) {
+        return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      }
+    }
+
+    // Update visibility (and description if provided) on workoutPlans
+    await db
+      .update(workoutPlans)
+      .set({
+        visibility,
+        ...(description !== undefined && { description }),
+        updatedAt: new Date(),
+      })
+      .where(eq(workoutPlans.id, id));
+
+    // Upsert the shared workout entry
+    const existingShared = await db.query.sharedWorkouts.findFirst({
+      where: eq(sharedWorkouts.workoutPlanId, id),
+      columns: { id: true },
+    });
+
+    const effectiveDescription = description !== undefined ? description : plan.description;
+
+    if (existingShared) {
+      // Update existing entry
+      await db
+        .update(sharedWorkouts)
+        .set({
+          visibility,
+          ...(description !== undefined && { description }),
+          updatedAt: new Date(),
+        })
+        .where(eq(sharedWorkouts.id, existingShared.id));
+    } else if (visibility !== "private") {
+      // Create new shared workout entry (was missing when created as private)
+      await db.insert(sharedWorkouts).values({
+        workoutPlanId: id,
+        userId: session.user.id,
+        title: plan.name,
+        description: effectiveDescription,
+        category: plan.category,
+        difficulty: plan.difficulty,
+        estimatedDuration: plan.estimatedDuration,
+        visibility,
+      });
+    }
+
+    return NextResponse.json({ id, visibility });
+  } catch (error) {
+    console.error("Error updating workout:", error);
+    return NextResponse.json(
+      { error: "Failed to update workout" },
       { status: 500 }
     );
   }

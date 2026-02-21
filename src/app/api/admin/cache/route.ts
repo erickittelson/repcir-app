@@ -98,6 +98,11 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userRole = session.activeCircle?.role;
+    if (userRole !== "admin" && userRole !== "owner") {
+      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+    }
+
     const url = new URL(request.url);
     const action = url.searchParams.get("action") || "expired";
 

@@ -183,6 +183,31 @@ function buildContextSummary(context: AgentContext): string {
     if (m.contextNotes) {
       parts.push(`- Average energy level: ${m.contextNotes.avgEnergy?.toFixed(1) || "Unknown"}/5`);
     }
+
+    // Workout preferences
+    if (m.workoutPreferences) {
+      const prefs = m.workoutPreferences;
+      const prefItems: string[] = [];
+      if (prefs.workoutDuration) prefItems.push(`${prefs.workoutDuration}min`);
+      if (prefs.trainingFrequency) prefItems.push(`${prefs.trainingFrequency}x/week`);
+      if (prefs.workoutDays?.length) prefItems.push(prefs.workoutDays.join(", "));
+      if (prefItems.length > 0) {
+        parts.push(`- Workout preferences: ${prefItems.join(", ")}`);
+      }
+    }
+
+    // Key coaching memories (high importance only for agent decisions)
+    if (m.coachingMemories && m.coachingMemories.length > 0) {
+      const keyMemories = m.coachingMemories
+        .filter((mem) => mem.importance >= 7)
+        .slice(0, 5);
+      if (keyMemories.length > 0) {
+        parts.push(`\nKEY COACHING MEMORIES:`);
+        keyMemories.forEach((mem) => {
+          parts.push(`- [${mem.category}] ${mem.content}`);
+        });
+      }
+    }
   }
 
   // What we've collected so far

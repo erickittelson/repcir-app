@@ -33,6 +33,7 @@ export type ActionData = z.infer<typeof actionSchema>;
 
 // Workout exercise prescription for display
 export const workoutExerciseSchema = z.object({
+  exerciseId: z.string().optional(),
   name: z.string(),
   sets: z.number(),
   reps: z.string(),
@@ -197,8 +198,8 @@ export function createGenerationPendingResponse(
 
 // Default actions for workout responses
 export const DEFAULT_WORKOUT_ACTIONS: ActionData[] = [
-  { id: "start", label: "Start Now", action: "start_workout", variant: "primary" },
-  { id: "save", label: "Save as Plan", action: "save_plan", variant: "primary" },
+  { id: "start", label: "Start Workout", action: "start_workout", variant: "primary" },
+  { id: "save", label: "Save Workout", action: "save_plan", variant: "primary" },
   { id: "modify", label: "Modify", action: "modify", variant: "outline" },
   { id: "regenerate", label: "Regenerate", action: "regenerate", variant: "outline" },
 ];

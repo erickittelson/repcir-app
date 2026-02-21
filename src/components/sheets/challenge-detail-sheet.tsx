@@ -47,10 +47,14 @@ import { toast } from "sonner";
 import { getDifficultyBrand, getCustomOrDefaultLabel } from "@/lib/difficulty-branding";
 
 interface DailyTask {
-  name: string;
+  // Standard format
+  name?: string;
   description?: string;
-  type: "workout" | "nutrition" | "mindset" | "recovery" | "custom";
-  isRequired: boolean;
+  type?: "workout" | "nutrition" | "mindset" | "recovery" | "custom";
+  isRequired?: boolean;
+  // Alternate format from some seed data
+  task?: string;
+  target?: string;
 }
 
 interface WeeklyFocus {
@@ -497,41 +501,49 @@ export function ChallengeDetailSheet({
                     Daily Requirements
                   </h3>
                   <div className="space-y-2">
-                    {challenge.dailyTasks.map((task, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-start gap-3 p-3 bg-muted/30 rounded-lg"
-                      >
+                    {challenge.dailyTasks.map((task, idx) => {
+                      // Handle both {name, type, isRequired} and {task, target} formats
+                      const taskName = task.name || task.task || "Task";
+                      const taskDesc = task.description || task.target;
+                      const taskType = task.type || "custom";
+                      const isRequired = task.isRequired ?? false;
+
+                      return (
                         <div
-                          className={cn(
-                            "h-6 w-6 rounded-full flex items-center justify-center text-xs",
-                            task.isRequired
-                              ? "bg-brand/20 text-brand"
-                              : "bg-muted text-muted-foreground"
-                          )}
+                          key={idx}
+                          className="flex items-start gap-3 p-3 bg-muted/30 rounded-lg"
                         >
-                          {getTaskTypeIcon(task.type)}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-sm">{task.name}</p>
-                            {task.isRequired && (
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] border-brand/30 text-brand"
-                              >
-                                Required
-                              </Badge>
+                          <div
+                            className={cn(
+                              "h-6 w-6 rounded-full flex items-center justify-center text-xs shrink-0",
+                              isRequired
+                                ? "bg-brand/20 text-brand"
+                                : "bg-muted text-muted-foreground"
+                            )}
+                          >
+                            {getTaskTypeIcon(taskType)}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-sm">{taskName}</p>
+                              {isRequired && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] border-brand/30 text-brand"
+                                >
+                                  Required
+                                </Badge>
+                              )}
+                            </div>
+                            {taskDesc && (
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {taskDesc}
+                              </p>
                             )}
                           </div>
-                          {task.description && (
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {task.description}
-                            </p>
-                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </section>
               )}

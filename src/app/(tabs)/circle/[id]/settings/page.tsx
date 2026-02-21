@@ -46,15 +46,10 @@ export default async function CircleSettingsPage({ params }: SettingsPageProps) 
     description: circle.description,
     imageUrl: circle.imageUrl,
     visibility: circle.visibility as "public" | "private",
-    category: circle.category,
     focusArea: circle.focusArea,
-    targetDemographic: circle.targetDemographic,
-    activityType: circle.activityType,
-    scheduleType: circle.scheduleType,
     maxMembers: circle.maxMembers,
     joinType: circle.joinType as "open" | "request" | "invite_only" | null,
     rules: (circle.rules as string[]) || [],
-    tags: (circle.tags as string[]) || [],
   };
 
   return (

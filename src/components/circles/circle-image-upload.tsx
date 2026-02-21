@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { Camera, Upload, X, Loader2, Users } from "lucide-react";
+import { Camera, X, Loader2, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { PhotoEditor } from "@/components/media/photo-editor";
 
 interface CircleImageUploadProps {
   /** Current image URL (or undefined if none) */
@@ -43,31 +44,19 @@ export function CircleImageUpload({
   const [preview, setPreview] = useState<string | null>(currentImage || null);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = useCallback(
-    async (file: File) => {
-      if (!file.type.startsWith("image/")) {
-        toast.error("Please select an image file");
-        return;
-      }
-
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error("Image must be less than 5MB");
-        return;
-      }
-
-      // Show preview immediately
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setPreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-
-      // If we have a circleId, upload to the server
+  const uploadImage = useCallback(
+    async (blob: Blob) => {
       if (circleId) {
+        // Upload to server for existing circles
         setIsUploading(true);
         try {
+          const file = new File([blob], "circle-image.jpg", {
+            type: "image/jpeg",
+          });
           const formData = new FormData();
           formData.append("file", file);
           formData.append("circleId", circleId);
@@ -96,19 +85,47 @@ export function CircleImageUpload({
           setIsUploading(false);
         }
       } else {
-        // No circleId - just use the data URL for preview and emit
-        // This is for the create flow where the circle doesn't exist yet
-        // The parent component will handle the actual upload after circle creation
-        const dataUrl = await new Promise<string>((resolve) => {
-          const r = new FileReader();
-          r.onload = (e) => resolve(e.target?.result as string);
-          r.readAsDataURL(file);
-        });
-        onImageChange(dataUrl);
+        // No circleId - create a data URL for the create flow
+        const url = URL.createObjectURL(blob);
+        setPreview(url);
+        onImageChange(url);
       }
     },
     [circleId, currentImage, onImageChange]
   );
+
+  const handleFileInput = useCallback(
+    (file: File) => {
+      if (!file.type.startsWith("image/")) {
+        toast.error("Please select an image file");
+        return;
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error("Image must be less than 10MB");
+        return;
+      }
+
+      // Open the photo editor instead of uploading directly
+      setPendingFile(file);
+      setIsEditorOpen(true);
+    },
+    []
+  );
+
+  const handleEditorSave = useCallback(
+    (editedBlob: Blob) => {
+      setPendingFile(null);
+      setIsEditorOpen(false);
+      uploadImage(editedBlob);
+    },
+    [uploadImage]
+  );
+
+  const handleEditorCancel = useCallback(() => {
+    setPendingFile(null);
+    setIsEditorOpen(false);
+  }, []);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -116,9 +133,9 @@ export function CircleImageUpload({
       setIsDragging(false);
       if (disabled) return;
       const file = e.dataTransfer.files[0];
-      if (file) handleFileSelect(file);
+      if (file) handleFileInput(file);
     },
-    [handleFileSelect, disabled]
+    [handleFileInput, disabled]
   );
 
   const handleDragOver = useCallback(
@@ -137,9 +154,13 @@ export function CircleImageUpload({
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      if (file) handleFileSelect(file);
+      if (file) handleFileInput(file);
+      // Reset input so the same file can be selected again
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     },
-    [handleFileSelect]
+    [handleFileInput]
   );
 
   const handleClick = useCallback(() => {
@@ -239,6 +260,17 @@ export function CircleImageUpload({
         >
           <X className="w-4 h-4" />
         </button>
+      )}
+
+      {/* Photo Editor */}
+      {pendingFile && (
+        <PhotoEditor
+          imageUrl={pendingFile}
+          onSave={handleEditorSave}
+          onCancel={handleEditorCancel}
+          open={isEditorOpen}
+          aspectRatio={1}
+        />
       )}
     </div>
   );

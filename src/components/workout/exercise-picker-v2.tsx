@@ -28,7 +28,22 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDebounce } from "@/hooks/use-debounce";
-import type { Exercise } from "./workout-builder";
+
+export interface Exercise {
+  id: string;
+  name: string;
+  description?: string;
+  instructions?: string;
+  category: string;
+  muscleGroups?: string[];
+  secondaryMuscles?: string[];
+  equipment?: string[];
+  difficulty?: string;
+  mechanic?: string;
+  force?: string;
+  benefits?: string[];
+  imageUrl?: string;
+}
 
 // ============================================================================
 // Filter Configuration

@@ -57,6 +57,7 @@ export async function GET(
       const planExercises = await db
         .select({
           id: workoutPlanExercises.id,
+          exerciseId: workoutPlanExercises.exerciseId,
           name: exercises.name,
           sets: workoutPlanExercises.sets,
           reps: workoutPlanExercises.reps,
@@ -72,8 +73,9 @@ export async function GET(
         .where(eq(workoutPlanExercises.planId, job.resultPlanId))
         .orderBy(workoutPlanExercises.order);
 
-      // Also return the full result data from the job (includes warmup, cooldown, etc.)
+      // Also return the full result data from the job (includes warmup, cooldown, memberPrescriptions, etc.)
       const resultData = (job.resultData || {}) as Record<string, unknown>;
+      const resultExercises = (resultData.exercises as Array<Record<string, unknown>>) || [];
 
       return NextResponse.json({
         status: "complete",
@@ -81,16 +83,25 @@ export async function GET(
         workout: {
           name: plan?.name || resultData.name || "Generated Workout",
           description: plan?.description || resultData.description || "",
-          exercises: planExercises.map((ex) => ({
-            name: ex.name,
-            sets: ex.sets || 3,
-            reps: ex.reps || "8-12",
-            restSeconds: ex.restSeconds || 60,
-            notes: ex.notes,
-            structureType: ex.groupType || null,
-            supersetGroup: ex.groupId ? parseInt(ex.groupId.replace("S", "")) : null,
-            rxWeights: ex.rxWeights || null,
-          })),
+          exercises: planExercises.map((ex, idx) => {
+            // Merge memberPrescriptions from AI result data
+            const resultEx = resultExercises.find(
+              (re) => (re.name as string)?.toLowerCase() === ex.name?.toLowerCase()
+            ) || resultExercises[idx];
+
+            return {
+              exerciseId: ex.exerciseId,
+              name: ex.name,
+              sets: ex.sets || 3,
+              reps: ex.reps || "8-12",
+              restSeconds: ex.restSeconds || 60,
+              notes: ex.notes,
+              structureType: ex.groupType || null,
+              supersetGroup: ex.groupId ? parseInt(ex.groupId.replace("S", "")) : null,
+              rxWeights: ex.rxWeights || null,
+              memberPrescriptions: (resultEx?.memberPrescriptions as Array<Record<string, unknown>>) || undefined,
+            };
+          }),
           warmup: (resultData.warmup as string[]) || [],
           cooldown: (resultData.cooldown as string[]) || [],
           estimatedDuration: plan?.estimatedDuration || (resultData.estimatedDuration as number) || 45,

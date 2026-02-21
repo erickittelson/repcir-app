@@ -174,6 +174,7 @@ export async function triggerWorkoutGenerationFromChat(
     targetType?: "individual" | "circle" | "selected_members";
     workoutType?: string;
     workoutSections?: Array<{ workoutType: string; label?: string; order: number }>;
+    focus?: string;
     intensity?: string;
     targetDuration?: number;
     goalIds?: string[];

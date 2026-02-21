@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { getSession } from "@/lib/neon-auth";
 import { DashboardSection } from "./dashboard-section";
 import { DashboardSkeleton } from "./dashboard-skeleton";
+import { CirclesSection } from "./circles-section";
 import { UnifiedFeedWrapper } from "./unified-feed-wrapper";
 import { db } from "@/lib/db";
 import { userProfiles } from "@/lib/db/schema";
@@ -40,6 +41,11 @@ export default async function HomePage() {
       {/* Health metrics strip */}
       <Suspense fallback={<DashboardSkeleton />}>
         <DashboardSection session={session} />
+      </Suspense>
+
+      {/* Your circles */}
+      <Suspense>
+        <CirclesSection userId={session.user.id} />
       </Suspense>
 
       {/* Social feed */}

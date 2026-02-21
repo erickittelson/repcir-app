@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
 import {
   Home,
   Plus,
-  Users,
   User,
   Sparkles,
   Dumbbell,
@@ -19,11 +18,11 @@ interface TabItem {
   isAction?: boolean;
 }
 
-// Navigation: Home (Feed) | Circles | Log (FAB) | Workouts | You
+// Navigation: Home (Feed) | Discover | Log (FAB) | Workouts | You
 // Workouts tab: create, publish, and manage workout plans
 const tabs: TabItem[] = [
   { href: "/", icon: Home, label: "Home" },
-  { href: "/circles", icon: Users, label: "Circles" },
+  { href: "/discover", icon: Sparkles, label: "Discover" },
   { href: "#log", icon: Plus, label: "Log", isAction: true },
   { href: "/workouts", icon: Dumbbell, label: "Workouts" },
   { href: "/you", icon: User, label: "You" },

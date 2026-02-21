@@ -197,5 +197,6 @@ export function calculateAllRxWeights(
 
 /** Check if gender-Rx prescription should be used (>3 members) */
 export function shouldUseGenderRx(memberCount: number): boolean {
-  return memberCount > 3;
+  // Uses INDIVIDUAL_RX_THRESHOLD from workout contract (currently 3)
+  return memberCount > 3; // Groups <= 3 get individual prescriptions from PRs
 }

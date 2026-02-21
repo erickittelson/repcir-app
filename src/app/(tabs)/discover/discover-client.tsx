@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useBilling } from "@/hooks/use-billing";
 import { UpgradeSheet } from "@/components/billing/upgrade-sheet";
 import { Card, CardContent } from "@/components/ui/card";
@@ -211,6 +212,11 @@ interface DiscoverPageProps {
     estimatedDuration?: number;
     saveCount: number;
     avgRating?: number;
+    creator?: {
+      displayName?: string;
+      handle?: string;
+      profilePicture?: string;
+    };
     userRelationship?: WorkoutUserRelationship;
   }>;
 }
@@ -1040,6 +1046,22 @@ export function DiscoverPage({
                             )}
                           </div>
                           <h3 className="font-semibold">{workout.title}</h3>
+                          {workout.creator && (workout.creator.displayName || workout.creator.handle) && (
+                            <div className="flex items-center gap-1.5 mt-1" onClick={(e) => e.stopPropagation()}>
+                              <Avatar className="h-4 w-4">
+                                <AvatarImage src={workout.creator.profilePicture} />
+                                <AvatarFallback className="text-[8px] bg-muted">
+                                  {(workout.creator.displayName || workout.creator.handle || "?").charAt(0).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <Link
+                                href={`/@${workout.creator.handle || ""}`}
+                                className="text-xs text-muted-foreground hover:text-brand transition-colors"
+                              >
+                                {workout.creator.displayName || `@${workout.creator.handle}`}
+                              </Link>
+                            </div>
+                          )}
                           {workout.description && (
                             <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
                               {workout.description}

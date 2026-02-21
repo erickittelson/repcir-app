@@ -25,6 +25,7 @@ import {
 import { eq, and, sql, desc } from "drizzle-orm";
 import { embed } from "ai";
 import { openai } from "@ai-sdk/openai";
+import { calculateStreak, STREAK_MILESTONES } from "@/lib/streak";
 
 // ===========================================
 // Goal Events
@@ -180,10 +181,9 @@ export const onWorkoutCompleted = inngest.createFunction(
       data: { memberId: newRow.member_id },
     });
 
-    // Check for streak milestones
+    // Check for streak milestones and persist to snapshot
     if (member.userId) {
       const streakInfo = await step.run("check-streak", async () => {
-        // Count consecutive days with completed workouts
         const recentWorkouts = await db
           .select({ date: workoutSessions.date })
           .from(workoutSessions)
@@ -194,41 +194,43 @@ export const onWorkoutCompleted = inngest.createFunction(
             )
           )
           .orderBy(desc(workoutSessions.date))
-          .limit(400); // Check up to ~1 year
+          .limit(400);
 
-        if (recentWorkouts.length === 0) return { streak: 0 };
+        if (recentWorkouts.length === 0) return { current: 0, longest: 0 };
 
-        // Calculate streak
-        let streak = 1;
-        const dates = recentWorkouts.map((w) => new Date(w.date).toDateString());
-        const uniqueDates = [...new Set(dates)];
+        return calculateStreak(recentWorkouts.map((w) => w.date));
+      });
 
-        for (let i = 1; i < uniqueDates.length; i++) {
-          const current = new Date(uniqueDates[i - 1]);
-          const prev = new Date(uniqueDates[i]);
-          const diffDays = Math.floor(
-            (current.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24)
-          );
+      // Persist streak to snapshot
+      await step.run("update-streak-snapshot", async () => {
+        const snapshot = await db.query.memberContextSnapshot.findFirst({
+          where: eq(memberContextSnapshot.memberId, newRow.member_id),
+          columns: { longestStreak: true },
+        });
 
-          if (diffDays === 1) {
-            streak++;
-          } else {
-            break;
-          }
-        }
+        const longestStreak = Math.max(
+          streakInfo.current,
+          snapshot?.longestStreak ?? 0
+        );
 
-        return { streak };
+        await db
+          .update(memberContextSnapshot)
+          .set({
+            currentStreak: streakInfo.current,
+            longestStreak,
+            lastUpdated: new Date(),
+          })
+          .where(eq(memberContextSnapshot.memberId, newRow.member_id));
       });
 
       // Send streak milestone notification for key milestones
-      const milestones = [7, 14, 30, 50, 100, 365];
-      if (milestones.includes(streakInfo.streak)) {
+      if (STREAK_MILESTONES.includes(streakInfo.current)) {
         await step.sendEvent("notify-streak", {
           name: "notification/streak-milestone",
           data: {
             userId: member.userId,
             memberId: newRow.member_id,
-            streakDays: streakInfo.streak,
+            streakDays: streakInfo.current,
           },
         });
       }

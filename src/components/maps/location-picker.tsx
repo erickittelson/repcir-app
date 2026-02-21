@@ -224,14 +224,14 @@ function LocationPickerInner({
 
       {/* Map container */}
       <div
-        className="relative rounded-lg overflow-hidden border border-border"
-        style={{ height }}
+        className="relative rounded-lg overflow-hidden border border-border aspect-square"
+        style={height ? { height } : undefined}
       >
         <Map
           id="location-picker"
           defaultCenter={center}
           defaultZoom={value ? SELECTED_ZOOM : defaultZoom}
-          gestureHandling="greedy"
+          gestureHandling="cooperative"
           disableDefaultUI={true}
           mapId="location-picker"
           onClick={handleMapClick}

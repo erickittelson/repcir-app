@@ -74,6 +74,8 @@ import {
 import { toast } from "sonner";
 import Link from "next/link";
 import InteractiveWorkoutGenerator from "@/components/workout/InteractiveWorkoutGenerator";
+import { ExerciseDetailDialog } from "@/components/workout/exercise-detail-dialog";
+import { WORKOUT_CATEGORIES, DIFFICULTY_LEVELS } from "@/lib/workout-contract";
 
 interface Exercise {
   id: string;
@@ -718,6 +720,9 @@ export default function WorkoutBuilderPage() {
             duration: e.duration,
             restBetweenSets: e.restBetweenSets,
             notes: e.notes,
+            supersetGroup: e.groupId ? parseInt(e.groupId.replace(/\D/g, "")) || null : null,
+            structureType: e.groupType || undefined,
+            memberPrescriptions: e.memberPrescriptions || undefined,
           }))
         );
       }
@@ -1043,6 +1048,8 @@ export default function WorkoutBuilderPage() {
             duration: ex.duration,
             restBetweenSets: ex.restBetweenSets,
             notes: ex.notes,
+            groupId: ex.supersetGroup != null ? `S${ex.supersetGroup}` : null,
+            groupType: ex.structureType || null,
           })),
         }),
       });
@@ -1138,11 +1145,11 @@ export default function WorkoutBuilderPage() {
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="strength">Strength</SelectItem>
-                    <SelectItem value="cardio">Cardio</SelectItem>
-                    <SelectItem value="hiit">HIIT</SelectItem>
-                    <SelectItem value="mixed">Mixed</SelectItem>
-                    <SelectItem value="flexibility">Flexibility</SelectItem>
+                    {WORKOUT_CATEGORIES.map((cat) => (
+                      <SelectItem key={cat} value={cat} className="capitalize">
+                        {cat === "hiit" ? "HIIT" : cat.charAt(0).toUpperCase() + cat.slice(1)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1153,9 +1160,11 @@ export default function WorkoutBuilderPage() {
                     <SelectValue placeholder="Select difficulty" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="beginner">Beginner</SelectItem>
-                    <SelectItem value="intermediate">Intermediate</SelectItem>
-                    <SelectItem value="advanced">Advanced</SelectItem>
+                    {DIFFICULTY_LEVELS.map((level) => (
+                      <SelectItem key={level} value={level} className="capitalize">
+                        {level.charAt(0).toUpperCase() + level.slice(1)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -2526,150 +2535,25 @@ export default function WorkoutBuilderPage() {
       </Dialog>
 
       {/* Exercise Detail Modal */}
-      <Dialog open={!!selectedExercise} onOpenChange={() => setSelectedExercise(null)}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          {selectedExercise && (
-            <>
-              {selectedExercise.imageUrl && (
-                <div className="relative w-full h-48 bg-muted rounded-lg overflow-hidden -mt-2 mb-2">
-                  <img
-                    src={selectedExercise.imageUrl}
-                    alt={selectedExercise.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = "none";
-                    }}
-                  />
-                </div>
-              )}
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  {selectedExercise.name}
-                  {selectedExercise.isCustom && (
-                    <Badge variant="secondary">Custom</Badge>
-                  )}
-                </DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                {/* Category, difficulty, force, mechanic */}
-                <div className="flex flex-wrap gap-2">
-                  <Badge>{selectedExercise.category}</Badge>
-                  {selectedExercise.difficulty && (
-                    <Badge variant="outline">{selectedExercise.difficulty}</Badge>
-                  )}
-                  {selectedExercise.force && (
-                    <Badge variant="outline" className="capitalize">{selectedExercise.force}</Badge>
-                  )}
-                  {selectedExercise.mechanic && (
-                    <Badge variant="outline" className="capitalize">{selectedExercise.mechanic}</Badge>
-                  )}
-                </div>
-
-                {selectedExercise.description && (
-                  <div>
-                    <h4 className="font-medium mb-1">Description</h4>
-                    <p className="text-sm text-muted-foreground">
-                      {selectedExercise.description}
-                    </p>
-                  </div>
-                )}
-
-                {/* Benefits - What this develops */}
-                {selectedExercise.benefits && selectedExercise.benefits.length > 0 && (
-                  <div>
-                    <h4 className="font-medium mb-1 text-green-600 dark:text-green-400">What This Develops</h4>
-                    <div className="flex flex-wrap gap-1">
-                      {selectedExercise.benefits.map((benefit) => (
-                        <Badge key={benefit} className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 capitalize">
-                          {benefit}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Progressions - What this leads to */}
-                {selectedExercise.progressions && selectedExercise.progressions.length > 0 && (
-                  <div>
-                    <h4 className="font-medium mb-1 text-blue-600 dark:text-blue-400">What This Leads To</h4>
-                    <div className="flex flex-wrap gap-1">
-                      {selectedExercise.progressions.map((prog) => (
-                        <Badge key={prog} className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                          {prog}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {selectedExercise.instructions && (
-                  <div>
-                    <h4 className="font-medium mb-1">How To Do It</h4>
-                    <p className="text-sm text-muted-foreground whitespace-pre-line">
-                      {selectedExercise.instructions}
-                    </p>
-                  </div>
-                )}
-
-                {/* Primary muscles */}
-                {selectedExercise.muscleGroups && selectedExercise.muscleGroups.length > 0 && (
-                  <div>
-                    <h4 className="font-medium mb-1">Primary Muscles</h4>
-                    <div className="flex flex-wrap gap-1">
-                      {selectedExercise.muscleGroups.map((muscle) => (
-                        <Badge key={muscle} variant="secondary" className="capitalize">
-                          {muscle}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Secondary muscles */}
-                {selectedExercise.secondaryMuscles && selectedExercise.secondaryMuscles.length > 0 && (
-                  <div>
-                    <h4 className="font-medium mb-1 text-muted-foreground">Secondary Muscles</h4>
-                    <div className="flex flex-wrap gap-1">
-                      {selectedExercise.secondaryMuscles.map((muscle) => (
-                        <Badge key={muscle} variant="outline" className="capitalize text-muted-foreground">
-                          {muscle}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {selectedExercise.equipment && selectedExercise.equipment.length > 0 && (
-                  <div>
-                    <h4 className="font-medium mb-1">Equipment</h4>
-                    <div className="flex flex-wrap gap-1">
-                      {selectedExercise.equipment.map((eq) => (
-                        <Badge key={eq} variant="outline" className="capitalize">
-                          {eq}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Add to Workout Button */}
-                <div className="pt-2 border-t">
-                  <Button
-                    className="w-full"
-                    onClick={() => {
-                      addExercise(selectedExercise);
-                      setSelectedExercise(null);
-                    }}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add to Workout
-                  </Button>
-                </div>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      <ExerciseDetailDialog
+        exercise={selectedExercise}
+        open={!!selectedExercise}
+        onOpenChange={(open) => !open && setSelectedExercise(null)}
+        action={
+          selectedExercise && (
+            <Button
+              className="w-full"
+              onClick={() => {
+                addExercise(selectedExercise);
+                setSelectedExercise(null);
+              }}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add to Workout
+            </Button>
+          )
+        }
+      />
 
       {/* Interactive Workout Generator */}
       {showInteractiveGenerator && (

@@ -116,9 +116,54 @@ export async function PUT(
           duration: ex.duration,
           restBetweenSets: ex.restBetweenSets,
           notes: ex.notes,
+          groupId: ex.groupId || null,
+          groupType: ex.groupType || null,
         }))
       );
     }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error updating workout plan:", error);
+    return NextResponse.json(
+      { error: "Failed to update workout plan" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await auth();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const body = await request.json();
+
+    // Verify plan belongs to this circle
+    const existingPlan = await db.query.workoutPlans.findFirst({
+      where: and(
+        eq(workoutPlans.id, id),
+        eq(workoutPlans.circleId, session.circleId)
+      ),
+    });
+
+    if (!existingPlan) {
+      return NextResponse.json({ error: "Plan not found" }, { status: 404 });
+    }
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (body.isDraft === false) updates.isDraft = false;
+
+    await db
+      .update(workoutPlans)
+      .set(updates)
+      .where(eq(workoutPlans.id, id));
 
     return NextResponse.json({ success: true });
   } catch (error) {

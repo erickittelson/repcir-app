@@ -35,8 +35,18 @@ import type {
   TargetType,
   MemberContextForForm,
 } from "@/lib/types/workout-config";
+import {
+  PRIMARY_FOCUS,
+  EMPHASIS_BY_SPLIT,
+  MAX_EMPHASIS,
+  INTENSITY_LEVELS,
+  DURATION_PRESETS,
+  DEFAULT_PRIMARY_FOCUS,
+  DEFAULT_INTENSITY,
+  DEFAULT_DURATION,
+} from "@/lib/workout-contract";
 
-// Workout type options
+// Workout type options (UI-specific: includes icons not in the contract)
 const WORKOUT_TYPES: Array<{
   value: WorkoutType;
   label: string;
@@ -51,19 +61,6 @@ const WORKOUT_TYPES: Array<{
   { value: "superset", label: "Superset", icon: Shuffle, description: "Paired exercises" },
   { value: "circuit", label: "Circuit", icon: RotateCcw, description: "Station rotation" },
   { value: "intervals", label: "Intervals", icon: Waves, description: "Work / rest" },
-];
-
-const DURATION_PRESETS = [15, 30, 45, 60, 90];
-
-const INTENSITY_OPTIONS: Array<{
-  value: WorkoutIntensity;
-  label: string;
-  color: string;
-}> = [
-  { value: "light", label: "Light", color: "text-green-500 border-green-500/30 bg-green-500/10" },
-  { value: "moderate", label: "Moderate", color: "text-yellow-500 border-yellow-500/30 bg-yellow-500/10" },
-  { value: "hard", label: "Hard", color: "text-orange-500 border-orange-500/30 bg-orange-500/10" },
-  { value: "max", label: "Max", color: "text-red-500 border-red-500/30 bg-red-500/10" },
 ];
 
 // Selected member with source info
@@ -126,11 +123,22 @@ export function WorkoutConfigForm({
     return [{ workoutType: sugType, order: 0 }];
   });
 
+  // Focus: primary split (single select) + optional emphasis muscles
+  const [primaryFocus, setPrimaryFocus] = useState<string>(() => {
+    if (defaults?.defaultFocus) {
+      const focus = defaults.defaultFocus.toLowerCase().replace(/\s+/g, "_");
+      const match = PRIMARY_FOCUS.find((o) => o.value === focus);
+      if (match) return match.value;
+    }
+    return DEFAULT_PRIMARY_FOCUS;
+  });
+  const [emphasisAreas, setEmphasisAreas] = useState<string[]>([]);
+
   // Duration, intensity, location, warmup/cooldown
-  const [duration, setDuration] = useState<number>(defaults?.defaultDuration || 30);
+  const [duration, setDuration] = useState<number>(defaults?.defaultDuration || DEFAULT_DURATION);
   const [customDuration, setCustomDuration] = useState("");
   const [intensity, setIntensity] = useState<WorkoutIntensity>(
-    (defaults?.defaultIntensity as WorkoutIntensity) || "moderate"
+    (defaults?.defaultIntensity as WorkoutIntensity) || DEFAULT_INTENSITY
   );
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [includeWarmup, setIncludeWarmup] = useState(true);
@@ -325,6 +333,7 @@ export function WorkoutConfigForm({
       ...(circleId && { circleId }),
       workoutSections,
       duration,
+      focusAreas: [primaryFocus, ...emphasisAreas],
       intensity,
       includeWarmup,
       includeCooldown,
@@ -657,6 +666,75 @@ export function WorkoutConfigForm({
           )}
         </div>
 
+        {/* Focus: Primary Split */}
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">Focus</p>
+          <div className="flex flex-wrap gap-2">
+            {PRIMARY_FOCUS.map(({ value, label }) => (
+              <button
+                key={value}
+                onClick={() => {
+                  setPrimaryFocus(value);
+                  setEmphasisAreas([]); // Reset emphasis when split changes
+                }}
+                disabled={disabled}
+                className={cn(
+                  "px-3 py-2 rounded-lg text-xs font-medium border transition-all",
+                  "min-h-[36px] touch-manipulation",
+                  primaryFocus === value
+                    ? "border-brand bg-brand/10 text-brand"
+                    : "border-border/60 bg-card text-muted-foreground hover:border-brand/30"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Emphasis: Optional muscle group emphasis within the selected split */}
+        {EMPHASIS_BY_SPLIT[primaryFocus] && (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">
+              Emphasize <span className="normal-case">(optional)</span>
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {EMPHASIS_BY_SPLIT[primaryFocus].map(({ value, label }) => {
+                const isSelected = emphasisAreas.includes(value);
+                return (
+                  <button
+                    key={value}
+                    onClick={() => {
+                      setEmphasisAreas((prev) =>
+                        isSelected
+                          ? prev.filter((v) => v !== value)
+                          : prev.length >= MAX_EMPHASIS
+                            ? prev
+                            : [...prev, value]
+                      );
+                    }}
+                    disabled={disabled}
+                    className={cn(
+                      "px-3 py-2 rounded-lg text-xs font-medium border transition-all",
+                      "min-h-[36px] touch-manipulation",
+                      isSelected
+                        ? "border-brand bg-brand/10 text-brand"
+                        : "border-border/60 bg-card text-muted-foreground hover:border-brand/30"
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              {emphasisAreas.length === 0
+                ? "No emphasis — AI will balance across the selected focus"
+                : `Emphasizing ${emphasisAreas.length}/${MAX_EMPHASIS} areas`}
+            </p>
+          </div>
+        )}
+
         {/* Duration */}
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground uppercase tracking-wider">Duration</p>
@@ -802,10 +880,10 @@ export function WorkoutConfigForm({
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground uppercase tracking-wider">Intensity</p>
           <div className="flex gap-2">
-            {INTENSITY_OPTIONS.map((opt) => (
+            {INTENSITY_LEVELS.map((opt) => (
               <button
                 key={opt.value}
-                onClick={() => setIntensity(opt.value)}
+                onClick={() => setIntensity(opt.value as WorkoutIntensity)}
                 disabled={disabled}
                 className={cn(
                   "flex-1 py-2.5 rounded-lg text-sm font-medium border transition-all",

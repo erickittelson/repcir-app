@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Sheet,
   SheetContent,
@@ -79,6 +80,11 @@ interface WorkoutDetail {
   isOfficial?: boolean;
   isFeatured?: boolean;
   creatorName?: string;
+  creator?: {
+    displayName?: string | null;
+    handle?: string | null;
+    profilePicture?: string | null;
+  } | null;
   // Program association
   programs?: Array<{ id: string; name: string }>;
 }
@@ -295,7 +301,23 @@ export function WorkoutDetailSheet({
                       )}
                     </div>
                     <SheetTitle className="text-xl">{workout.title}</SheetTitle>
-                    {workout.creatorName && (
+                    {workout.creator && (workout.creator.displayName || workout.creator.handle) && (
+                      <Link
+                        href={`/@${workout.creator.handle || ""}`}
+                        className="flex items-center gap-2 mt-2 group"
+                      >
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage src={workout.creator.profilePicture || undefined} />
+                          <AvatarFallback className="text-[10px] bg-muted">
+                            {(workout.creator.displayName || workout.creator.handle || "?").charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm text-muted-foreground group-hover:text-brand transition-colors">
+                          {workout.creator.displayName || `@${workout.creator.handle}`}
+                        </span>
+                      </Link>
+                    )}
+                    {!workout.creator && workout.creatorName && (
                       <p className="text-sm text-muted-foreground mt-1">
                         by {workout.creatorName}
                       </p>

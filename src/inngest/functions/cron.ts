@@ -28,6 +28,7 @@ import {
   exercises,
 } from "@/lib/db/schema";
 import { sql, lt, and, eq, isNull, or, inArray, desc } from "drizzle-orm";
+import { calculateStreak } from "@/lib/streak";
 import { clearExpiredCache } from "@/lib/ai/cache";
 
 // Retention periods in days
@@ -444,6 +445,22 @@ async function updateMemberSnapshot(memberId: string): Promise<void> {
         new Date(w.date) >= new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
     ).length / 2;
 
+  // Calculate workout streak from completed sessions
+  const completedDates = recentWorkouts
+    .filter((w) => w.status === "completed")
+    .map((w) => w.date);
+  const streakData = calculateStreak(completedDates);
+
+  // Get existing longest streak to preserve it
+  const existingSnapshot = await dbRead.query.memberContextSnapshot.findFirst({
+    where: eq(memberContextSnapshot.memberId, memberId),
+    columns: { longestStreak: true },
+  });
+  const longestStreak = Math.max(
+    streakData.longest,
+    existingSnapshot?.longestStreak ?? 0
+  );
+
   // Upsert snapshot
   await db
     .insert(memberContextSnapshot)
@@ -473,6 +490,8 @@ async function updateMemberSnapshot(memberId: string): Promise<void> {
       })),
       muscleRecoveryStatus,
       weeklyWorkoutAvg: weeklyWorkoutAvg.toString(),
+      currentStreak: streakData.current,
+      longestStreak,
       lastWorkoutDate: recentWorkouts[0]?.endTime || null,
       lastUpdated: new Date(),
       snapshotVersion: 1,
@@ -485,6 +504,8 @@ async function updateMemberSnapshot(memberId: string): Promise<void> {
         personalRecords: sql`EXCLUDED.personal_records`,
         muscleRecoveryStatus: sql`EXCLUDED.muscle_recovery_status`,
         weeklyWorkoutAvg: sql`EXCLUDED.weekly_workout_avg`,
+        currentStreak: sql`EXCLUDED.current_streak`,
+        longestStreak: sql`EXCLUDED.longest_streak`,
         lastWorkoutDate: sql`EXCLUDED.last_workout_date`,
         lastUpdated: new Date(),
         snapshotVersion: sql`${memberContextSnapshot.snapshotVersion} + 1`,
@@ -548,6 +569,67 @@ function calculateMuscleRecovery(
 }
 
 /**
+ * Batch Member Snapshot Update
+ *
+ * Processes an array of member IDs in batches of 10.
+ * Triggered by triggerBatchSnapshotUpdate() from application code.
+ */
+export const batchSnapshotUpdateFunction = inngest.createFunction(
+  {
+    id: "member-batch-snapshot-update",
+    name: "Batch Member Snapshot Update",
+    retries: 2,
+    concurrency: { limit: 3 },
+  },
+  { event: "member/batch-snapshot-update" },
+  async ({ event, step, logger }) => {
+    const { memberIds } = event.data;
+
+    if (!memberIds || memberIds.length === 0) {
+      return { success: true, updated: 0, errors: 0, message: "No member IDs provided" };
+    }
+
+    logger.info("Starting batch snapshot update", { count: memberIds.length });
+
+    let updated = 0;
+    let errors = 0;
+
+    const batchSize = 10;
+    for (let i = 0; i < memberIds.length; i += batchSize) {
+      const batch = memberIds.slice(i, i + batchSize);
+
+      const results = await step.run(`update-batch-${i}`, async () => {
+        const batchResults = await Promise.allSettled(
+          batch.map((memberId: string) => updateMemberSnapshot(memberId))
+        );
+
+        return batchResults.map((r, idx) => ({
+          memberId: batch[idx],
+          success: r.status === "fulfilled",
+          error: r.status === "rejected" ? (r.reason as Error)?.message : undefined,
+        }));
+      });
+
+      for (const result of results) {
+        if (result.success) {
+          updated++;
+        } else {
+          errors++;
+          logger.warn("Failed to update snapshot in batch", {
+            memberId: result.memberId,
+            error: result.error,
+          });
+        }
+      }
+    }
+
+    logger.info("Batch snapshot update completed", { updated, errors, total: memberIds.length });
+
+    return { success: true, updated, errors, total: memberIds.length };
+  }
+);
+
+/**
  * Export all cron functions for registration
  */
 export const cronFunctions = [
@@ -555,4 +637,5 @@ export const cronFunctions = [
   snapshotsRefreshCron,
   cacheCleanupCron,
   aggregateRefreshCron,
+  batchSnapshotUpdateFunction,
 ];

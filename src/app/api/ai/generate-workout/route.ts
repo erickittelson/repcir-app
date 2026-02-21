@@ -16,6 +16,7 @@ import {
   aiModelPro,
   type ReasoningLevel,
   REASONING_TIMEOUTS,
+  getTaskOptions,
 } from "@/lib/ai";
 import { getFastWorkoutContext, getFastMemberContext, contextToPrompt, type FastMemberContext } from "@/lib/ai/fast-context";
 import { getCachedResponse, setCachedResponse, generateCacheKey } from "@/lib/ai/cache";
@@ -1046,6 +1047,7 @@ Requirements:
 10. Provide memberPrescriptions for each exercise
 
 Generate a cohesive, purposeful workout with ${recommendedExercises}+ exercises.`,
+        providerOptions: getTaskOptions("simple_workout") as any,
       });
 
       workout = workoutResult.object;
@@ -1080,6 +1082,7 @@ Think deeply about:
 Your exercisePlan array MUST have at least ${recommendedExercises} exercises!
 
 Provide your detailed analysis and exercise plan.`,
+        providerOptions: getTaskOptions("multi_member_workout") as any,
       });
 
       planningResultObj = planningResult.object;
@@ -1112,9 +1115,11 @@ Generate the final workout structure. Ensure:
 10. Include time calculations in the reasoning field to verify the workout fits the target duration
 
 The workout should feel cohesive and purposeful with ${recommendedExercises}+ exercises, not just a random collection.`,
+        providerOptions: getTaskOptions("personalized_workout") as any,
       });
 
       workout = workoutResult.object;
+      const workoutUsage = workoutResult.usage;
 
       const generationTimeMs = Math.round(performance.now() - generationStart);
 
@@ -1125,23 +1130,23 @@ The workout should feel cohesive and purposeful with ${recommendedExercises}+ ex
         reasoningLevel,
         generationTimeMs,
       });
-    }
-    }
 
-    // Track AI usage (fire and forget)
-    if (!cacheHit) {
+      // Track AI usage (fire and forget)
       trackAIUsage({
         userId: session.user.id,
         memberId: memberIds?.[0],
         endpoint: "ai/generate-workout",
+        feature: "workout_generation",
         modelUsed: "gpt-5.2",
         reasoningLevel,
-        inputTokens: 0, // generateObject doesn't expose usage in the same way
-        outputTokens: 0,
-        durationMs: Math.round(performance.now() - generationStart),
-        cacheHit: false,
+        inputTokens: workoutUsage?.inputTokens ?? 0,
+        outputTokens: workoutUsage?.outputTokens ?? 0,
+        cachedTokens: workoutUsage?.inputTokenDetails?.cacheReadTokens ?? 0,
+        cacheHit: (workoutUsage?.inputTokenDetails?.cacheReadTokens ?? 0) > 0,
+        durationMs: generationTimeMs,
         metadata: { exerciseCount: workout.exercises.length, duration: effectiveDuration },
       }).catch(() => {});
+    }
     }
 
     // Fix invalid supersets - supersets must have at least 2 exercises
@@ -1324,6 +1329,6 @@ The workout should feel cohesive and purposeful with ${recommendedExercises}+ ex
     });
   } catch (error) {
     console.error("Error generating workout:", error);
-    return new Response(`Failed to generate workout: ${error instanceof Error ? error.message : 'Unknown error'}`, { status: 500 });
+    return new Response("Failed to generate workout", { status: 500 });
   }
 }

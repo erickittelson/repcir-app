@@ -4,11 +4,46 @@ import { db } from "@/lib/db";
 import {
   challenges,
   challengeParticipants,
-  challengeProgress,
   userProfiles,
   badgeDefinitions,
 } from "@/lib/db/schema";
 import { eq, and, desc } from "drizzle-orm";
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+
+  try {
+    const challenge = await db.query.challenges.findFirst({
+      where: eq(challenges.id, id),
+      columns: { createdByUserId: true },
+    });
+
+    if (!challenge) {
+      return NextResponse.json({ error: "Challenge not found" }, { status: 404 });
+    }
+
+    if (challenge.createdByUserId !== session.user.id) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
+
+    // Delete participants (cascade will handle challengeProgress)
+    await db.delete(challengeParticipants).where(eq(challengeParticipants.challengeId, id));
+    await db.delete(challenges).where(eq(challenges.id, id));
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting challenge:", error);
+    return NextResponse.json({ error: "Failed to delete challenge" }, { status: 500 });
+  }
+}
 
 export async function GET(
   request: NextRequest,

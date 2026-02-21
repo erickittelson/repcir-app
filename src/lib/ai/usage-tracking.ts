@@ -6,12 +6,25 @@
 import { db } from "@/lib/db";
 import { aiUsageTracking, aiQuotas } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { estimateCost } from "./config";
+import { estimateCostDetailed } from "./config";
+
+/** Feature categories for cost-per-feature reporting */
+export type AIFeature =
+  | "chat"
+  | "workout_generation"
+  | "caption"
+  | "milestones"
+  | "recommendations"
+  | "parse_workout"
+  | "onboarding"
+  | "coaching_memory"
+  | "session_summary";
 
 interface TrackUsageParams {
   userId: string;
   memberId?: string;
   endpoint: string;
+  feature: AIFeature;
   modelUsed: string;
   reasoningLevel?: string;
   inputTokens: number;
@@ -28,11 +41,13 @@ interface TrackUsageParams {
  */
 export async function trackAIUsage(params: TrackUsageParams): Promise<void> {
   try {
-    const totalCost = estimateCost(
-      params.inputTokens,
+    const cachedTokens = params.cachedTokens ?? 0;
+    const uncachedInputTokens = Math.max(0, params.inputTokens - cachedTokens);
+    const totalCost = estimateCostDetailed(
+      uncachedInputTokens,
+      cachedTokens,
       params.outputTokens,
-      params.modelUsed,
-      (params.cachedTokens ?? 0) > 0
+      params.modelUsed
     );
 
     // Insert usage record
@@ -40,6 +55,7 @@ export async function trackAIUsage(params: TrackUsageParams): Promise<void> {
       userId: params.userId,
       memberId: params.memberId || null,
       endpoint: params.endpoint,
+      feature: params.feature,
       modelUsed: params.modelUsed,
       reasoningLevel: params.reasoningLevel || null,
       inputTokens: params.inputTokens,

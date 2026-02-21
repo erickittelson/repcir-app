@@ -640,10 +640,13 @@ Remember to:
           userId: session.user.id,
           memberId,
           endpoint: "ai/chat",
+          feature: "chat",
           modelUsed: deepThinking || mode !== "general" ? "gpt-5.2" : "gpt-5.2-chat-latest",
           reasoningLevel: deepThinking ? "standard" : "none",
-          inputTokens: usage?.promptTokens ?? 0,
-          outputTokens: usage?.completionTokens ?? 0,
+          inputTokens: usage?.inputTokens ?? 0,
+          outputTokens: usage?.outputTokens ?? 0,
+          cachedTokens: usage?.inputTokenDetails?.cacheReadTokens ?? 0,
+          cacheHit: (usage?.inputTokenDetails?.cacheReadTokens ?? 0) > 0,
         }).catch(() => {});
 
         // Trigger coaching memory extraction in background (every 5th message)

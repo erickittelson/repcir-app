@@ -42,6 +42,11 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userRole = session.activeCircle?.role;
+    if (userRole !== "admin" && userRole !== "owner") {
+      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+    }
+
     const body = await request.json();
     const { name, description, passkey } = body;
 

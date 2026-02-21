@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { goals, milestones } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getMemberContext, buildSystemPrompt, aiModel, getTaskOptions } from "@/lib/ai";
+import { trackAIUsage } from "@/lib/ai/usage-tracking";
 import { checkAIPersonalizationConsent, createConsentRequiredResponse } from "@/lib/consent";
 import { applyDistributedRateLimit as applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit-redis";
 
@@ -92,12 +93,26 @@ Create progressive milestones that build up to the final goal. Each milestone sh
 
 Consider the person's current fitness level, limitations, and recent progress when setting milestone targets.`;
 
+    const startTime = Date.now();
     const result = await generateObject({
       model: aiModel,
       schema: milestonesSchema,
       system: systemPrompt,
       prompt,
+      providerOptions: getTaskOptions("milestone_generation") as any,
     });
+
+    trackAIUsage({
+      userId: session.user.id,
+      endpoint: "/api/ai/generate-milestones",
+      feature: "milestones",
+      modelUsed: "gpt-5.2",
+      inputTokens: result.usage?.inputTokens ?? 0,
+      outputTokens: result.usage?.outputTokens ?? 0,
+      cachedTokens: result.usage?.inputTokenDetails?.cacheReadTokens ?? 0,
+      cacheHit: (result.usage?.inputTokenDetails?.cacheReadTokens ?? 0) > 0,
+      durationMs: Date.now() - startTime,
+    }).catch(() => {});
 
     // Save milestones to database
     const today = new Date();

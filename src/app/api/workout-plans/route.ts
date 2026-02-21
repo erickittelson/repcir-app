@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { workoutPlans, workoutPlanExercises } from "@/lib/db/schema";
-import { eq, count } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 export async function GET() {
   try {
@@ -12,7 +12,10 @@ export async function GET() {
     }
 
     const plans = await db.query.workoutPlans.findMany({
-      where: eq(workoutPlans.circleId, session.circleId),
+      where: and(
+        eq(workoutPlans.circleId, session.circleId),
+        eq(workoutPlans.isDraft, false)
+      ),
       with: {
         exercises: true,
       },
@@ -25,6 +28,7 @@ export async function GET() {
       category: plan.category,
       difficulty: plan.difficulty,
       estimatedDuration: plan.estimatedDuration,
+      visibility: plan.visibility,
       exerciseCount: plan.exercises?.length || 0,
     }));
 

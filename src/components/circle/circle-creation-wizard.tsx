@@ -45,7 +45,7 @@ import type { LocationValue } from "@/components/maps/types";
 // Dynamically import map components for code-splitting
 const LocationPicker = dynamic(
   () => import("@/components/maps/location-picker").then((mod) => mod.LocationPicker),
-  { loading: () => <div className="h-[200px] bg-muted rounded-lg animate-pulse" /> }
+  { loading: () => <div className="h-[300px] bg-muted rounded-lg animate-pulse" /> }
 );
 
 // ============================================================================
@@ -503,11 +503,8 @@ function StepImage({ formData, updateField, onSkip }: StepImageProps) {
 
       {isEditing && selectedFile && (
         <PhotoEditor
-          imageFile={selectedFile}
+          imageUrl={selectedFile}
           open={isEditing}
-          onOpenChange={(open) => {
-            if (!open) handleEditorCancel();
-          }}
           aspectRatio={1}
           onSave={handleEditorSave}
           onCancel={handleEditorCancel}
@@ -693,7 +690,7 @@ function StepLocation({ formData, updateField }: StepProps) {
       : undefined;
 
   return (
-    <div className="space-y-5 overflow-y-auto max-h-[calc(100vh-380px)] pr-1">
+    <div className="space-y-5 overflow-y-auto h-full pr-1">
       <div className="text-center space-y-2">
         <h2 className="text-2xl font-bold">Where do you meet?</h2>
         <p className="text-muted-foreground">
@@ -801,12 +798,11 @@ function StepLocation({ formData, updateField }: StepProps) {
             </div>
 
             {/* Map Picker */}
-            <div className="space-y-2">
+            <div className="space-y-2 max-w-[320px] mx-auto">
               <p className="text-sm text-muted-foreground">Search or tap to set location</p>
               <LocationPicker
                 value={mapValue}
                 onChange={handleMapLocationChange}
-                height={200}
                 placeholder="Search for gym, park, address..."
               />
             </div>

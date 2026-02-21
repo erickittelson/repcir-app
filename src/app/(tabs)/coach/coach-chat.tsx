@@ -115,16 +115,28 @@ export function CoachChat({ memberId }: CoachChatProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const billing = useBilling();
 
-  // Auto-scroll to bottom when messages change
-  const scrollToBottom = useCallback(() => {
-    if (messagesEndRef.current) {
+  // Auto-scroll to latest message when messages change
+  const scrollToLatest = useCallback(() => {
+    // Find the last message element and scroll its top into view
+    // This prevents tall content (config forms, workout cards) from scrolling past
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const messageElements = container.querySelectorAll("[data-message-id]");
+    const lastMessage = messageElements[messageElements.length - 1];
+
+    if (lastMessage) {
+      lastMessage.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, []);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
+    // Small delay to let the DOM render the new message before scrolling
+    const timer = setTimeout(scrollToLatest, 50);
+    return () => clearTimeout(timer);
+  }, [messages, scrollToLatest]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -715,6 +727,7 @@ export function CoachChat({ memberId }: CoachChatProps) {
               messages.map((message) => (
                 <motion.div
                   key={message.id}
+                  data-message-id={message.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.2 }}

@@ -1,0 +1,215 @@
+# Workout Data Contract
+# Single source of truth for workout configuration shared between:
+# - AI workout generation (Inngest background function)
+# - Manual workout builder (builder page)
+# - Chat workout config form
+# - Workout display components
+#
+# Any UI that shows focus areas, intensity options, duration presets,
+# or structure types MUST reference this contract via the compiled loader.
+
+version: "1.1.0"
+last_updated: "2026-02-10"
+
+# =============================================================================
+# FOCUS AREAS — Training split selection
+# =============================================================================
+# Primary focus is single-select (the training split).
+# Emphasis areas are multi-select within the selected split (max 3).
+focus:
+  primary:
+    - value: full_body
+      label: "Full Body"
+      description: "Balanced across all muscle groups"
+
+    - value: upper_body
+      label: "Upper Body"
+      description: "Chest, back, shoulders, arms"
+
+    - value: lower_body
+      label: "Lower Body"
+      description: "Quads, hamstrings, glutes, calves"
+
+    - value: push
+      label: "Push"
+      description: "Chest, shoulders, triceps"
+
+    - value: pull
+      label: "Pull"
+      description: "Back, biceps, rear delts"
+
+  default_primary: full_body
+
+  emphasis:
+    full_body:
+      - { value: chest, label: "Chest" }
+      - { value: back, label: "Back" }
+      - { value: shoulders, label: "Shoulders" }
+      - { value: arms, label: "Arms" }
+      - { value: core, label: "Core" }
+      - { value: glutes, label: "Glutes" }
+      - { value: legs, label: "Legs" }
+
+    upper_body:
+      - { value: chest, label: "Chest" }
+      - { value: back, label: "Back" }
+      - { value: shoulders, label: "Shoulders" }
+      - { value: arms, label: "Arms" }
+      - { value: core, label: "Core" }
+
+    lower_body:
+      - { value: quads, label: "Quads" }
+      - { value: hamstrings, label: "Hamstrings" }
+      - { value: glutes, label: "Glutes" }
+      - { value: calves, label: "Calves" }
+      - { value: core, label: "Core" }
+
+    push:
+      - { value: chest, label: "Chest" }
+      - { value: shoulders, label: "Shoulders" }
+      - { value: triceps, label: "Triceps" }
+
+    pull:
+      - { value: back, label: "Back" }
+      - { value: biceps, label: "Biceps" }
+      - { value: rear_delts, label: "Rear Delts" }
+
+  max_emphasis: 3
+
+# =============================================================================
+# INTENSITY LEVELS
+# =============================================================================
+intensity:
+  levels:
+    - value: light
+      label: "Light"
+      color: "text-green-500 border-green-500/30 bg-green-500/10"
+      rpe_range: [5, 7]
+      description: "Active recovery or easy day"
+
+    - value: moderate
+      label: "Moderate"
+      color: "text-yellow-500 border-yellow-500/30 bg-yellow-500/10"
+      rpe_range: [7, 8]
+      description: "Standard training intensity"
+
+    - value: hard
+      label: "Hard"
+      color: "text-orange-500 border-orange-500/30 bg-orange-500/10"
+      rpe_range: [8, 9]
+      description: "High intensity, pushing limits"
+
+    - value: max
+      label: "Max"
+      color: "text-red-500 border-red-500/30 bg-red-500/10"
+      rpe_range: [9, 10]
+      description: "Peak effort, testing day"
+
+  default: moderate
+
+# =============================================================================
+# DURATION PRESETS (minutes)
+# =============================================================================
+duration:
+  presets: [15, 30, 45, 60, 90]
+  default: 30
+  min: 10
+  max: 120
+
+# =============================================================================
+# WORKOUT STRUCTURE TYPES
+# =============================================================================
+structures:
+  types:
+    - value: standard
+      label: "Standard"
+      description: "Traditional sets and reps"
+
+    - value: superset
+      label: "Superset"
+      description: "Two exercises back-to-back"
+
+    - value: circuit
+      label: "Circuit"
+      description: "Multiple exercises in a row"
+
+    - value: emom
+      label: "EMOM"
+      description: "Every minute on the minute"
+
+    - value: amrap
+      label: "AMRAP"
+      description: "As many rounds as possible"
+
+    - value: interval
+      label: "Interval"
+      description: "Work/rest intervals"
+
+    - value: tabata
+      label: "Tabata"
+      description: "20s work / 10s rest"
+
+  max_sections: 5
+  default: standard
+
+# =============================================================================
+# WEIGHT PRESCRIPTION RULES
+# =============================================================================
+weight_prescription:
+  # For small groups (1-3 members), prescribe individual weights from PRs
+  individual_threshold: 3  # <= this many members = individual prescriptions
+
+  # Percentage of 1RM by rep range
+  percent_of_max:
+    strength:
+      reps: [1, 5]
+      percent: [75, 90]
+      description: "Heavy loads for strength"
+    hypertrophy:
+      reps: [6, 12]
+      percent: [60, 75]
+      description: "Moderate loads for muscle growth"
+    endurance:
+      reps: [12, 30]
+      percent: [40, 60]
+      description: "Lighter loads for endurance"
+
+  # For large groups (4+ members), use gender-based Rx weights
+  group_rx:
+    enabled_above: 3
+    format: "CrossFit-style Rx weights by gender"
+
+# =============================================================================
+# WORKOUT PLAN FIELDS — canonical shape
+# =============================================================================
+# Both AI generation and manual builder must produce plans conforming to this.
+plan_fields:
+  required:
+    - name         # string — workout name
+    - exercises    # array — at least 1 exercise
+  optional:
+    - description         # string
+    - category            # enum: strength, cardio, hiit, mixed, skill, recovery
+    - difficulty          # enum: beginner, intermediate, advanced
+    - estimated_duration  # integer (minutes)
+    - structure_type      # enum from structures.types
+    - warmup              # string array
+    - cooldown            # string array
+    - ai_generated        # boolean
+    - is_draft            # boolean
+
+exercise_fields:
+  required:
+    - exercise_id  # uuid — linked to exercises table
+    - order        # integer
+    - sets         # integer
+    - reps         # string (can be "8-12", "to failure", "30s")
+  optional:
+    - weight             # string (can be "135 lbs", "80%", "bodyweight")
+    - duration           # integer (seconds, for timed exercises)
+    - rest_between_sets  # integer (seconds)
+    - notes              # string
+    - group_id           # string (e.g. "S1" for superset group 1)
+    - group_type         # enum: superset, circuit, triset, giant_set, drop_set
+    - rx_weights         # object { rx_men, rx_women, calculation }
+    - member_prescriptions  # array of per-member weight/RPE/notes

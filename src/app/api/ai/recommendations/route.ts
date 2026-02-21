@@ -12,7 +12,8 @@ import {
 } from "@/lib/db/schema";
 import { eq, and, desc, gte, sql, not, inArray } from "drizzle-orm";
 import { generateText } from "ai";
-import { aiModel, getMemberContext, buildSystemPrompt } from "@/lib/ai";
+import { aiModel, getMemberContext, buildSystemPrompt, getReasoningOptions } from "@/lib/ai";
+import { trackAIUsage } from "@/lib/ai/usage-tracking";
 import { applyDistributedRateLimit as applyRateLimit, RATE_LIMITS, createRateLimitResponse } from "@/lib/rate-limit-redis";
 
 // Query parameter validation
@@ -250,13 +251,28 @@ Underworked areas: ${underworkedCategories.join(", ") || "None - well balanced!"
 
 Provide a brief, motivating insight about what they should focus on next.`;
 
-        const { text } = await generateText({
+        const startTime = Date.now();
+        const insightResult = await generateText({
           model: aiModel,
           system: systemPrompt,
           prompt: insightPrompt,
+          providerOptions: getReasoningOptions("none", { cacheKey: "recommendations" }) as any,
         });
 
-        recommendations.aiInsight = text;
+        recommendations.aiInsight = insightResult.text;
+
+        trackAIUsage({
+          userId,
+          memberId,
+          endpoint: "/api/ai/recommendations",
+          feature: "recommendations",
+          modelUsed: "gpt-5.2",
+          inputTokens: insightResult.usage?.inputTokens ?? 0,
+          outputTokens: insightResult.usage?.outputTokens ?? 0,
+          cachedTokens: insightResult.usage?.inputTokenDetails?.cacheReadTokens ?? 0,
+          cacheHit: (insightResult.usage?.inputTokenDetails?.cacheReadTokens ?? 0) > 0,
+          durationMs: Date.now() - startTime,
+        }).catch(() => {});
       } catch (error) {
         console.error("AI insight generation failed:", error);
         recommendations.aiInsight =

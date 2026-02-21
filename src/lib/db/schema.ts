@@ -26,6 +26,20 @@ import {
 import { relations, sql } from "drizzle-orm";
 
 // ============================================================================
+// SHARED TYPES & CONSTANTS
+// ============================================================================
+
+/**
+ * Content visibility levels used across workouts, plans, templates, and programs.
+ * - "private": only the creator can see
+ * - "public": anyone can discover and view
+ * - "circles": visible to members of the creator's circles
+ * - "connections": visible to the creator's accepted connections
+ */
+export const CONTENT_VISIBILITY = ["private", "public", "circles", "connections"] as const;
+export type ContentVisibility = (typeof CONTENT_VISIBILITY)[number];
+
+// ============================================================================
 // ONBOARDING PROGRESS (persisted conversation state)
 // ============================================================================
 
@@ -393,6 +407,10 @@ export const workoutPlans = pgTable(
     prerequisites: jsonb("prerequisites").$type<string[]>().default([]), // Required skills or fitness level
     intensityLevel: integer("intensity_level"), // 1-10 scale
     aiGenerated: boolean("ai_generated").default(false).notNull(),
+    isDraft: boolean("is_draft").default(false).notNull(),
+    // Visibility: who can discover/view this plan
+    // "private" = only creator, "public" = anyone, "circles" = creator's circle members, "connections" = creator's connections
+    visibility: text("visibility").default("private").notNull(),
     createdByMemberId: uuid("created_by_member_id").references(
       () => circleMembers.id,
       { onDelete: "set null" }
@@ -404,6 +422,8 @@ export const workoutPlans = pgTable(
     index("workout_plans_circle_idx").on(plan.circleId),
     index("workout_plans_structure_idx").on(plan.structureType),
     index("workout_plans_official_idx").on(plan.isOfficial),
+    index("workout_plans_visibility_idx").on(plan.visibility),
+    index("workout_plans_visibility_created_idx").on(plan.visibility, plan.createdAt),
   ]
 );
 
@@ -758,6 +778,8 @@ export const memberContextSnapshot = pgTable(
     preferredWorkoutTime: text("preferred_workout_time"),
     avgWorkoutDuration: integer("avg_workout_duration"),
     consecutiveTrainingWeeks: integer("consecutive_training_weeks"),
+    currentStreak: integer("current_streak").default(0),
+    longestStreak: integer("longest_streak").default(0),
     needsDeload: boolean("needs_deload").default(false),
     avgMood: text("avg_mood"),
     avgEnergyLevel: decimal("avg_energy_level", { precision: 3, scale: 2 }),
@@ -1339,8 +1361,8 @@ export const communityPrograms = pgTable(
     primaryGoal: text("primary_goal"), // strength, muscle_gain, fat_loss, endurance, athletic_performance
     targetMuscles: jsonb("target_muscles").$type<string[]>(), // full_body, upper, lower, push_pull_legs
     equipmentRequired: jsonb("equipment_required").$type<string[]>().default([]).notNull(),
-    // Visibility
-    visibility: text("visibility").default("public").notNull(),
+    // Visibility: "private" | "public" | "circles" | "connections"
+    visibility: text("visibility").default("private").notNull(),
     isOfficial: boolean("is_official").default(false).notNull(),
     isFeatured: boolean("is_featured").default(false).notNull(),
     // Stats
@@ -1632,8 +1654,8 @@ export const sharedWorkouts = pgTable(
     estimatedDuration: integer("estimated_duration"),
     targetMuscles: jsonb("target_muscles").$type<string[]>(),
     equipmentRequired: jsonb("equipment_required").$type<string[]>(),
-    // Discovery
-    visibility: text("visibility").default("public").notNull(),
+    // Discovery visibility: "private" | "public" | "circles" | "connections"
+    visibility: text("visibility").default("private").notNull(),
     isFeatured: boolean("is_featured").default(false).notNull(),
     // Stats
     saveCount: integer("save_count").default(0).notNull(),
@@ -2289,6 +2311,10 @@ export const sharedWorkoutsRelations = relations(sharedWorkouts, ({ one, many })
   workoutPlan: one(workoutPlans, {
     fields: [sharedWorkouts.workoutPlanId],
     references: [workoutPlans.id],
+  }),
+  creator: one(userProfiles, {
+    fields: [sharedWorkouts.userId],
+    references: [userProfiles.userId],
   }),
   savedBy: many(savedWorkouts),
 }));
@@ -3020,6 +3046,7 @@ export const aiUsageTracking = pgTable(
     userId: text("user_id").notNull(),
     memberId: text("member_id"),
     endpoint: text("endpoint").notNull(), // e.g., "ai/chat", "ai/generate-workout"
+    feature: text("feature"), // e.g., "chat", "workout_generation", "caption", "milestones", "onboarding"
     modelUsed: text("model_used").notNull(),
     reasoningLevel: text("reasoning_level"),
     inputTokens: integer("input_tokens").notNull().default(0),
@@ -3034,6 +3061,7 @@ export const aiUsageTracking = pgTable(
   (table) => [
     index("ai_usage_user_idx").on(table.userId),
     index("ai_usage_endpoint_idx").on(table.endpoint),
+    index("ai_usage_feature_idx").on(table.feature),
     index("ai_usage_created_at_idx").on(table.createdAt),
     index("ai_usage_model_idx").on(table.modelUsed),
   ]
@@ -3182,6 +3210,8 @@ export const workoutTemplates = pgTable(
     }>>().notNull(),
     isSystem: boolean("is_system").default(false).notNull(), // Built-in vs user-created
     createdBy: text("created_by"), // null for system templates
+    // Visibility: "private" | "public" | "circles" | "connections"
+    visibility: text("visibility").default("private").notNull(),
     useCount: integer("use_count").default(0).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -3190,6 +3220,7 @@ export const workoutTemplates = pgTable(
     index("workout_templates_difficulty_idx").on(table.difficulty),
     index("workout_templates_system_idx").on(table.isSystem),
     index("workout_templates_use_count_idx").on(table.useCount),
+    index("workout_templates_visibility_idx").on(table.visibility),
   ]
 );
 
