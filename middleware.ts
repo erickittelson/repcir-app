@@ -25,6 +25,7 @@ const publicPatterns = [
   /^\/sw\.js/,
   /^\/icons\//,
   /^\/images\//,
+  /^\/monitoring/, // Sentry tunnel route
 ];
 
 function isPublicRoute(pathname: string): boolean {

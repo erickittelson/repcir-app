@@ -3,6 +3,9 @@ import * as Sentry from "@sentry/nextjs";
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
 
+  // Route browser requests through our domain to bypass ad-blockers
+  tunnel: "/monitoring",
+
   // Tag this app so errors can be filtered in the shared Sentry project
   initialScope: {
     tags: { app: "repcir-app" },

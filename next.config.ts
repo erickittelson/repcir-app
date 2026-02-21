@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import { withSentryConfig } from "@sentry/nextjs";
 
 const securityHeaders = [
   // Prevent MIME type sniffing
@@ -77,20 +76,19 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // Tunnel Sentry events through our domain to bypass ad-blockers
+  async rewrites() {
+    return [
+      {
+        source: "/monitoring",
+        destination: "https://o4510845040918528.ingest.us.sentry.io/api/4510845044391936/envelope/",
+      },
+      {
+        source: "/monitoring/:path*",
+        destination: "https://o4510845040918528.ingest.us.sentry.io/api/4510845044391936/envelope/",
+      },
+    ];
+  },
 };
 
-// Wrap with Sentry for error tracking and source maps
-export default withSentryConfig(nextConfig, {
-  org: "quiet-victory-labs",
-  project: "repcir",
-  silent: !process.env.CI,
-
-  // Route browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers
-  tunnelRoute: "/monitoring",
-
-  // Disable source map uploading during build to avoid middleware.js.nft.json Turbopack conflict
-  // Source maps are uploaded via SENTRY_AUTH_TOKEN in Vercel env instead
-  sourcemaps: {
-    disable: true,
-  },
-});
+export default nextConfig;
