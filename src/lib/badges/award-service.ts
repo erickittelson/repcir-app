@@ -9,10 +9,8 @@ import {
   badgeDefinitions,
   userBadges,
   personalRecords,
-  memberSkills,
   userSkills,
   circleMembers,
-  memberMetrics,
   userMetrics,
   workoutSessions,
   challengeParticipants,
@@ -271,36 +269,6 @@ async function checkSkillBadge(
       (requiredStatus === "achieved" && status === "mastered")
     ) {
       return { eligible: true, badgeId };
-    }
-  }
-
-  // Also check member-level skills
-  const members = await db
-    .select({ id: circleMembers.id })
-    .from(circleMembers)
-    .where(eq(circleMembers.userId, userId));
-
-  if (members.length > 0) {
-    const memberIds = members.map((m) => m.id);
-    const memberSkill = await db
-      .select({ currentStatus: memberSkills.currentStatus })
-      .from(memberSkills)
-      .where(
-        and(
-          inArray(memberSkills.memberId, memberIds),
-          sql`LOWER(${memberSkills.name}) = ${criteria.skillName.toLowerCase()}`
-        )
-      )
-      .limit(1);
-
-    if (memberSkill.length > 0) {
-      const status = memberSkill[0].currentStatus;
-      if (
-        status === requiredStatus ||
-        (requiredStatus === "achieved" && status === "mastered")
-      ) {
-        return { eligible: true, badgeId };
-      }
     }
   }
 

@@ -21,7 +21,7 @@ import {
   circleMembers,
   memberContextSnapshot,
   goals,
-  memberLimitations,
+  userLimitations,
   personalRecords,
   workoutSessions,
   workoutSessionExercises,
@@ -367,6 +367,12 @@ export const aggregateRefreshCron = inngest.createFunction(
  * Helper function to update a single member's snapshot
  */
 async function updateMemberSnapshot(memberId: string): Promise<void> {
+  // Look up member to get userId for user-scoped queries
+  const member = await dbRead.query.circleMembers.findFirst({
+    where: eq(circleMembers.id, memberId),
+    columns: { userId: true },
+  });
+
   // Parallel fetch all data needed for snapshot
   const [memberGoals, limitations, memberPRs, recentWorkouts] = await Promise.all([
     dbRead
@@ -374,10 +380,12 @@ async function updateMemberSnapshot(memberId: string): Promise<void> {
       .from(goals)
       .where(and(eq(goals.memberId, memberId), eq(goals.status, "active")))
       .limit(10),
-    dbRead
-      .select()
-      .from(memberLimitations)
-      .where(and(eq(memberLimitations.memberId, memberId), eq(memberLimitations.active, true))),
+    member?.userId
+      ? dbRead
+          .select()
+          .from(userLimitations)
+          .where(and(eq(userLimitations.userId, member.userId), eq(userLimitations.active, true)))
+      : Promise.resolve([]),
     dbRead
       .select({
         id: personalRecords.id,
@@ -477,7 +485,7 @@ async function updateMemberSnapshot(memberId: string): Promise<void> {
       })),
       activeLimitations: limitations.map((l) => ({
         type: l.type,
-        description: l.description,
+        description: l.description || "",
         severity: l.severity || "moderate",
         affectedAreas: (l.affectedAreas as string[]) || [],
       })),

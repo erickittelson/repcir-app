@@ -5,7 +5,7 @@ import {
   workoutSessions,
   workoutPlans,
   circleMembers,
-  memberMetrics,
+  userMetrics,
   personalRecords,
   goals,
   exercises,
@@ -95,18 +95,26 @@ export async function GET(request: Request) {
       })
     );
 
-    // Get weight progress
-    const weightData = await db.query.memberMetrics.findMany({
-      where: and(
-        inArray(memberMetrics.memberId, memberIds),
-        gte(memberMetrics.date, startDate)
-      ),
-      orderBy: [memberMetrics.date],
+    // Get weight progress (user-scoped)
+    const membersForMetrics = await db.query.circleMembers.findMany({
+      where: inArray(circleMembers.id, memberIds),
+      columns: { userId: true },
     });
+    const userIdsForMetrics = membersForMetrics.map((m) => m.userId).filter(Boolean) as string[];
+
+    const weightData = userIdsForMetrics.length > 0
+      ? await db.query.userMetrics.findMany({
+          where: and(
+            inArray(userMetrics.userId, userIdsForMetrics),
+            gte(userMetrics.date, startDate)
+          ),
+          orderBy: [userMetrics.date],
+        })
+      : [];
 
     const weightProgress = weightData
-      .filter((m) => m.weight)
-      .map((m) => ({
+      .filter((m: typeof userMetrics.$inferSelect) => m.weight)
+      .map((m: typeof userMetrics.$inferSelect) => ({
         date: m.date.toLocaleDateString("en-US", {
           month: "short",
           day: "numeric",

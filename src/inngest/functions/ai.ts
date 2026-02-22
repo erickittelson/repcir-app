@@ -16,14 +16,14 @@ import { db, dbRead } from "@/lib/db";
 import {
   circleMembers,
   memberEmbeddings,
-  memberMetrics,
   goals,
   workoutSessions,
   personalRecords,
-  memberLimitations,
-  memberSkills,
   contextNotes,
   userProfiles,
+  userMetrics,
+  userLimitations,
+  userSkills,
   workoutPlans,
   workoutPlanExercises,
   exercises,
@@ -73,13 +73,16 @@ export const generateEmbeddingsFunction = inngest.createFunction(
 
     // Step 2: Gather all member data
     const memberData = await step.run("gather-member-data", async () => {
+      const userId = member.userId;
       const [metrics, memberGoals, workouts, prs, limitations, skills, notes, profile] =
         await Promise.all([
-          db.query.memberMetrics.findMany({
-            where: eq(memberMetrics.memberId, memberId),
-            orderBy: [desc(memberMetrics.date)],
-            limit: 10,
-          }),
+          userId
+            ? db.query.userMetrics.findMany({
+                where: eq(userMetrics.userId, userId),
+                orderBy: [desc(userMetrics.date)],
+                limit: 10,
+              })
+            : [],
           db.query.goals.findMany({
             where: eq(goals.memberId, memberId),
           }),
@@ -92,20 +95,24 @@ export const generateEmbeddingsFunction = inngest.createFunction(
             where: eq(personalRecords.memberId, memberId),
             with: { exercise: true },
           }),
-          db.query.memberLimitations.findMany({
-            where: eq(memberLimitations.memberId, memberId),
-          }),
-          db.query.memberSkills.findMany({
-            where: eq(memberSkills.memberId, memberId),
-          }),
+          userId
+            ? db.query.userLimitations.findMany({
+                where: eq(userLimitations.userId, userId),
+              })
+            : [],
+          userId
+            ? db.query.userSkills.findMany({
+                where: eq(userSkills.userId, userId),
+              })
+            : [],
           db.query.contextNotes.findMany({
             where: eq(contextNotes.memberId, memberId),
             orderBy: [desc(contextNotes.createdAt)],
             limit: 30,
           }),
-          member.userId
+          userId
             ? db.query.userProfiles.findFirst({
-                where: eq(userProfiles.userId, member.userId),
+                where: eq(userProfiles.userId, userId),
               })
             : null,
         ]);
@@ -122,7 +129,7 @@ export const generateEmbeddingsFunction = inngest.createFunction(
       // Profile embedding - pass member data directly instead of typed objects
       const profileContent = buildProfileContentFromData(
         { name: member.name, gender: member.gender, dateOfBirth: member.dateOfBirth },
-        metrics[0],
+        metrics[0] || undefined,
         profile
       );
       result.push({
@@ -162,7 +169,7 @@ export const generateEmbeddingsFunction = inngest.createFunction(
       if (limitations.length > 0) {
         result.push({
           type: "limitations",
-          content: buildLimitationsContentFromData(limitations),
+          content: buildLimitationsContentFromData(limitations as LimitationData[]),
           metadata: { memberId, limitationCount: limitations.length },
         });
       }

@@ -10,7 +10,7 @@ import { db, dbRead } from "@/lib/db";
 import {
   circleMembers,
   goals,
-  memberLimitations,
+  userLimitations,
   personalRecords,
   workoutSessions,
   workoutSessionExercises,
@@ -120,6 +120,13 @@ export async function GET(request: Request) {
 }
 
 async function updateMemberSnapshot(memberId: string): Promise<void> {
+  // Look up member's userId for user-scoped queries
+  const member = await dbRead.query.circleMembers.findFirst({
+    where: eq(circleMembers.id, memberId),
+    columns: { userId: true },
+  });
+  const userId = member?.userId;
+
   // Parallel fetch all data needed for snapshot
   const [
     memberGoals,
@@ -134,11 +141,13 @@ async function updateMemberSnapshot(memberId: string): Promise<void> {
       .where(and(eq(goals.memberId, memberId), eq(goals.status, "active")))
       .limit(10),
 
-    // Active limitations
-    dbRead
-      .select()
-      .from(memberLimitations)
-      .where(and(eq(memberLimitations.memberId, memberId), eq(memberLimitations.active, true))),
+    // Active limitations (user-scoped)
+    userId
+      ? dbRead
+          .select()
+          .from(userLimitations)
+          .where(and(eq(userLimitations.userId, userId), eq(userLimitations.active, true)))
+      : Promise.resolve([]),
 
     // Recent PRs with exercise info
     dbRead
@@ -230,7 +239,7 @@ async function updateMemberSnapshot(memberId: string): Promise<void> {
       })),
       activeLimitations: limitations.map((l) => ({
         type: l.type,
-        description: l.description,
+        description: l.description || "",
         severity: l.severity || "moderate",
         affectedAreas: (l.affectedAreas as string[]) || [],
       })),

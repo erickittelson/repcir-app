@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/neon-auth";
 import { db } from "@/lib/db";
-import { circleMembers, memberMetrics, memberLimitations, userProfiles } from "@/lib/db/schema";
+import { circleMembers, userMetrics, userLimitations, userProfiles } from "@/lib/db/schema";
 import { eq, desc, and, inArray } from "drizzle-orm";
 
 export async function GET(request: Request) {
@@ -27,47 +27,51 @@ export async function GET(request: Request) {
 
     const members = await db.query.circleMembers.findMany({
       where: whereClause,
-      limit: 100, // Prevent unbounded queries
+      limit: 100,
       with: {
-        metrics: {
-          orderBy: (metrics, { desc }) => [desc(metrics.date)],
-          limit: 1,
-        },
-        limitations: {
-          where: eq(memberLimitations.active, true),
-          limit: 20, // Typical limitation count
-        },
         goals: {
-          limit: 50, // Reasonable goals per member
+          limit: 50,
         },
       },
     });
 
-    // Fetch user profiles for members with userId
+    // Fetch user profiles and user-scoped data for members with userId
     const userIds = members
       .filter((m) => m.userId)
       .map((m) => m.userId as string);
 
-    const profiles = userIds.length > 0
-      ? await db.query.userProfiles.findMany({
-          where: inArray(userProfiles.userId, userIds),
-        })
-      : [];
+    const [profiles, allMetrics, allLimitations] = await Promise.all([
+      userIds.length > 0
+        ? db.query.userProfiles.findMany({ where: inArray(userProfiles.userId, userIds) })
+        : [],
+      userIds.length > 0
+        ? db.query.userMetrics.findMany({
+            where: inArray(userMetrics.userId, userIds),
+            orderBy: [desc(userMetrics.date)],
+          })
+        : [],
+      userIds.length > 0
+        ? db.query.userLimitations.findMany({
+            where: and(inArray(userLimitations.userId, userIds), eq(userLimitations.active, true)),
+          })
+        : [],
+    ]);
 
     const profileMap = new Map(profiles.map((p) => [p.userId, p]));
 
     const formattedMembers = members.map((member) => {
-      // Get user profile if member has userId
       const profile = member.userId ? profileMap.get(member.userId) : null;
+      const memberMetricsData = member.userId
+        ? allMetrics.filter((m) => m.userId === member.userId)
+        : [];
+      const memberLimitationsData = member.userId
+        ? allLimitations.filter((l) => l.userId === member.userId)
+        : [];
 
-      // Calculate age from userProfile (birthMonth/birthYear) or fallback to member.dateOfBirth
       let dateOfBirth: string | null = null;
       if (profile?.birthMonth && profile?.birthYear) {
-        // Construct date from month/year (use 15th as middle of month)
         dateOfBirth = `${profile.birthYear}-${String(profile.birthMonth).padStart(2, "0")}-15`;
       } else if (member.dateOfBirth) {
-        // Fallback to legacy circleMembers.dateOfBirth
-        // Handle both Date objects and ISO strings from database
         const dob = member.dateOfBirth as unknown;
         dateOfBirth = dob instanceof Date
           ? dob.toISOString().split("T")[0]
@@ -77,20 +81,19 @@ export async function GET(request: Request) {
       return {
         id: member.id,
         name: member.name,
-        // Prefer userProfile data, fallback to circleMembers for legacy/standalone members
         profilePicture: profile?.profilePicture || member.profilePicture,
         dateOfBirth,
         gender: profile?.gender || member.gender,
         role: member.role,
-        latestMetrics: member.metrics[0]
+        latestMetrics: memberMetricsData[0]
           ? {
-              weight: member.metrics[0].weight,
-              height: member.metrics[0].height,
-              bodyFatPercentage: member.metrics[0].bodyFatPercentage,
-              fitnessLevel: member.metrics[0].fitnessLevel,
+              weight: memberMetricsData[0].weight,
+              height: memberMetricsData[0].height,
+              bodyFatPercentage: memberMetricsData[0].bodyFatPercentage,
+              fitnessLevel: memberMetricsData[0].fitnessLevel,
             }
           : null,
-        limitations: member.limitations.map((l) => ({
+        limitations: memberLimitationsData.map((l) => ({
           id: l.id,
           type: l.type,
           description: l.description,
@@ -143,10 +146,12 @@ export async function POST(request: Request) {
       })
       .returning();
 
-    // Create initial metrics if provided
+    // Create initial metrics if provided (user-scoped — only for members with userId)
     if (metrics && (metrics.weight || metrics.height || metrics.bodyFatPercentage || metrics.fitnessLevel)) {
-      await db.insert(memberMetrics).values({
-        memberId: member.id,
+      // Standalone members (no userId) won't have user metrics
+      const userId = session.user.id;
+      await db.insert(userMetrics).values({
+        userId,
         weight: metrics.weight,
         height: metrics.height,
         bodyFatPercentage: metrics.bodyFatPercentage,

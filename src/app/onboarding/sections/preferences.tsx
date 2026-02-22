@@ -131,7 +131,12 @@ export function PreferencesSection({ data, onUpdate, onNext, onBack }: SectionPr
 
   const handleDaysContinue = () => {
     onUpdate({ workoutDays: selectedDays });
-    setStep("city");
+    // Skip city step if already collected from equipment section
+    if (data.city && data.state) {
+      onNext();
+    } else {
+      setStep("city");
+    }
   };
 
   const handleCitySelect = (result: CityResult) => {

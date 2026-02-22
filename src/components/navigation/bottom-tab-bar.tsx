@@ -23,7 +23,7 @@ interface TabItem {
 const tabs: TabItem[] = [
   { href: "/", icon: Home, label: "Home" },
   { href: "/discover", icon: Sparkles, label: "Discover" },
-  { href: "#log", icon: Plus, label: "Log", isAction: true },
+  { href: "#log", icon: Plus, label: "Create", isAction: true },
   { href: "/workouts", icon: Dumbbell, label: "Workouts" },
   { href: "/you", icon: User, label: "You" },
 ];
@@ -70,7 +70,7 @@ export function BottomTabBar({ onCreateClick }: BottomTabBarProps) {
                 key={tab.href}
                 onClick={onCreateClick}
                 className="relative -mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-brand-gradient shadow-lg shadow-brand/30 transition-transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 focus:ring-offset-background"
-                aria-label="Log workout"
+                aria-label="Create"
               >
                 <Icon className="h-7 w-7 text-white" aria-hidden="true" />
               </button>

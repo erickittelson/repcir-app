@@ -31,12 +31,12 @@ const STEPS = [
     desc: "Your dashboard — today's workout, streak, and activity feed.",
   },
   {
-    label: "Circles",
-    desc: "Your workout crew. Share progress and stay accountable.",
+    label: "Discover",
+    desc: "Find workout plans, challenges, and people to train with.",
   },
   {
-    label: "Log",
-    desc: "Tap here to log a workout, record a PR, or ask your AI coach.",
+    label: "Create",
+    desc: "Log a workout, generate an AI training plan, chat with your coach, or share a post.",
   },
   {
     label: "Workouts",

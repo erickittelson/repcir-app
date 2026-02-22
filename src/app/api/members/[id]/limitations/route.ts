@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { circleMembers, memberLimitations } from "@/lib/db/schema";
+import { circleMembers, userLimitations } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 
 export async function GET(
@@ -28,9 +28,13 @@ export async function GET(
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
-    const limitations = await db.query.memberLimitations.findMany({
-      where: eq(memberLimitations.memberId, id),
-      orderBy: (limitations, { desc }) => [desc(limitations.createdAt)],
+    if (!member.userId) {
+      return NextResponse.json([]);
+    }
+
+    const limitations = await db.query.userLimitations.findMany({
+      where: eq(userLimitations.userId, member.userId),
+      orderBy: (limitations: any, { desc }: any) => [desc(limitations.createdAt)],
     });
 
     return NextResponse.json(limitations);
@@ -76,10 +80,14 @@ export async function POST(
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
+    if (!member.userId) {
+      return NextResponse.json({ error: "Member has no user account" }, { status: 400 });
+    }
+
     const [limitation] = await db
-      .insert(memberLimitations)
+      .insert(userLimitations)
       .values({
-        memberId: id,
+        userId: member.userId,
         type,
         description,
         affectedAreas: affectedAreas || [],
@@ -130,8 +138,12 @@ export async function PUT(
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
+    if (!member.userId) {
+      return NextResponse.json({ error: "Member has no user account" }, { status: 400 });
+    }
+
     await db
-      .update(memberLimitations)
+      .update(userLimitations)
       .set({
         type,
         description,
@@ -142,8 +154,8 @@ export async function PUT(
       })
       .where(
         and(
-          eq(memberLimitations.id, limitationId),
-          eq(memberLimitations.memberId, id)
+          eq(userLimitations.id, limitationId),
+          eq(userLimitations.userId, member.userId)
         )
       );
 
@@ -187,12 +199,16 @@ export async function DELETE(
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
+    if (!member.userId) {
+      return NextResponse.json({ error: "Member has no user account" }, { status: 400 });
+    }
+
     await db
-      .delete(memberLimitations)
+      .delete(userLimitations)
       .where(
         and(
-          eq(memberLimitations.id, limitationId),
-          eq(memberLimitations.memberId, id)
+          eq(userLimitations.id, limitationId),
+          eq(userLimitations.userId, member.userId)
         )
       );
 

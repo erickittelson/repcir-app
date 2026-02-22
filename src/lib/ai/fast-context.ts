@@ -431,7 +431,7 @@ export async function rebuildMemberSnapshot(memberId: string): Promise<void> {
     fitnessLevel: context.currentMetrics?.fitnessLevel,
     activeLimitations: context.limitations.map((l) => ({
       type: l.type,
-      description: l.description,
+      description: l.description || "",
       severity: l.severity || "moderate",
       affectedAreas: (l.affectedAreas as string[]) || [],
     })),

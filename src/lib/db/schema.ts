@@ -221,51 +221,8 @@ export const circleGoals = pgTable(
 // MEMBER METRICS (tracked over time)
 // ============================================================================
 
-export const memberMetrics = pgTable(
-  "member_metrics",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    memberId: uuid("member_id")
-      .notNull()
-      .references(() => circleMembers.id, { onDelete: "cascade" }),
-    date: timestamp("date").defaultNow().notNull(),
-    weight: real("weight"), // in lbs
-    height: real("height"), // in inches
-    bodyFatPercentage: real("body_fat_percentage"),
-    fitnessLevel: text("fitness_level"), // beginner, intermediate, advanced, elite
-    notes: text("notes"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-  },
-  (metric) => [
-    index("member_metrics_member_idx").on(metric.memberId),
-    index("member_metrics_date_idx").on(metric.date),
-  ]
-);
-
-// ============================================================================
-// MEMBER LIMITATIONS
-// ============================================================================
-
-export const memberLimitations = pgTable(
-  "member_limitations",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    memberId: uuid("member_id")
-      .notNull()
-      .references(() => circleMembers.id, { onDelete: "cascade" }),
-    type: text("type").notNull(), // injury, condition, preference
-    description: text("description").notNull(),
-    affectedAreas: jsonb("affected_areas").$type<string[]>(), // body parts affected
-    severity: text("severity"), // mild, moderate, severe
-    startDate: timestamp("start_date"),
-    endDate: timestamp("end_date"), // null if ongoing
-    active: boolean("active").default(true).notNull(),
-    notes: text("notes"), // Additional user notes about the limitation
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  },
-  (limitation) => [index("member_limitations_member_idx").on(limitation.memberId)]
-);
+// member_metrics REMOVED — consolidated into user_metrics (user-scoped, not circle-scoped)
+// member_limitations REMOVED — consolidated into user_limitations (user-scoped, not circle-scoped)
 
 // ============================================================================
 // GOALS & MILESTONES
@@ -541,30 +498,7 @@ export const exerciseSets = pgTable(
 // MEMBER SKILLS (gymnastics, athletic skills, etc.)
 // ============================================================================
 
-export const memberSkills = pgTable(
-  "member_skills",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    memberId: uuid("member_id")
-      .notNull()
-      .references(() => circleMembers.id, { onDelete: "cascade" }),
-    name: text("name").notNull(), // back tuck, back handspring, muscle-up, etc.
-    category: text("category").notNull(), // gymnastics, calisthenics, sport, other
-    // Current assessed status
-    currentStatus: text("current_status").default("learning").notNull(), // learning, achieved, mastered
-    currentStatusDate: timestamp("current_status_date").defaultNow(),
-    // All-time best status
-    allTimeBestStatus: text("all_time_best_status").default("learning").notNull(),
-    allTimeBestDate: timestamp("all_time_best_date"),
-    notes: text("notes"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  },
-  (skill) => [
-    index("member_skills_member_idx").on(skill.memberId),
-    index("member_skills_current_status_idx").on(skill.currentStatus),
-  ]
-);
+// member_skills REMOVED — consolidated into user_skills (user-scoped, not circle-scoped)
 
 // ============================================================================
 // PERSONAL RECORDS
@@ -1911,26 +1845,7 @@ export const equipmentCatalog = pgTable(
 // TODO: Remove in future migration after verifying no production data exists.
 // ============================================================================
 
-export const circleRequests = pgTable(
-  "circle_requests",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    circleId: uuid("circle_id")
-      .notNull()
-      .references(() => circles.id, { onDelete: "cascade" }),
-    requesterId: text("requester_id").notNull(), // Who is sending the request
-    targetUserId: text("target_user_id").notNull(), // Who is receiving the request
-    message: text("message"), // Optional message with the request
-    status: text("status").default("pending").notNull(), // 'pending' | 'accepted' | 'declined' | 'expired'
-    respondedAt: timestamp("responded_at", { withTimezone: true }),
-    expiresAt: timestamp("expires_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (request) => [
-    index("circle_requests_target_idx").on(request.targetUserId, request.status),
-    index("circle_requests_requester_idx").on(request.requesterId, request.createdAt),
-  ]
-);
+// circle_requests REMOVED — duplicate of circle_join_requests
 
 // ============================================================================
 // RELATIONS
@@ -1942,7 +1857,6 @@ export const circlesRelations = relations(circles, ({ many }) => ({
   equipment: many(circleEquipment),
   invitations: many(circleInvitations),
   messages: many(messages),
-  circleRequests: many(circleRequests),
   goals: many(circleGoals),
 }));
 
@@ -1983,12 +1897,9 @@ export const circleMembersRelations = relations(circleMembers, ({ one, many }) =
     fields: [circleMembers.circleId],
     references: [circles.id],
   }),
-  metrics: many(memberMetrics),
-  limitations: many(memberLimitations),
   goals: many(goals),
   workoutSessions: many(workoutSessions),
   personalRecords: many(personalRecords),
-  skills: many(memberSkills),
   embeddings: many(memberEmbeddings),
   contextNotes: many(contextNotes),
   coachConversations: many(coachConversations),
@@ -2008,26 +1919,7 @@ export const circleEquipmentRelations = relations(circleEquipment, ({ one }) => 
   }),
 }));
 
-export const memberMetricsRelations = relations(memberMetrics, ({ one }) => ({
-  member: one(circleMembers, {
-    fields: [memberMetrics.memberId],
-    references: [circleMembers.id],
-  }),
-}));
-
-export const memberLimitationsRelations = relations(memberLimitations, ({ one }) => ({
-  member: one(circleMembers, {
-    fields: [memberLimitations.memberId],
-    references: [circleMembers.id],
-  }),
-}));
-
-export const memberSkillsRelations = relations(memberSkills, ({ one }) => ({
-  member: one(circleMembers, {
-    fields: [memberSkills.memberId],
-    references: [circleMembers.id],
-  }),
-}));
+// memberMetricsRelations, memberLimitationsRelations, memberSkillsRelations REMOVED
 
 export const goalsRelations = relations(goals, ({ one, many }) => ({
   member: one(circleMembers, {
@@ -2172,12 +2064,7 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   // Notifications are user-level, linked via userId text field
 }));
 
-export const circleRequestsRelations = relations(circleRequests, ({ one }) => ({
-  circle: one(circles, {
-    fields: [circleRequests.circleId],
-    references: [circles.id],
-  }),
-}));
+// circleRequestsRelations REMOVED
 
 export const userFollowsRelations = relations(userFollows, ({ }) => ({
   // Relations are via userId text fields, not foreign keys
@@ -2410,30 +2297,7 @@ export const userBadges = pgTable(
   ]
 );
 
-/**
- * External Achievements - Achievements logged from outside the app
- * (marathons, ironmans, competitions, etc.)
- */
-export const externalAchievements = pgTable(
-  "external_achievements",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    userId: text("user_id").notNull(),
-    category: text("category").notNull(), // marathon, ironman, competition, obstacle_race, etc.
-    name: text("name").notNull(),
-    description: text("description"),
-    achievedDate: date("achieved_date"),
-    value: text("value"), // time, place, etc.
-    unit: text("unit"),
-    proofUrl: text("proof_url"), // Photo/certificate URL
-    isVerified: boolean("is_verified").default(false),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (achievement) => [
-    index("external_achievements_user_idx").on(achievement.userId),
-    index("external_achievements_category_idx").on(achievement.category),
-  ]
-);
+// external_achievements REMOVED — never used by any UI
 
 /**
  * User Sports - Sports the user plays
@@ -3185,44 +3049,7 @@ export const progressReports = pgTable(
 );
 
 // ============================================================================
-// WORKOUT TEMPLATES (pre-built patterns to skip AI generation)
-// ============================================================================
-
-export const workoutTemplates = pgTable(
-  "workout_templates",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    name: text("name").notNull(),
-    category: text("category").notNull(), // ppl, upper_lower, full_body, bro_split, cardio, hiit
-    description: text("description"),
-    difficulty: text("difficulty").notNull(), // beginner, intermediate, advanced
-    estimatedDuration: integer("estimated_duration"), // minutes
-    equipment: jsonb("equipment").$type<string[]>().default([]),
-    muscleGroups: jsonb("muscle_groups").$type<string[]>().default([]),
-    exercises: jsonb("exercises").$type<Array<{
-      name: string;
-      sets: number;
-      reps: string;
-      restSeconds: number;
-      order: number;
-      notes?: string;
-      supersetGroup?: string;
-    }>>().notNull(),
-    isSystem: boolean("is_system").default(false).notNull(), // Built-in vs user-created
-    createdBy: text("created_by"), // null for system templates
-    // Visibility: "private" | "public" | "circles" | "connections"
-    visibility: text("visibility").default("private").notNull(),
-    useCount: integer("use_count").default(0).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => [
-    index("workout_templates_category_idx").on(table.category),
-    index("workout_templates_difficulty_idx").on(table.difficulty),
-    index("workout_templates_system_idx").on(table.isSystem),
-    index("workout_templates_use_count_idx").on(table.useCount),
-    index("workout_templates_visibility_idx").on(table.visibility),
-  ]
-);
+// workout_templates REMOVED — never used
 
 // ============================================================================
 // INDIVIDUAL POSTS (user-level, not circle-scoped)
@@ -3400,8 +3227,7 @@ export type Message = typeof messages.$inferSelect;
 export type NewMessage = typeof messages.$inferInsert;
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
-export type CircleRequest = typeof circleRequests.$inferSelect;
-export type NewCircleRequest = typeof circleRequests.$inferInsert;
+// CircleRequest types REMOVED
 export type UserFollow = typeof userFollows.$inferSelect;
 export type NewUserFollow = typeof userFollows.$inferInsert;
 export type Connection = typeof connections.$inferSelect;
@@ -3508,8 +3334,7 @@ export type WorkoutFeedback = typeof workoutFeedback.$inferSelect;
 export type NewWorkoutFeedback = typeof workoutFeedback.$inferInsert;
 export type ProgressReport = typeof progressReports.$inferSelect;
 export type NewProgressReport = typeof progressReports.$inferInsert;
-export type WorkoutTemplate = typeof workoutTemplates.$inferSelect;
-export type NewWorkoutTemplate = typeof workoutTemplates.$inferInsert;
+// WorkoutTemplate types REMOVED
 
 // Individual Posts
 export type Post = typeof posts.$inferSelect;

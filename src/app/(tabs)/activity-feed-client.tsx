@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useFeed, type FeedItem } from "@/hooks/use-feed";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -63,10 +64,22 @@ export function ActivityFeedClient({
 }: ActivityFeedClientProps) {
   const feed = useFeed();
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const autoCompose = searchParams?.get("compose") === "true";
 
   useEffect(() => {
     feed.initialize();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-scroll to composer when navigated with ?compose=true
+  useEffect(() => {
+    if (autoCompose && composerRef.current) {
+      composerRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      router.replace("/", { scroll: false });
+    }
+  }, [autoCompose, router]);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -97,14 +110,17 @@ export function ActivityFeedClient({
 
       {/* Post Composer — always show for logged-in users */}
       {userId && userName && (
-        <PostComposer
-          circleId={circleId || null}
-          userId={userId}
-          userName={userName}
-          userImage={userImage}
-          circles={circles || []}
-          onPost={feed.refresh}
-        />
+        <div ref={composerRef}>
+          <PostComposer
+            circleId={circleId || null}
+            userId={userId}
+            userName={userName}
+            userImage={userImage}
+            circles={circles || []}
+            onPost={feed.refresh}
+            autoExpand={autoCompose}
+          />
+        </div>
       )}
 
       {feed.items.length > 0 ? (
@@ -533,6 +549,7 @@ function PostComposer({
   userImage,
   circles,
   onPost,
+  autoExpand = false,
 }: {
   circleId: string | null;
   userId: string;
@@ -540,12 +557,13 @@ function PostComposer({
   userImage?: string | null;
   circles: Array<{ id: string; name: string }>;
   onPost: () => void;
+  autoExpand?: boolean;
 }) {
   const [content, setContent] = useState("");
   const [isPosting, setIsPosting] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(autoExpand);
 
   // Unified destination selector
   const defaultDest: PostDestination = circleId

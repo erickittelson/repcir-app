@@ -18,13 +18,12 @@ import { db } from "@/lib/db";
 import {
   circles,
   circleMembers,
-  memberMetrics,
-  memberLimitations,
   goals,
   personalRecords,
   exercises,
   userProfiles,
   userMetrics,
+  userLimitations,
   userLocations,
   userSports,
   userSkills,
@@ -287,16 +286,6 @@ export async function POST(request: Request) {
         ? data.heightFeet * 12 + (data.heightInches || 0)
         : null;
 
-      // Save to member_metrics (circle-level)
-      await db.insert(memberMetrics).values({
-        memberId,
-        weight: data.weight || null,
-        height: heightInches,
-        bodyFatPercentage: data.bodyFatPercentage || null,
-        fitnessLevel: data.fitnessLevel || null,
-        notes: "Initial profile from onboarding",
-      });
-
       // Save to user_metrics (user-level - displayed on profile)
       await db.insert(userMetrics).values({
         userId: session.user.id,
@@ -389,14 +378,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create limitations if any
+    // Create limitations if any (user-scoped)
     if (data.limitations && data.limitations.length > 0) {
-      await db.insert(memberLimitations).values(
+      await db.insert(userLimitations).values(
         data.limitations.map((l) => ({
-          memberId,
+          userId: session.user.id,
           type: "injury",
-          description: l.condition 
-            ? `${l.bodyPart}: ${l.condition}` 
+          description: l.condition
+            ? `${l.bodyPart}: ${l.condition}`
             : `${l.bodyPart} limitation`,
           affectedAreas: [l.bodyPart],
           severity: l.severity || null,

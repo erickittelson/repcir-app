@@ -15,7 +15,7 @@ import {
   badgeDefinitions,
   userBadges,
   personalRecords,
-  memberSkills,
+  userSkills,
   userSports,
   workoutSessions,
   exercises,
@@ -355,12 +355,12 @@ async function evaluateSkillBadge(
 
   const skill = await db
     .select()
-    .from(memberSkills)
+    .from(userSkills)
     .where(
       and(
-        eq(memberSkills.memberId, context.memberId),
-        eq(sql`LOWER(${memberSkills.name})`, criteria.skillName.toLowerCase()),
-        eq(memberSkills.currentStatus, criteria.skillStatus || "achieved")
+        eq(userSkills.userId, context.userId),
+        eq(sql`LOWER(${userSkills.name})`, criteria.skillName.toLowerCase()),
+        eq(userSkills.currentStatus, criteria.skillStatus || "achieved")
       )
     )
     .limit(1);

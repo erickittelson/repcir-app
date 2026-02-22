@@ -15,7 +15,7 @@ import {
   circleMembers,
   memberContextSnapshot,
   goals,
-  memberLimitations,
+  userLimitations,
   personalRecords,
   workoutSessions,
   workoutSessionExercises,
@@ -354,16 +354,24 @@ export const updateMemberSnapshotFunction = inngest.createFunction(
 
     await step.run("update-snapshot", async () => {
       // This duplicates logic from cron.ts - in production you'd extract to a shared function
+      // Look up member to get userId for user-scoped queries
+      const member = await db.query.circleMembers.findFirst({
+        where: eq(circleMembers.id, memberId),
+        columns: { userId: true },
+      });
+
       const [memberGoals, limitations, memberPRs, recentWorkouts] = await Promise.all([
         db
           .select()
           .from(goals)
           .where(and(eq(goals.memberId, memberId), eq(goals.status, "active")))
           .limit(10),
-        db
-          .select()
-          .from(memberLimitations)
-          .where(and(eq(memberLimitations.memberId, memberId), eq(memberLimitations.active, true))),
+        member?.userId
+          ? db
+              .select()
+              .from(userLimitations)
+              .where(and(eq(userLimitations.userId, member.userId), eq(userLimitations.active, true)))
+          : Promise.resolve([]),
         db
           .select({
             id: personalRecords.id,
@@ -408,7 +416,7 @@ export const updateMemberSnapshotFunction = inngest.createFunction(
           })),
           activeLimitations: limitations.map((l) => ({
             type: l.type,
-            description: l.description,
+            description: l.description || "",
             severity: l.severity || "moderate",
             affectedAreas: (l.affectedAreas as string[]) || [],
           })),

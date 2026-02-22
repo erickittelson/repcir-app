@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { exercises, memberLimitations } from "@/lib/db/schema";
+import { exercises, userLimitations, circleMembers } from "@/lib/db/schema";
 import { eq, and, ne, sql, ilike, or } from "drizzle-orm";
 
 const querySchema = z.object({
@@ -134,21 +134,27 @@ export async function GET(
       .orderBy(sql`match_score DESC`)
       .limit(limit * 3); // Fetch extra for post-filtering
 
-    // 4. Fetch member limitations if memberId provided
+    // 4. Fetch user limitations if memberId provided
     let limitedAreas: string[] = [];
     if (memberId) {
-      const limitations = await db
-        .select({ affectedAreas: memberLimitations.affectedAreas })
-        .from(memberLimitations)
-        .where(
-          and(
-            eq(memberLimitations.memberId, memberId),
-            eq(memberLimitations.active, true)
-          )
+      const member = await db.query.circleMembers.findFirst({
+        where: eq(circleMembers.id, memberId),
+        columns: { userId: true },
+      });
+      if (member?.userId) {
+        const limitations = await db
+          .select({ affectedAreas: userLimitations.affectedAreas })
+          .from(userLimitations)
+          .where(
+            and(
+              eq(userLimitations.userId, member.userId),
+              eq(userLimitations.active, true)
+            )
+          );
+        limitedAreas = limitations.flatMap(
+          (l) => (l.affectedAreas as string[]) || []
         );
-      limitedAreas = limitations.flatMap(
-        (l) => (l.affectedAreas as string[]) || []
-      );
+      }
     }
 
     // 5. Post-filter: remove exercises that target limited areas

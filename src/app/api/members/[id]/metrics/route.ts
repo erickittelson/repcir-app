@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { circleMembers, memberMetrics } from "@/lib/db/schema";
+import { circleMembers, userMetrics } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 
 // PUT - Update a specific metric entry
@@ -35,11 +35,15 @@ export async function PUT(
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
-    // Verify metric belongs to this member
-    const metric = await db.query.memberMetrics.findFirst({
+    if (!member.userId) {
+      return NextResponse.json({ error: "Member has no user account" }, { status: 400 });
+    }
+
+    // Verify metric belongs to this user
+    const metric = await db.query.userMetrics.findFirst({
       where: and(
-        eq(memberMetrics.id, metricId),
-        eq(memberMetrics.memberId, memberId)
+        eq(userMetrics.id, metricId),
+        eq(userMetrics.userId, member.userId)
       ),
     });
 
@@ -49,7 +53,7 @@ export async function PUT(
 
     // Update the metric
     await db
-      .update(memberMetrics)
+      .update(userMetrics)
       .set({
         date: date ? new Date(date) : undefined,
         weight: weight !== undefined ? weight : undefined,
@@ -58,7 +62,7 @@ export async function PUT(
         fitnessLevel: fitnessLevel !== undefined ? fitnessLevel : undefined,
         notes: notes !== undefined ? notes : undefined,
       })
-      .where(eq(memberMetrics.id, metricId));
+      .where(eq(userMetrics.id, metricId));
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -101,11 +105,15 @@ export async function DELETE(
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
-    // Verify metric belongs to this member
-    const metric = await db.query.memberMetrics.findFirst({
+    if (!member.userId) {
+      return NextResponse.json({ error: "Member has no user account" }, { status: 400 });
+    }
+
+    // Verify metric belongs to this user
+    const metric = await db.query.userMetrics.findFirst({
       where: and(
-        eq(memberMetrics.id, metricId),
-        eq(memberMetrics.memberId, memberId)
+        eq(userMetrics.id, metricId),
+        eq(userMetrics.userId, member.userId)
       ),
     });
 
@@ -114,7 +122,7 @@ export async function DELETE(
     }
 
     // Delete the metric
-    await db.delete(memberMetrics).where(eq(memberMetrics.id, metricId));
+    await db.delete(userMetrics).where(eq(userMetrics.id, metricId));
 
     return NextResponse.json({ success: true });
   } catch (error) {

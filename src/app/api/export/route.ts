@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import {
   circleMembers,
-  memberMetrics,
+  userMetrics,
   workoutSessions,
   workoutSessionExercises,
   exerciseSets,
@@ -116,12 +116,14 @@ export async function GET(request: Request) {
         createdAt: member.createdAt,
       };
 
-      // Member metrics
-      const metrics = await db.query.memberMetrics.findMany({
-        where: eq(memberMetrics.memberId, memberId),
-        orderBy: [desc(memberMetrics.date)],
-      });
-      exportData.metrics = metrics.map((m) => ({
+      // User metrics
+      const metrics = member.userId
+        ? await db.query.userMetrics.findMany({
+            where: eq(userMetrics.userId, member.userId),
+            orderBy: [desc(userMetrics.date)],
+          })
+        : [];
+      exportData.metrics = metrics.map((m: typeof userMetrics.$inferSelect) => ({
         date: m.date,
         weight: m.weight,
         bodyFatPercentage: m.bodyFatPercentage,

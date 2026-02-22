@@ -17,13 +17,13 @@ import {
   userBadges,
   personalRecords,
   circleMembers,
-  memberMetrics,
+  userMetrics,
   userSports,
   userSkills,
   onboardingProgress,
   goals,
 } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { calculateCompleteness } from "@/lib/profile/completeness";
 
 interface BadgeCriteria {
@@ -101,10 +101,9 @@ export async function POST() {
 
     async function getBodyweight() {
       if (_bodyweight !== null) return _bodyweight;
-      if (!member) return 0;
-      const m = await db.query.memberMetrics.findFirst({
-        where: eq(memberMetrics.memberId, member.id),
-        orderBy: (m, { desc }) => desc(m.createdAt),
+      const m = await db.query.userMetrics.findFirst({
+        where: eq(userMetrics.userId, userId),
+        orderBy: [desc(userMetrics.date)],
       });
       _bodyweight = m?.weight || 0;
       return _bodyweight;

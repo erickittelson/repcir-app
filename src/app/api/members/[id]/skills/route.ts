@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { circleMembers, memberSkills } from "@/lib/db/schema";
+import { circleMembers, userSkills } from "@/lib/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { evaluateAndAwardBadges } from "@/lib/badges";
 
@@ -29,9 +29,13 @@ export async function GET(
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
-    const skills = await db.query.memberSkills.findMany({
-      where: eq(memberSkills.memberId, id),
-      orderBy: [desc(memberSkills.createdAt)],
+    if (!member.userId) {
+      return NextResponse.json([]);
+    }
+
+    const skills = await db.query.userSkills.findMany({
+      where: eq(userSkills.userId, member.userId),
+      orderBy: [desc(userSkills.createdAt)],
     });
 
     // Normalize skills for API response
@@ -95,11 +99,15 @@ export async function POST(
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
+    if (!member.userId) {
+      return NextResponse.json({ error: "Member has no user account" }, { status: 400 });
+    }
+
     const initialStatus = currentStatus || status || "learning";
     const [skill] = await db
-      .insert(memberSkills)
+      .insert(userSkills)
       .values({
-        memberId: id,
+        userId: member.userId,
         name,
         category,
         notes,
@@ -195,8 +203,8 @@ export async function PUT(
       // Update all-time best if new status is higher
       const statusRank: Record<string, number> = { learning: 1, achieved: 2, mastered: 3 };
       // We need to fetch the existing skill to compare
-      const existingSkill = await db.query.memberSkills.findFirst({
-        where: eq(memberSkills.id, skillId),
+      const existingSkill = await db.query.userSkills.findFirst({
+        where: eq(userSkills.id, skillId),
       });
       if (existingSkill) {
         const existingBestRank = statusRank[existingSkill.allTimeBestStatus] || 0;
@@ -216,12 +224,12 @@ export async function PUT(
     }
 
     await db
-      .update(memberSkills)
+      .update(userSkills)
       .set(updateData)
       .where(
         and(
-          eq(memberSkills.id, skillId),
-          eq(memberSkills.memberId, id)
+          eq(userSkills.id, skillId),
+          eq(userSkills.userId, member.userId!)
         )
       );
 
@@ -230,8 +238,8 @@ export async function PUT(
     if (newStatus === "achieved" || newStatus === "mastered") {
       try {
         // Get the skill name for badge evaluation
-        const updatedSkill = await db.query.memberSkills.findFirst({
-          where: eq(memberSkills.id, skillId),
+        const updatedSkill = await db.query.userSkills.findFirst({
+          where: eq(userSkills.id, skillId),
         });
         
         if (updatedSkill) {
@@ -290,12 +298,16 @@ export async function DELETE(
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
+    if (!member.userId) {
+      return NextResponse.json({ error: "Member has no user account" }, { status: 400 });
+    }
+
     await db
-      .delete(memberSkills)
+      .delete(userSkills)
       .where(
         and(
-          eq(memberSkills.id, skillId),
-          eq(memberSkills.memberId, id)
+          eq(userSkills.id, skillId),
+          eq(userSkills.userId, member.userId)
         )
       );
 

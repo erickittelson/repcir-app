@@ -9,14 +9,14 @@ import {
 import {
   circleMembers,
   memberEmbeddings,
-  memberMetrics,
   goals,
   workoutSessions,
   personalRecords,
-  memberLimitations,
-  memberSkills,
   contextNotes,
   userProfiles,
+  userMetrics,
+  userLimitations,
+  userSkills,
 } from "@/lib/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { openai } from "@ai-sdk/openai";
@@ -63,12 +63,15 @@ export async function POST(
     }
 
     // Gather all member data for embedding generation
+    const userId = member.userId;
     const [metrics, memberGoals, workouts, prs, limitations, skills, notes, profile] = await Promise.all([
-      db.query.memberMetrics.findMany({
-        where: eq(memberMetrics.memberId, memberId),
-        orderBy: [desc(memberMetrics.date)],
-        limit: 10,
-      }),
+      userId
+        ? db.query.userMetrics.findMany({
+            where: eq(userMetrics.userId, userId),
+            orderBy: [desc(userMetrics.date)],
+            limit: 10,
+          })
+        : [],
       db.query.goals.findMany({
         where: eq(goals.memberId, memberId),
       }),
@@ -81,21 +84,24 @@ export async function POST(
         where: eq(personalRecords.memberId, memberId),
         with: { exercise: true },
       }),
-      db.query.memberLimitations.findMany({
-        where: eq(memberLimitations.memberId, memberId),
-      }),
-      db.query.memberSkills.findMany({
-        where: eq(memberSkills.memberId, memberId),
-      }),
+      userId
+        ? db.query.userLimitations.findMany({
+            where: eq(userLimitations.userId, userId),
+          })
+        : [],
+      userId
+        ? db.query.userSkills.findMany({
+            where: eq(userSkills.userId, userId),
+          })
+        : [],
       db.query.contextNotes.findMany({
         where: eq(contextNotes.memberId, memberId),
         orderBy: [desc(contextNotes.createdAt)],
         limit: 30,
       }),
-      // Fetch user profile if member has userId
-      member.userId
+      userId
         ? db.query.userProfiles.findFirst({
-            where: eq(userProfiles.userId, member.userId),
+            where: eq(userProfiles.userId, userId),
           })
         : Promise.resolve(null),
     ]);
@@ -245,7 +251,7 @@ export async function GET(
 // Helper functions to build embedding content
 function buildProfileContent(
   member: typeof circleMembers.$inferSelect,
-  metrics?: typeof memberMetrics.$inferSelect,
+  metrics?: typeof userMetrics.$inferSelect,
   profile?: typeof userProfiles.$inferSelect | null
 ): string {
   let content = `Member Profile: ${member.name}`;
@@ -365,7 +371,7 @@ function buildPreferencesContent(notes: typeof contextNotes.$inferSelect[]): str
   return content;
 }
 
-function buildLimitationsContent(limitations: typeof memberLimitations.$inferSelect[]): string {
+function buildLimitationsContent(limitations: typeof userLimitations.$inferSelect[]): string {
   const active = limitations.filter((l) => l.active);
 
   let content = `Physical Limitations and Injuries:\n`;

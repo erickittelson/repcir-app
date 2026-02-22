@@ -18,7 +18,6 @@ import {
   exercises,
   personalRecords,
   workoutSessions,
-  memberLimitations,
   challengeParticipants,
   challenges,
 } from "@/lib/db/schema";

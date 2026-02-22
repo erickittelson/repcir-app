@@ -3,15 +3,15 @@ import { generateText, streamText, generateObject } from "ai";
 import { db } from "@/lib/db";
 import {
   circleMembers,
-  memberMetrics,
   goals,
   workoutSessions,
   workoutSessionExercises,
   exerciseSets,
   personalRecords,
-  memberLimitations,
-  memberSkills,
   exercises,
+  userMetrics,
+  userLimitations,
+  userSkills,
   contextNotes,
   circleEquipment,
   userProfiles,
@@ -61,13 +61,6 @@ export async function getMemberContext(memberId: string) {
   const member = await db.query.circleMembers.findFirst({
     where: eq(circleMembers.id, memberId),
     with: {
-      metrics: {
-        orderBy: (metrics, { desc }) => [desc(metrics.date)],
-        limit: 5,
-      },
-      limitations: {
-        where: eq(memberLimitations.active, true),
-      },
       goals: true,
       personalRecords: {
         with: {
@@ -75,18 +68,37 @@ export async function getMemberContext(memberId: string) {
         },
         limit: 20,
       },
-      skills: true,
     },
   });
 
   if (!member) return null;
 
-  // Fetch userProfile if member has userId
-  const profile = member.userId
-    ? await db.query.userProfiles.findFirst({
-        where: eq(userProfiles.userId, member.userId),
-      })
-    : null;
+  // Fetch user-scoped data (metrics, limitations, skills, profile)
+  const userId = member.userId;
+  const [metricsData, limitationsData, skillsData, profile] = await Promise.all([
+    userId
+      ? db.query.userMetrics.findMany({
+          where: eq(userMetrics.userId, userId),
+          orderBy: [desc(userMetrics.date)],
+          limit: 5,
+        })
+      : [],
+    userId
+      ? db.query.userLimitations.findMany({
+          where: and(eq(userLimitations.userId, userId), eq(userLimitations.active, true)),
+        })
+      : [],
+    userId
+      ? db.query.userSkills.findMany({
+          where: eq(userSkills.userId, userId),
+        })
+      : [],
+    userId
+      ? db.query.userProfiles.findFirst({
+          where: eq(userProfiles.userId, userId),
+        })
+      : null,
+  ]);
 
   // Get more detailed recent workouts (last 30 days for recovery analysis)
   const thirtyDaysAgo = new Date();
@@ -260,9 +272,9 @@ export async function getMemberContext(memberId: string) {
       age,
       gender: profile?.gender || member.gender,
     },
-    currentMetrics: member.metrics[0] || null,
-    metricsHistory: member.metrics,
-    limitations: member.limitations,
+    currentMetrics: metricsData[0] || null,
+    metricsHistory: metricsData,
+    limitations: limitationsData,
     goals: member.goals,
     personalRecords: member.personalRecords.map((pr) => ({
       exercise: pr.exercise.name,
@@ -272,7 +284,7 @@ export async function getMemberContext(memberId: string) {
       date: pr.date,
       recordType: pr.recordType || "current",
     })),
-    skills: member.skills.map((s) => ({
+    skills: skillsData.map((s) => ({
       name: s.name,
       category: s.category,
       status: s.currentStatus,

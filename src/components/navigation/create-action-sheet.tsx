@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Dumbbell,
   Sparkles,
+  PenSquare,
   ChevronRight,
   Users,
 } from "lucide-react";
@@ -61,6 +62,17 @@ const ACTIONS = [
     borderColor: "border-energy/30",
     action: "coach",
   },
+  {
+    id: "post",
+    title: "Post",
+    subtitle: "Share something",
+    description: "Post to your feed or a circle",
+    icon: PenSquare,
+    color: "text-info",
+    bgColor: "bg-info/10",
+    borderColor: "border-info/30",
+    action: "post",
+  },
 ] as const;
 
 export function CreateActionSheet({
@@ -94,6 +106,9 @@ export function CreateActionSheet({
           ? `/coach?with=${memberIds}`
           : "/coach";
         router.push(coachUrl);
+        break;
+      case "post":
+        router.push("/?compose=true");
         break;
     }
 

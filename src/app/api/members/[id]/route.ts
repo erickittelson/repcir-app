@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { circleMembers, memberMetrics, memberLimitations, goals, personalRecords, memberSkills, userProfiles } from "@/lib/db/schema";
+import { circleMembers, userMetrics, userLimitations, goals, personalRecords, userSkills, userProfiles } from "@/lib/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { logAuditEventFromRequest } from "@/lib/audit-log";
 
@@ -23,21 +23,12 @@ export async function GET(
         eq(circleMembers.circleId, session.circleId)
       ),
       with: {
-        metrics: {
-          orderBy: (metrics, { desc }) => [desc(metrics.date)],
-        },
-        limitations: {
-          where: eq(memberLimitations.active, true),
-        },
         goals: true,
         personalRecords: {
           with: {
             exercise: true,
           },
-          orderBy: (pr, { desc }) => [desc(pr.date)],
-        },
-        skills: {
-          orderBy: (skills, { desc }) => [desc(skills.createdAt)],
+          orderBy: (pr: any, { desc }: any) => [desc(pr.date)],
         },
       },
     });
@@ -46,12 +37,30 @@ export async function GET(
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
-    // Get user profile if member has userId
-    const profile = member.userId
-      ? await db.query.userProfiles.findFirst({
-          where: eq(userProfiles.userId, member.userId),
-        })
-      : null;
+    // Fetch user-scoped data if member has userId
+    const userId = member.userId;
+    const [profile, metrics, limitations, skills] = await Promise.all([
+      userId
+        ? db.query.userProfiles.findFirst({ where: eq(userProfiles.userId, userId) })
+        : null,
+      userId
+        ? db.query.userMetrics.findMany({
+            where: eq(userMetrics.userId, userId),
+            orderBy: [desc(userMetrics.date)],
+          })
+        : [],
+      userId
+        ? db.query.userLimitations.findMany({
+            where: and(eq(userLimitations.userId, userId), eq(userLimitations.active, true)),
+          })
+        : [],
+      userId
+        ? db.query.userSkills.findMany({
+            where: eq(userSkills.userId, userId),
+            orderBy: [desc(userSkills.createdAt)],
+          })
+        : [],
+    ]);
 
     // Calculate dateOfBirth from userProfile or fallback to member
     let dateOfBirth: string | null = null;
@@ -64,16 +73,15 @@ export async function GET(
     return NextResponse.json({
       id: member.id,
       name: member.name,
-      // Prefer userProfile data, fallback to circleMembers for legacy/standalone members
       profilePicture: profile?.profilePicture || member.profilePicture,
       dateOfBirth,
       gender: profile?.gender || member.gender,
       role: member.role,
-      metrics: member.metrics,
-      limitations: member.limitations,
+      metrics,
+      limitations,
       goals: member.goals,
       personalRecords: member.personalRecords,
-      skills: member.skills,
+      skills,
     });
   } catch (error) {
     console.error("Error fetching member:", error);
@@ -138,10 +146,10 @@ export async function PUT(
         .where(eq(userProfiles.userId, existingMember.userId));
     }
 
-    // Add new metrics entry if provided
-    if (metrics && (metrics.weight || metrics.height || metrics.bodyFatPercentage || metrics.fitnessLevel)) {
-      await db.insert(memberMetrics).values({
-        memberId: id,
+    // Add new metrics entry if provided (user-scoped)
+    if (metrics && (metrics.weight || metrics.height || metrics.bodyFatPercentage || metrics.fitnessLevel) && existingMember.userId) {
+      await db.insert(userMetrics).values({
+        userId: existingMember.userId,
         weight: metrics.weight,
         height: metrics.height,
         bodyFatPercentage: metrics.bodyFatPercentage,
